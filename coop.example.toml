@@ -1,0 +1,51 @@
+# Example Coop configuration.
+#
+# Every key here has a default except database.dsn, server.public_url and
+# auth.encryption_key. Resolution order is defaults, then this file, then
+# COOP_-prefixed environment variables.
+#
+# Run with: coopd -config coop.toml
+
+[server]
+addr = ":8080"
+
+# Externally reachable base URL. Child devices embed this during pairing.
+public_url = "https://coop.example"
+
+read_timeout = "15s"
+write_timeout = "30s"
+shutdown_timeout = "20s"
+
+[database]
+dsn = "postgres://coop:coop@localhost:5432/coop?sslmode=disable"
+max_open_conns = 25
+max_idle_conns = 5
+conn_max_lifetime = "1h"
+
+[auth]
+# Generate with: openssl rand -base64 32
+encryption_key = ""
+
+parent_session_ttl = "720h"
+child_token_ttl = "8760h"
+pairing_code_ttl = "15m"
+
+[youtube]
+# Google allows 10000 units per project per day and there is no paid tier.
+# The default leaves headroom so a bug hits this wall rather than Google's.
+daily_unit_budget = 8000
+
+# search.list is metered in its own bucket of 100 calls per day.
+daily_search_budget = 90
+
+# Back-catalog fetching, which only spends what the reserves leave behind.
+backfill_call_budget = 500
+
+# One hour is a hard floor, not a default. Lower values are rejected.
+cache_ttl_default = "1h"
+
+uploads_refresh_interval = "6h"
+
+[log]
+level = "info"
+format = "json"
