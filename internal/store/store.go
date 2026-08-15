@@ -11,6 +11,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	// Registers the "postgres" driver that migrator's sql.Open depends on.
+	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -26,10 +28,11 @@ var migrationsFS embed.FS
 // "child" rather than depending on GORM's pluralizer for irregular nouns.
 var namingStrategy = schema.NamingStrategy{SingularTable: true}
 
-// DB wraps a GORM handle plus the underlying pool, which migrations need.
+// DB wraps a GORM handle plus the underlying pool.
 type DB struct {
 	*gorm.DB
 	sql *sql.DB
+	dsn string
 }
 
 // Open connects to Postgres and configures the pool. It does not migrate.
@@ -59,7 +62,7 @@ func Open(ctx context.Context, cfg config.Database, quiet bool) (*DB, error) {
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("pinging postgres: %w", err)
 	}
-	return &DB{DB: gdb, sql: sqlDB}, nil
+	return &DB{DB: gdb, sql: sqlDB, dsn: cfg.DSN}, nil
 }
 
 // Close releases the connection pool.
@@ -68,21 +71,38 @@ func (d *DB) Close() error { return d.sql.Close() }
 // SQL exposes the raw pool for migrations and health checks.
 func (d *DB) SQL() *sql.DB { return d.sql }
 
-// migrator opens the embedded migrations. Callers must Close the result.
+// migrator opens the embedded migrations on a dedicated connection. It must
+// not share the GORM pool: migrate.Close() closes the driver it was given,
+// which would leave every later query hitting "database is closed".
 func (d *DB) migrator() (*migrate.Migrate, error) {
 	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return nil, fmt.Errorf("opening embedded migrations: %w", err)
 	}
-	drv, err := migratepg.WithInstance(d.sql, &migratepg.Config{})
+
+	conn, err := sql.Open("postgres", d.dsn)
 	if err != nil {
+		return nil, fmt.Errorf("opening migration connection: %w", err)
+	}
+
+	drv, err := migratepg.WithInstance(conn, &migratepg.Config{})
+	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("preparing migration driver: %w", err)
 	}
+
 	m, err := migrate.NewWithInstance("iofs", src, "postgres", drv)
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("building migrator: %w", err)
 	}
 	return m, nil
+}
+
+// closeMigrator releases the migrator's dedicated connection. Its errors are
+// reported separately by design and none of them affect the caller's result.
+func closeMigrator(m *migrate.Migrate) {
+	_, _ = m.Close()
 }
 
 // Migrate applies every pending migration. Already-current is not an error.
@@ -91,7 +111,7 @@ func (d *DB) Migrate() error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer closeMigrator(m)
 
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("applying migrations: %w", err)
@@ -105,7 +125,7 @@ func (d *DB) MigrateDown() error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer closeMigrator(m)
 
 	if err := m.Steps(-1); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("rolling back migration: %w", err)
@@ -120,7 +140,7 @@ func (d *DB) Version() (version uint, dirty bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
-	defer m.Close()
+	defer closeMigrator(m)
 
 	version, dirty, err = m.Version()
 	if errors.Is(err, migrate.ErrNilVersion) {

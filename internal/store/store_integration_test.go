@@ -5,11 +5,26 @@ package store
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"gorm.io/gorm/schema"
+
 	"github.com/nerdswhofish/coop/internal/config"
 )
+
+// parseModel resolves a model's table and column names exactly as GORM will at
+// runtime, without needing a session or a live query.
+func parseModel(t *testing.T, model any) *schema.Schema {
+	t.Helper()
+
+	s, err := schema.Parse(model, &sync.Map{}, namingStrategy)
+	if err != nil {
+		t.Fatalf("parsing %T: %v", model, err)
+	}
+	return s
+}
 
 func testDB(t *testing.T) *DB {
 	t.Helper()
@@ -82,12 +97,7 @@ func TestModelsMatchMigratedTables(t *testing.T) {
 	}
 
 	for _, model := range AllModels() {
-		stmt := db.Session(nil).Statement
-		if err := stmt.Parse(model); err != nil {
-			t.Errorf("parsing %T: %v", model, err)
-			continue
-		}
-		table := stmt.Schema.Table
+		table := parseModel(t, model).Table
 
 		var exists bool
 		err := db.Raw(
@@ -113,13 +123,9 @@ func TestModelColumnsExist(t *testing.T) {
 	}
 
 	for _, model := range AllModels() {
-		stmt := db.Session(nil).Statement
-		if err := stmt.Parse(model); err != nil {
-			t.Errorf("parsing %T: %v", model, err)
-			continue
-		}
+		s := parseModel(t, model)
 
-		for _, field := range stmt.Schema.Fields {
+		for _, field := range s.Fields {
 			if field.DBName == "" {
 				continue
 			}
@@ -128,14 +134,14 @@ func TestModelColumnsExist(t *testing.T) {
 				`SELECT EXISTS (SELECT 1 FROM information_schema.columns
 				                WHERE table_schema = 'public'
 				                  AND table_name = ? AND column_name = ?)`,
-				stmt.Schema.Table, field.DBName,
+				s.Table, field.DBName,
 			).Scan(&exists).Error
 			if err != nil {
-				t.Fatalf("querying columns for %s.%s: %v", stmt.Schema.Table, field.DBName, err)
+				t.Fatalf("querying columns for %s.%s: %v", s.Table, field.DBName, err)
 			}
 			if !exists {
 				t.Errorf("%T expects column %s.%s, which no migration creates",
-					model, stmt.Schema.Table, field.DBName)
+					model, s.Table, field.DBName)
 			}
 		}
 	}
