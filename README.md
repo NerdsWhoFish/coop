@@ -1,0 +1,85 @@
+# Coop
+
+Self-hosted, parent-curated YouTube for kids.
+
+Children get an app that looks and feels like real YouTube: a home feed, subscriptions, channel pages, search, and a vertically scrolling Shorts feed.
+Every channel they can watch was approved by a parent first.
+When they find something new, they ask, and a parent approves it from their own app.
+
+No Google account on the child's device. No comments, in either direction. No livestreams.
+
+> **Status: pre-alpha.** Phase 0 (foundations) is the current work. Nothing runs yet.
+> The full design lives in [docs/PLAN.md](docs/PLAN.md), and the decisions behind it in [adr/](adr/).
+
+## How it works
+
+```mermaid
+graph TD
+  Child[Child app<br/>Cooper Watch] -->|child token| API[Coop backend<br/>Go]
+  Parent[Parent app<br/>Cooper The Cop] -->|parent token| API
+  API --> DB[(Postgres)]
+  API --> YT[YouTube Data API v3<br/>your own key]
+  Child -->|nocookie embed| Player[YouTube IFrame player]
+```
+
+Each family runs their own backend with their own YouTube Data API key.
+The backend holds the allowlists, evaluates policy, and caches everything it fetches.
+Playback uses YouTube's official embedded player, so creators receive real views and there is no stream extraction involved.
+
+## Features
+
+- **Channel-level allowlists**, global across the family or per child.
+- **Three channel states**: allowed, requestable (visible, asks first), and blocked (invisible).
+- **Request and approve loop.** A child asks, a parent approves from their phone.
+- **Negative keywords** that block individual videos inside otherwise-allowed channels, with every suppression visible to the parent and overridable in one tap.
+- **Multiple children**, each with their own subscriptions, allowlist, and settings.
+- **Multiple parents**, scoped to the children they are allowed to manage.
+- **Local subscriptions, likes, and dislikes** that never touch YouTube.
+- **No livestreams**, including finished livestream VODs.
+- **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data.
+
+## Components
+
+| Path | What |
+| --- | --- |
+| `cmd/coopd` | The backend server binary |
+| `internal/config` | Configuration loading, TOML file overlaid by environment |
+| `internal/store` | Postgres models and migrations |
+| `internal/policy` | Allowlist and keyword evaluation. Pure, no I/O |
+| `internal/youtube` | Data API client, response cache, quota budgets |
+| `internal/rank` | Recommendation scoring. Pure, no I/O |
+| `api/openapi.yaml` | The API contract, source of truth for both clients |
+| `adr/` | Architecture decision records |
+| `docs/PLAN.md` | Full design document |
+
+The iOS apps (`Cooper The Cop` for parents, `Cooper Watch` for children) land in later phases.
+
+## Requirements
+
+- Go 1.26 or newer
+- Postgres 16 or newer
+- A Google Cloud project with the YouTube Data API v3 enabled, and an API key
+
+Every family needs their own API key.
+The YouTube API Developer Policies forbid embedding API credentials in open source projects, so there is no shared key and there never will be.
+The upside is that each family gets its own full daily quota.
+
+## Development
+
+```sh
+make help          # list targets
+make dev-db        # start a local Postgres in Docker
+make migrate       # apply migrations
+make run           # run the server
+make test          # run tests
+make lint          # vet and staticcheck
+```
+
+## Contributing
+
+Decisions with real trade-offs get an ADR in [adr/](adr/) before the code lands.
+Prose in this repo is written one sentence per line, so that editing a sentence produces a one-line diff.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

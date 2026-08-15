@@ -1,0 +1,23 @@
+# Build output
+/bin/
+/dist/
+coopd
+
+# Env and local config
+.env
+.env.*
+coop.local.toml
+
+# Go
+*.test
+*.out
+/vendor/
+
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.swiftpm/
