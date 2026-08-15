@@ -1,0 +1,35 @@
+---
+# Single-family deployment. Copy .env.example to .env first.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: coop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: coop
+    volumes:
+      - coop-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  coopd:
+    image: ghcr.io/nerdswhofish/coop:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COOP_DATABASE_DSN: postgres://coop:${POSTGRES_PASSWORD}@postgres:5432/coop?sslmode=disable
+      COOP_PUBLIC_URL: ${COOP_PUBLIC_URL:?set COOP_PUBLIC_URL in .env}
+      COOP_AUTH_ENCRYPTION_KEY: ${COOP_AUTH_ENCRYPTION_KEY:?generate with openssl rand -base64 32}
+      COOP_LOG_FORMAT: json
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  coop-data:
