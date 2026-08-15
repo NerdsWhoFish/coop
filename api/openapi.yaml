@@ -1,0 +1,1406 @@
+openapi: 3.1.0
+
+info:
+  title: Coop API
+  version: 0.1.0
+  description: |
+    Coop is a self-hosted, parent-curated YouTube for kids.
+
+    This document is the contract between the Go backend and the two native
+    clients. Both the server handlers and the Swift client are generated from
+    it, so drift is a build failure rather than a runtime surprise.
+
+    Two disjoint surfaces share one server:
+
+    - `/api/v1/parent` requires a parent session. Parents scoped to specific
+      children receive 404 rather than 403 for children outside their scope, so
+      the response does not confirm that another child exists.
+    - `/api/v1/child` requires a paired device token. It is read-mostly: a child
+      can read their own feed, record local reactions and watch progress, and
+      raise a request. Nothing on this surface can change policy.
+  license:
+    name: MIT
+    url: https://github.com/nerdswhofish/coop/blob/main/LICENSE
+
+servers:
+  - url: "{publicUrl}/api/v1"
+    description: A family's own instance
+    variables:
+      publicUrl:
+        default: https://coop.example
+
+tags:
+  - name: parent-auth
+  - name: family
+  - name: children
+  - name: pairing
+  - name: allowlist
+  - name: keywords
+  - name: requests
+  - name: suppressions
+  - name: child-session
+  - name: child-browse
+  - name: child-activity
+  - name: system
+
+security:
+  - parentSession: []
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness and database reachability
+      security: []
+      responses:
+        "200": { description: Healthy }
+        "503": { description: Database unreachable }
+
+  # Parent authentication ----------------------------------------------------
+
+  /parent/auth/login:
+    post:
+      tags: [parent-auth]
+      summary: Exchange credentials for a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Authenticated, or a TOTP challenge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /parent/auth/totp:
+    post:
+      tags: [parent-auth]
+      summary: Complete a TOTP challenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeToken, code]
+              properties:
+                challengeToken: { type: string }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /parent/me:
+    get:
+      tags: [parent-auth]
+      summary: The signed-in parent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Parent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # Family -------------------------------------------------------------------
+
+  /parent/family:
+    get:
+      tags: [family]
+      summary: Read family settings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Family" }
+    patch:
+      tags: [family]
+      summary: Update family settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                timezone: { type: string }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Family" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/family/api-key:
+    put:
+      tags: [family]
+      summary: Set the family's YouTube Data API key
+      description: |
+        Admin only. The key is validated against YouTube before it is stored,
+        then encrypted at rest. It is never returned by any endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [apiKey]
+              properties:
+                apiKey: { type: string }
+      responses:
+        "204": { description: Stored }
+        "400":
+          description: The key was rejected by YouTube
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/family/quota:
+    get:
+      tags: [family]
+      summary: Today's API spend against each budget
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QuotaStatus" }
+
+  # Parents ------------------------------------------------------------------
+
+  /parent/parents:
+    get:
+      tags: [family]
+      summary: List parents. Admin only
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Parent" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/parents/invite:
+    post:
+      tags: [family]
+      summary: Create a single-use invitation. Admin only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, childIds]
+              properties:
+                email: { type: string, format: email }
+                childIds:
+                  type: array
+                  description: Children this parent may manage. Empty grants nothing.
+                  items: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/parents/{parentId}:
+    parameters:
+      - $ref: "#/components/parameters/ParentId"
+    delete:
+      tags: [family]
+      summary: Remove a parent. Admin only
+      description: Removing the last admin is refused, since nothing could restore access.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Would leave the family with no admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /parent/parents/{parentId}/scope:
+    parameters:
+      - $ref: "#/components/parameters/ParentId"
+    put:
+      tags: [family]
+      summary: Replace which children a parent may manage. Admin only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [childIds]
+              properties:
+                childIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "204": { description: Updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # Children -----------------------------------------------------------------
+
+  /parent/children:
+    get:
+      tags: [children]
+      summary: List children in scope
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Child" }
+    post:
+      tags: [children]
+      summary: Create a child profile. Admin only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                avatarId: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Child" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/children/{childId}:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      tags: [children]
+      summary: Read one child
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Child" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [children]
+      summary: Update a child's settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChildSettings" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Child" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [children]
+      summary: Delete a child and everything belonging to them. Admin only
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # Pairing ------------------------------------------------------------------
+
+  /parent/children/{childId}/pairing-code:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    post:
+      tags: [pairing]
+      summary: Mint a single-use pairing code for a child device
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingCode" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parent/children/{childId}/devices:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      tags: [pairing]
+      summary: List a child's paired devices
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+
+  /parent/devices/{deviceId}:
+    parameters:
+      - name: deviceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [pairing]
+      summary: Revoke a paired device
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # Allowlists ---------------------------------------------------------------
+
+  /parent/allowlist/global:
+    get:
+      tags: [allowlist]
+      summary: Channels approved for every child
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ApprovedChannel" }
+    put:
+      tags: [allowlist]
+      summary: Approve a channel for every child
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId]
+              properties:
+                channelId: { $ref: "#/components/schemas/ChannelId" }
+      responses:
+        "204": { description: Approved }
+
+  /parent/allowlist/global/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    delete:
+      tags: [allowlist]
+      summary: Remove a channel from the global allowlist
+      responses:
+        "204": { description: Removed }
+
+  /parent/children/{childId}/allowlist:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      tags: [allowlist]
+      summary: Channels this child may watch, with the reason for each
+      description: |
+        Effective state, not a raw table read. Each entry reports whether it
+        came from the global list or this child's own list, and whether a
+        per-child denial is subtracting it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EffectiveChannel" }
+    put:
+      tags: [allowlist]
+      summary: Approve a channel for this child only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId]
+              properties:
+                channelId: { $ref: "#/components/schemas/ChannelId" }
+      responses:
+        "204": { description: Approved }
+
+  /parent/children/{childId}/allowlist/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+      - $ref: "#/components/parameters/ChannelId"
+    delete:
+      tags: [allowlist]
+      summary: Remove a channel from this child's own allowlist
+      responses:
+        "204": { description: Removed }
+
+  /parent/children/{childId}/denylist/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      tags: [allowlist]
+      summary: Subtract a globally approved channel from this child
+      responses:
+        "204": { description: Denied }
+    delete:
+      tags: [allowlist]
+      summary: Remove the per-child denial
+      responses:
+        "204": { description: Removed }
+
+  /parent/blocklist:
+    get:
+      tags: [allowlist]
+      summary: Channels hidden family-wide
+      description: Blocked channels are invisible to children and cannot be requested.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BlockedChannel" }
+    put:
+      tags: [allowlist]
+      summary: Block a channel family-wide
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId]
+              properties:
+                channelId: { $ref: "#/components/schemas/ChannelId" }
+                reason: { type: string }
+      responses:
+        "204": { description: Blocked }
+
+  /parent/blocklist/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    delete:
+      tags: [allowlist]
+      summary: Unblock a channel
+      responses:
+        "204": { description: Unblocked }
+
+  # Keywords -----------------------------------------------------------------
+
+  /parent/keywords:
+    get:
+      tags: [keywords]
+      summary: List negative keywords
+      parameters:
+        - name: childId
+          in: query
+          description: Omit for family-wide keywords only.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Keyword" }
+    post:
+      tags: [keywords]
+      summary: Create a negative keyword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KeywordInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Keyword" }
+
+  /parent/keywords/{keywordId}:
+    parameters:
+      - name: keywordId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [keywords]
+      summary: Update a keyword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KeywordInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Keyword" }
+    delete:
+      tags: [keywords]
+      summary: Delete a keyword
+      responses:
+        "204": { description: Deleted }
+
+  # Requests -----------------------------------------------------------------
+
+  /parent/requests:
+    get:
+      tags: [requests]
+      summary: Requests raised by children in scope
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/RequestStatus" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequestPage" }
+
+  /parent/requests/{requestId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      tags: [requests]
+      summary: Approve a request
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  description: Approve for this child only, or for everyone.
+                  type: string
+                  enum: [child, global]
+                  default: child
+                note: { type: string }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Request" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parent/requests/{requestId}/deny:
+    parameters:
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      tags: [requests]
+      summary: Deny a request
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+                block:
+                  description: Also block the channel family-wide.
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Denied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Request" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # Suppressions -------------------------------------------------------------
+
+  /parent/children/{childId}/suppressions:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      tags: [suppressions]
+      summary: Videos a keyword hid from this child
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuppressionPage" }
+
+  /parent/suppressions/{suppressionId}/override:
+    parameters:
+      - name: suppressionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [suppressions]
+      summary: Allow the suppressed video after all
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  enum: [child, family]
+                  default: child
+      responses:
+        "204": { description: Overridden }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # Parent-side channel search -----------------------------------------------
+
+  /parent/search/channels:
+    get:
+      tags: [allowlist]
+      summary: Find channels to approve
+      description: |
+        Spends from the family's search budget, which Google meters separately
+        at 100 calls per day per project. Results are cached for 24 hours by
+        normalized query, so repeating a search is free.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+        "429":
+          description: The daily search budget is exhausted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # Child surface ------------------------------------------------------------
+
+  /child/pair:
+    post:
+      tags: [child-session]
+      summary: Redeem a pairing code for a device token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, deviceName]
+              properties:
+                code: { type: string }
+                deviceName: { type: string }
+      responses:
+        "200":
+          description: Paired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, child]
+                properties:
+                  token: { type: string }
+                  child: { $ref: "#/components/schemas/ChildProfile" }
+        "400":
+          description: The code is unknown, expired, or already used
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /child/me:
+    get:
+      tags: [child-session]
+      summary: The paired child's profile and enabled surfaces
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChildProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /child/feed:
+    get:
+      tags: [child-browse]
+      summary: Home feed, newest first across subscribed and allowed channels
+      security:
+        - childToken: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VideoPage" }
+
+  /child/shorts:
+    get:
+      tags: [child-browse]
+      summary: Shorts feed
+      description: |
+        Allowed channels only, with no locked entries. The feed shuffles per
+        session and wraps rather than dead-ending when the pool is exhausted.
+      security:
+        - childToken: []
+      parameters:
+        - name: session
+          in: query
+          description: Stable shuffle seed for one browsing session.
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VideoPage" }
+        "404":
+          description: The Shorts surface is disabled for this child
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /child/subscriptions:
+    get:
+      tags: [child-browse]
+      summary: Channels this child subscribes to
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+
+  /child/subscriptions/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      tags: [child-browse]
+      summary: Subscribe. Local to Coop, never written to YouTube
+      security:
+        - childToken: []
+      responses:
+        "204": { description: Subscribed }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [child-browse]
+      summary: Unsubscribe
+      security:
+        - childToken: []
+      responses:
+        "204": { description: Unsubscribed }
+
+  /child/channels/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      tags: [child-browse]
+      summary: A channel page
+      description: |
+        A requestable channel returns its branding with an empty video list, so
+        the child can see what they are asking for. A blocked channel returns
+        404, giving no signal that it exists.
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /child/search:
+    get:
+      tags: [child-browse]
+      summary: Search channels and videos
+      description: |
+        Results from channels that are not yet allowed are marked `locked` so
+        the client can render an ask affordance rather than a dead end. Blocked
+        channels never appear.
+      security:
+        - childToken: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResults" }
+        "429":
+          description: The search budget for this child or family is exhausted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /child/videos/{videoId}:
+    parameters:
+      - $ref: "#/components/parameters/VideoId"
+    get:
+      tags: [child-browse]
+      summary: Watch page data, including the embed URL
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WatchPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /child/videos/{videoId}/reaction:
+    parameters:
+      - $ref: "#/components/parameters/VideoId"
+    put:
+      tags: [child-activity]
+      summary: Record a local like or dislike
+      security:
+        - childToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [like, dislike] }
+      responses:
+        "204": { description: Recorded }
+    delete:
+      tags: [child-activity]
+      summary: Clear the reaction
+      security:
+        - childToken: []
+      responses:
+        "204": { description: Cleared }
+
+  /child/videos/{videoId}/watch:
+    parameters:
+      - $ref: "#/components/parameters/VideoId"
+    post:
+      tags: [child-activity]
+      summary: Report watch progress
+      description: Completion, not starts, is what the ranker weighs.
+      security:
+        - childToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startedAt, secondsWatched]
+              properties:
+                startedAt: { type: string, format: date-time }
+                secondsWatched: { type: integer, minimum: 0 }
+      responses:
+        "204": { description: Recorded }
+
+  /child/requests:
+    get:
+      tags: [child-activity]
+      summary: This child's own requests and their outcomes
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Request" }
+    post:
+      tags: [child-activity]
+      summary: Ask for a channel
+      description: |
+        Re-asking for a channel that already has an open request updates that
+        request rather than creating a duplicate in the parent's queue.
+      security:
+        - childToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId]
+              properties:
+                channelId: { $ref: "#/components/schemas/ChannelId" }
+                promptedByVideoId: { type: string }
+      responses:
+        "201":
+          description: Raised
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Request" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    parentSession:
+      type: http
+      scheme: bearer
+      description: A parent session token from the login flow.
+    childToken:
+      type: http
+      scheme: bearer
+      description: |
+        A device token from pairing. Scoped to one child, read-mostly, and
+        revocable from the parent app.
+
+  parameters:
+    ChildId:
+      name: childId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ParentId:
+      name: parentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ChannelId:
+      name: channelId
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ChannelId" }
+    VideoId:
+      name: videoId
+      in: path
+      required: true
+      schema: { type: string }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated, but not permitted
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: |
+        No such resource, or it is outside the caller's scope. Scope failures
+        are reported as 404 so the response does not confirm existence.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Too many attempts
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+    ChannelId:
+      type: string
+      description: A YouTube channel ID.
+      pattern: "^UC[A-Za-z0-9_-]{22}$"
+
+    RequestStatus:
+      type: string
+      enum: [pending, approved, denied]
+
+    ChannelState:
+      type: string
+      description: |
+        Effective visibility of a channel for one child. Blocked never appears
+        on the child surface at all.
+      enum: [allowed, requestable, blocked]
+
+    LoginResult:
+      oneOf:
+        - $ref: "#/components/schemas/Session"
+        - $ref: "#/components/schemas/TOTPChallenge"
+
+    Session:
+      type: object
+      required: [token, expiresAt, parent]
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+        parent: { $ref: "#/components/schemas/Parent" }
+
+    TOTPChallenge:
+      type: object
+      required: [challengeToken]
+      properties:
+        challengeToken: { type: string }
+
+    Parent:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, parent] }
+        totpEnrolled: { type: boolean }
+        scopedChildIds:
+          type: array
+          description: Empty for admins, who see every child.
+          items: { type: string, format: uuid }
+
+    Invitation:
+      type: object
+      required: [code, email, expiresAt]
+      properties:
+        code: { type: string }
+        email: { type: string, format: email }
+        expiresAt: { type: string, format: date-time }
+
+    Family:
+      type: object
+      required: [id, name, timezone, apiKeyConfigured]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        timezone: { type: string }
+        apiKeyConfigured: { type: boolean }
+
+    QuotaStatus:
+      type: object
+      required: [purpose, used, budget]
+      properties:
+        purpose: { type: string, enum: [feed, search, backfill] }
+        used: { type: integer }
+        budget: { type: integer }
+        resetsAt: { type: string, format: date-time }
+
+    ChildSettings:
+      type: object
+      properties:
+        name: { type: string }
+        avatarId: { type: string }
+        shortsEnabled: { type: boolean }
+        watchPageAutoplay:
+          type: boolean
+          description: |
+            Off by default, so nothing contacts Google until the child taps.
+            Does not apply to the Shorts feed, where autoplay is the format.
+        videoSearchTiles:
+          type: boolean
+          description: Whether search returns videos as well as channels.
+        dailySearchLimit:
+          type: integer
+          description: Zero means no per-child limit beyond the family budget.
+          minimum: 0
+
+    Child:
+      allOf:
+        - type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            deviceCount: { type: integer }
+            pendingRequestCount: { type: integer }
+        - $ref: "#/components/schemas/ChildSettings"
+
+    ChildProfile:
+      type: object
+      required: [id, name, shortsEnabled, watchPageAutoplay]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        avatarId: { type: string }
+        shortsEnabled: { type: boolean }
+        watchPageAutoplay: { type: boolean }
+        videoSearchTiles: { type: boolean }
+
+    PairingCode:
+      type: object
+      required: [code, expiresAt, pairingUrl]
+      properties:
+        code: { type: string }
+        expiresAt: { type: string, format: date-time }
+        pairingUrl:
+          type: string
+          description: Encoded into a QR code. Embeds the server's public URL.
+
+    Device:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+
+    Channel:
+      type: object
+      required: [id, title]
+      properties:
+        id: { $ref: "#/components/schemas/ChannelId" }
+        title: { type: string }
+        description: { type: string }
+        thumbnailUrl: { type: string }
+        bannerUrl: { type: string }
+        subscriberCount: { type: integer, format: int64 }
+
+    ApprovedChannel:
+      allOf:
+        - $ref: "#/components/schemas/Channel"
+        - type: object
+          properties:
+            approvedAt: { type: string, format: date-time }
+            approvedBy: { type: string, format: uuid }
+            youtubeUrl:
+              type: string
+              description: |
+                Opens the real YouTube app so a parent can review what they
+                approved.
+
+    EffectiveChannel:
+      allOf:
+        - $ref: "#/components/schemas/ApprovedChannel"
+        - type: object
+          required: [source]
+          properties:
+            source:
+              type: string
+              description: Which list put this channel in reach of the child.
+              enum: [global, child]
+            deniedForChild:
+              type: boolean
+              description: A per-child denial subtracting a globally approved channel.
+
+    BlockedChannel:
+      allOf:
+        - $ref: "#/components/schemas/Channel"
+        - type: object
+          properties:
+            reason: { type: string }
+            blockedAt: { type: string, format: date-time }
+
+    Video:
+      type: object
+      required: [id, channelId, title, isShort]
+      properties:
+        id: { type: string }
+        channelId: { $ref: "#/components/schemas/ChannelId" }
+        channelTitle: { type: string }
+        title: { type: string }
+        thumbnailUrl:
+          type: string
+          description: Served through this instance, not from a Google host.
+        durationSeconds: { type: integer }
+        publishedAt: { type: string, format: date-time }
+        isShort: { type: boolean }
+        locked:
+          type: boolean
+          description: |
+            The video belongs to a requestable channel. Present on search
+            results, never on the Shorts feed.
+
+    ChannelPage:
+      type: object
+      required: [channel, state, subscribed, videos]
+      properties:
+        channel: { $ref: "#/components/schemas/Channel" }
+        state: { $ref: "#/components/schemas/ChannelState" }
+        subscribed: { type: boolean }
+        pendingRequest: { type: boolean }
+        videos:
+          type: array
+          description: Empty for a requestable channel.
+          items: { $ref: "#/components/schemas/Video" }
+
+    WatchPage:
+      type: object
+      required: [video, embedUrl, autoplay]
+      properties:
+        video: { $ref: "#/components/schemas/Video" }
+        embedUrl:
+          type: string
+          description: |
+            A youtube-nocookie.com embed URL. Tracking is disabled for videos
+            YouTube designates Made For Kids.
+        autoplay:
+          type: boolean
+          description: Reflects the child's watchPageAutoplay setting.
+        reaction:
+          type: string
+          enum: [like, dislike]
+        shareUrl:
+          type: string
+          description: A canonical youtube.com link, for sharing out.
+
+    SearchResults:
+      type: object
+      required: [channels, videos]
+      properties:
+        channels:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Channel"
+              - type: object
+                required: [state]
+                properties:
+                  state: { $ref: "#/components/schemas/ChannelState" }
+                  pendingRequest: { type: boolean }
+        videos:
+          type: array
+          description: Empty when videoSearchTiles is off for this child.
+          items: { $ref: "#/components/schemas/Video" }
+
+    Keyword:
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+        - $ref: "#/components/schemas/KeywordInput"
+
+    KeywordInput:
+      type: object
+      required: [term]
+      properties:
+        term: { type: string, minLength: 1 }
+        childId:
+          type: string
+          format: uuid
+          description: Omit for a family-wide keyword. Per-child keywords add to those.
+        matchTitle: { type: boolean, default: true }
+        matchTags: { type: boolean, default: true }
+        matchDescription:
+          type: boolean
+          default: false
+          description: |
+            Off by default. Descriptions carry sponsor copy and boilerplate, so
+            matching them false-positives hard.
+        wholeWord:
+          type: boolean
+          default: true
+          description: Whole-word matching avoids blocking "gun" and killing "begun".
+
+    Request:
+      type: object
+      required: [id, childId, channel, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        childId: { type: string, format: uuid }
+        childName: { type: string }
+        channel: { $ref: "#/components/schemas/Channel" }
+        promptedByVideo: { $ref: "#/components/schemas/Video" }
+        status: { $ref: "#/components/schemas/RequestStatus" }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        decidedByName: { type: string }
+
+    Suppression:
+      type: object
+      required: [id, video, term, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        video: { $ref: "#/components/schemas/Video" }
+        term: { type: string }
+        matchedField: { type: string, enum: [title, tags, description] }
+        createdAt: { type: string, format: date-time }
+
+    VideoPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Video" }
+        nextCursor: { type: string }
+
+    RequestPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Request" }
+        nextCursor: { type: string }
+
+    SuppressionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Suppression" }
+        nextCursor: { type: string }
