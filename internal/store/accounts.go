@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/nerdswhofish/coop/internal/domain"
 )
@@ -174,6 +175,86 @@ func (a *Accounts) CreateParent(ctx context.Context, familyID uuid.UUID, email,
 	return parent, nil
 }
 
+// CreateParentInvitation records a single-use credential and the scope that
+// will be granted when it is redeemed.
+func (a *Accounts) CreateParentInvitation(ctx context.Context, invitation ParentInvitation,
+	childIDs []uuid.UUID) (ParentInvitation, error) {
+
+	invitation.Email = normalizeEmail(invitation.Email)
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&invitation).Error; err != nil {
+			return fmt.Errorf("creating parent invitation: %w", err)
+		}
+		if len(childIDs) == 0 {
+			return nil
+		}
+
+		scopes := make([]ParentInvitationScope, len(childIDs))
+		for i, childID := range childIDs {
+			scopes[i] = ParentInvitationScope{InvitationID: invitation.ID, ChildID: childID}
+		}
+		if err := tx.Create(&scopes).Error; err != nil {
+			return fmt.Errorf("writing parent invitation scope: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return ParentInvitation{}, err
+	}
+	return invitation, nil
+}
+
+// RedeemParentInvitation consumes an invitation and creates the parent and
+// their scope in one transaction. The row lock makes concurrent redemption
+// attempts resolve to one winner.
+func (a *Accounts) RedeemParentInvitation(ctx context.Context, tokenHash,
+	passwordHash string) (Parent, error) {
+
+	var parent Parent
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var invitation ParentInvitation
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&invitation, "token_hash = ? AND used_at IS NULL AND expires_at > ?", tokenHash, a.now()).Error
+		if err != nil {
+			return wrap(err, "reading parent invitation")
+		}
+
+		var scopes []ParentInvitationScope
+		if err := tx.Where("invitation_id = ?", invitation.ID).Find(&scopes).Error; err != nil {
+			return fmt.Errorf("reading parent invitation scope: %w", err)
+		}
+		childIDs := make([]uuid.UUID, len(scopes))
+		for i, scope := range scopes {
+			childIDs[i] = scope.ChildID
+		}
+
+		parent = Parent{
+			FamilyID:     invitation.FamilyID,
+			Email:        invitation.Email,
+			PasswordHash: passwordHash,
+			Role:         invitation.Role,
+		}
+		if err := tx.Create(&parent).Error; err != nil {
+			return fmt.Errorf("creating invited parent: %w", err)
+		}
+		if invitation.Role == domain.RoleParent {
+			if err := setScopeTx(tx, parent.ID, childIDs); err != nil {
+				return err
+			}
+		}
+
+		usedAt := a.now()
+		if err := tx.Model(&invitation).Update("used_at", usedAt).Error; err != nil {
+			return fmt.Errorf("consuming parent invitation: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return Parent{}, err
+	}
+	return parent, nil
+}
+
 // DeleteParent removes a parent, refusing to strand a family without an admin.
 func (a *Accounts) DeleteParent(ctx context.Context, familyID, parentID uuid.UUID) error {
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -287,6 +368,14 @@ func (a *Accounts) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("purging sessions: %w", result.Error)
 	}
 	return result.RowsAffected, nil
+}
+
+// PurgeParentInvitations drops credentials that are expired or already used.
+func (a *Accounts) PurgeParentInvitations(ctx context.Context) (int64, error) {
+	result := a.db.WithContext(ctx).
+		Where("expires_at <= ? OR used_at IS NOT NULL", a.now()).
+		Delete(&ParentInvitation{})
+	return result.RowsAffected, wrap(result.Error, "purging parent invitations")
 }
 
 // CreateChild adds a viewing profile.

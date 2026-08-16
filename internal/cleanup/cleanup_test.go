@@ -13,6 +13,7 @@ type fakeStores struct {
 	cacheCount   int64
 	sessionCount int64
 	pairingCount int64
+	inviteCount  int64
 	quotaCount   int64
 	searchCount  int64
 	cacheErr     error
@@ -34,6 +35,11 @@ func (f *fakeStores) PurgeExpiredSessions(context.Context) (int64, error) {
 func (f *fakeStores) PurgeExpiredPairingCodes(context.Context) (int64, error) {
 	f.called = append(f.called, "pairing")
 	return f.pairingCount, nil
+}
+
+func (f *fakeStores) PurgeParentInvitations(context.Context) (int64, error) {
+	f.called = append(f.called, "invitations")
+	return f.inviteCount, nil
 }
 
 func (f *fakeStores) PurgeBefore(_ context.Context, day string) (int64, error) {
@@ -63,8 +69,9 @@ func TestCleanPurgesEveryBoundedTable(t *testing.T) {
 		cacheCount:   1,
 		sessionCount: 2,
 		pairingCount: 3,
-		quotaCount:   4,
-		searchCount:  5,
+		inviteCount:  4,
+		quotaCount:   5,
+		searchCount:  6,
 	}
 	now := time.Date(2026, 8, 16, 6, 30, 0, 0, time.UTC)
 
@@ -72,7 +79,7 @@ func TestCleanPurgesEveryBoundedTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Clean() error = %v", err)
 	}
-	want := Stats{Cache: 1, Sessions: 2, PairingCodes: 3, Quota: 4, Searches: 5}
+	want := Stats{Cache: 1, Sessions: 2, PairingCodes: 3, Invitations: 4, Quota: 5, Searches: 6}
 	if stats != want {
 		t.Errorf("Clean() stats = %+v, want %+v", stats, want)
 	}
@@ -80,23 +87,23 @@ func TestCleanPurgesEveryBoundedTable(t *testing.T) {
 		t.Errorf("ledger cutoff = (%q, %q), want Pacific quota day 2026-08-15",
 			stores.quotaDay, stores.searchDay)
 	}
-	if len(stores.called) != 5 {
-		t.Errorf("cleanup calls = %v, want all five", stores.called)
+	if len(stores.called) != 6 {
+		t.Errorf("cleanup calls = %v, want all six", stores.called)
 	}
 }
 
 func TestCleanContinuesAfterFailure(t *testing.T) {
 	wantErr := errors.New("database unavailable")
-	stores := &fakeStores{cacheErr: wantErr, sessionCount: 2, pairingCount: 3, quotaCount: 4, searchCount: 5}
+	stores := &fakeStores{cacheErr: wantErr, sessionCount: 2, pairingCount: 3, inviteCount: 4, quotaCount: 5, searchCount: 6}
 
 	stats, err := newService(t, stores, time.Now()).Clean(context.Background())
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Clean() error = %v, want cache failure", err)
 	}
-	if stats.Sessions != 2 || stats.PairingCodes != 3 || stats.Quota != 4 || stats.Searches != 5 {
+	if stats.Sessions != 2 || stats.PairingCodes != 3 || stats.Invitations != 4 || stats.Quota != 5 || stats.Searches != 6 {
 		t.Errorf("Clean() stopped after a failure: %+v", stats)
 	}
-	if len(stores.called) != 5 {
+	if len(stores.called) != 6 {
 		t.Errorf("cleanup calls = %v, want all five after a failure", stores.called)
 	}
 }

@@ -7,8 +7,8 @@ info:
     Coop is a self-hosted, parent-curated YouTube for kids.
 
     This document is the contract between the Go backend and the two native
-    clients. Both the server handlers and the Swift client are generated from
-    it, so drift is a build failure rather than a runtime surprise.
+    clients. The Swift client is generated from it, and the server is tested
+    against it so drift fails before release rather than at runtime.
 
     Two disjoint surfaces share one server:
 
@@ -47,8 +47,44 @@ security:
   - parentSession: []
 
 paths:
+  /setup:
+    get:
+      operationId: getSetupStatus
+      tags: [parent-auth]
+      summary: Report whether first-run setup is available
+      security: []
+      responses:
+        "200":
+          description: Setup status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+    post:
+      operationId: setUpFamily
+      tags: [parent-auth]
+      summary: Create the first family and admin
+      description: Refused once any family exists on the instance.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupRequest" }
+      responses:
+        "201":
+          description: Family created and authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "409":
+          description: The instance is already configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /healthz:
     get:
+      operationId: getHealth
       tags: [system]
       summary: Liveness and database reachability
       security: []
@@ -60,6 +96,7 @@ paths:
 
   /parent/auth/login:
     post:
+      operationId: logInParent
       tags: [parent-auth]
       summary: Exchange credentials for a session
       security: []
@@ -75,30 +112,6 @@ paths:
                 password: { type: string, format: password }
       responses:
         "200":
-          description: Authenticated, or a TOTP challenge
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/LoginResult" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-
-  /parent/auth/totp:
-    post:
-      tags: [parent-auth]
-      summary: Complete a TOTP challenge
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [challengeToken, code]
-              properties:
-                challengeToken: { type: string }
-                code: { type: string, pattern: "^[0-9]{6}$" }
-      responses:
-        "200":
           description: Authenticated
           content:
             application/json:
@@ -106,8 +119,33 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /parent/auth/invitation:
+    post:
+      operationId: acceptParentInvitation
+      tags: [parent-auth]
+      summary: Accept a single-use parent invitation
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, password]
+              properties:
+                code: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "201":
+          description: Parent created and authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /parent/me:
     get:
+      operationId: getCurrentParent
       tags: [parent-auth]
       summary: The signed-in parent
       responses:
@@ -122,6 +160,7 @@ paths:
 
   /parent/family:
     get:
+      operationId: getFamily
       tags: [family]
       summary: Read family settings
       responses:
@@ -131,6 +170,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Family" }
     patch:
+      operationId: updateFamily
       tags: [family]
       summary: Update family settings
       requestBody:
@@ -152,6 +192,7 @@ paths:
 
   /parent/family/api-key:
     put:
+      operationId: setFamilyAPIKey
       tags: [family]
       summary: Set the family's YouTube Data API key
       description: |
@@ -177,6 +218,7 @@ paths:
 
   /parent/family/quota:
     get:
+      operationId: getFamilyQuota
       tags: [family]
       summary: Today's API spend against each budget
       responses:
@@ -192,6 +234,7 @@ paths:
 
   /parent/parents:
     get:
+      operationId: listParents
       tags: [family]
       summary: List parents. Admin only
       responses:
@@ -206,6 +249,7 @@ paths:
 
   /parent/parents/invite:
     post:
+      operationId: inviteParent
       tags: [family]
       summary: Create a single-use invitation. Admin only
       requestBody:
@@ -217,9 +261,13 @@ paths:
               required: [email, childIds]
               properties:
                 email: { type: string, format: email }
+                role:
+                  type: string
+                  enum: [admin, parent]
+                  default: parent
                 childIds:
                   type: array
-                  description: Children this parent may manage. Empty grants nothing.
+                  description: Children this parent may manage. Must be empty for admins.
                   items: { type: string, format: uuid }
       responses:
         "201":
@@ -233,6 +281,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ParentId"
     delete:
+      operationId: deleteParent
       tags: [family]
       summary: Remove a parent. Admin only
       description: Removing the last admin is refused, since nothing could restore access.
@@ -249,6 +298,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ParentId"
     put:
+      operationId: setParentScope
       tags: [family]
       summary: Replace which children a parent may manage. Admin only
       requestBody:
@@ -270,6 +320,7 @@ paths:
 
   /parent/children:
     get:
+      operationId: listChildren
       tags: [children]
       summary: List children in scope
       responses:
@@ -281,6 +332,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Child" }
     post:
+      operationId: createChild
       tags: [children]
       summary: Create a child profile. Admin only
       requestBody:
@@ -305,6 +357,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChildId"
     get:
+      operationId: getChild
       tags: [children]
       summary: Read one child
       responses:
@@ -315,6 +368,7 @@ paths:
               schema: { $ref: "#/components/schemas/Child" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
+      operationId: updateChild
       tags: [children]
       summary: Update a child's settings
       requestBody:
@@ -330,6 +384,7 @@ paths:
               schema: { $ref: "#/components/schemas/Child" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
+      operationId: deleteChild
       tags: [children]
       summary: Delete a child and everything belonging to them. Admin only
       responses:
@@ -342,6 +397,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChildId"
     post:
+      operationId: createPairingCode
       tags: [pairing]
       summary: Mint a single-use pairing code for a child device
       responses:
@@ -356,6 +412,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChildId"
     get:
+      operationId: listChildDevices
       tags: [pairing]
       summary: List a child's paired devices
       responses:
@@ -374,6 +431,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     delete:
+      operationId: revokeChildDevice
       tags: [pairing]
       summary: Revoke a paired device
       responses:
@@ -384,6 +442,7 @@ paths:
 
   /parent/allowlist/global:
     get:
+      operationId: getGlobalAllowlist
       tags: [allowlist]
       summary: Channels approved for every child
       responses:
@@ -395,6 +454,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/ApprovedChannel" }
     put:
+      operationId: allowChannelGlobally
       tags: [allowlist]
       summary: Approve a channel for every child
       requestBody:
@@ -413,6 +473,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
     delete:
+      operationId: disallowChannelGlobally
       tags: [allowlist]
       summary: Remove a channel from the global allowlist
       responses:
@@ -422,6 +483,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChildId"
     get:
+      operationId: getChildAllowlist
       tags: [allowlist]
       summary: Channels this child may watch, with the reason for each
       description: |
@@ -437,6 +499,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/EffectiveChannel" }
     put:
+      operationId: allowChannelForChild
       tags: [allowlist]
       summary: Approve a channel for this child only
       requestBody:
@@ -456,6 +519,7 @@ paths:
       - $ref: "#/components/parameters/ChildId"
       - $ref: "#/components/parameters/ChannelId"
     delete:
+      operationId: disallowChannelForChild
       tags: [allowlist]
       summary: Remove a channel from this child's own allowlist
       responses:
@@ -466,11 +530,13 @@ paths:
       - $ref: "#/components/parameters/ChildId"
       - $ref: "#/components/parameters/ChannelId"
     put:
+      operationId: denyChannelForChild
       tags: [allowlist]
       summary: Subtract a globally approved channel from this child
       responses:
         "204": { description: Denied }
     delete:
+      operationId: removeChildChannelDenial
       tags: [allowlist]
       summary: Remove the per-child denial
       responses:
@@ -478,6 +544,7 @@ paths:
 
   /parent/blocklist:
     get:
+      operationId: getChannelBlocklist
       tags: [allowlist]
       summary: Channels hidden family-wide
       description: Blocked channels are invisible to children and cannot be requested.
@@ -490,6 +557,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/BlockedChannel" }
     put:
+      operationId: blockChannel
       tags: [allowlist]
       summary: Block a channel family-wide
       requestBody:
@@ -509,6 +577,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
     delete:
+      operationId: unblockChannel
       tags: [allowlist]
       summary: Unblock a channel
       responses:
@@ -518,6 +587,7 @@ paths:
 
   /parent/keywords:
     get:
+      operationId: listKeywords
       tags: [keywords]
       summary: List negative keywords
       parameters:
@@ -534,6 +604,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Keyword" }
     post:
+      operationId: createKeyword
       tags: [keywords]
       summary: Create a negative keyword
       requestBody:
@@ -555,6 +626,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     patch:
+      operationId: updateKeyword
       tags: [keywords]
       summary: Update a keyword
       requestBody:
@@ -569,6 +641,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Keyword" }
     delete:
+      operationId: deleteKeyword
       tags: [keywords]
       summary: Delete a keyword
       responses:
@@ -578,6 +651,7 @@ paths:
 
   /parent/requests:
     get:
+      operationId: listParentRequests
       tags: [requests]
       summary: Requests raised by children in scope
       parameters:
@@ -597,6 +671,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/RequestId"
     post:
+      operationId: approveRequest
       tags: [requests]
       summary: Approve a request
       requestBody:
@@ -623,6 +698,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/RequestId"
     post:
+      operationId: denyRequest
       tags: [requests]
       summary: Deny a request
       requestBody:
@@ -650,6 +726,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChildId"
     get:
+      operationId: listSuppressions
       tags: [suppressions]
       summary: Videos a keyword hid from this child
       parameters:
@@ -669,6 +746,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     post:
+      operationId: overrideSuppression
       tags: [suppressions]
       summary: Allow the suppressed video after all
       requestBody:
@@ -689,6 +767,7 @@ paths:
 
   /parent/search/channels:
     get:
+      operationId: searchChannelsForParent
       tags: [allowlist]
       summary: Find channels to approve
       description: |
@@ -718,6 +797,7 @@ paths:
 
   /child/pair:
     post:
+      operationId: pairChildDevice
       tags: [child-session]
       summary: Redeem a pairing code for a device token
       security: []
@@ -750,6 +830,7 @@ paths:
 
   /child/me:
     get:
+      operationId: getChildProfile
       tags: [child-session]
       summary: The paired child's profile and enabled surfaces
       security:
@@ -764,6 +845,7 @@ paths:
 
   /child/feed:
     get:
+      operationId: getChildFeed
       tags: [child-browse]
       summary: Home feed, newest first across subscribed and allowed channels
       security:
@@ -780,6 +862,7 @@ paths:
 
   /child/shorts:
     get:
+      operationId: getChildShorts
       tags: [child-browse]
       summary: Shorts feed
       description: |
@@ -808,6 +891,7 @@ paths:
 
   /child/subscriptions:
     get:
+      operationId: listChildSubscriptions
       tags: [child-browse]
       summary: Channels this child subscribes to
       security:
@@ -825,6 +909,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
     put:
+      operationId: subscribeToChannel
       tags: [child-browse]
       summary: Subscribe. Local to Coop, never written to YouTube
       security:
@@ -833,6 +918,7 @@ paths:
         "204": { description: Subscribed }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
+      operationId: unsubscribeFromChannel
       tags: [child-browse]
       summary: Unsubscribe
       security:
@@ -844,6 +930,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ChannelId"
     get:
+      operationId: getChildChannel
       tags: [child-browse]
       summary: A channel page
       description: |
@@ -862,6 +949,7 @@ paths:
 
   /child/search:
     get:
+      operationId: searchForChild
       tags: [child-browse]
       summary: Search channels and videos
       description: |
@@ -891,6 +979,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/VideoId"
     get:
+      operationId: getChildVideo
       tags: [child-browse]
       summary: Watch page data, including the embed URL
       security:
@@ -907,6 +996,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/VideoId"
     put:
+      operationId: setVideoReaction
       tags: [child-activity]
       summary: Record a local like or dislike
       security:
@@ -923,6 +1013,7 @@ paths:
       responses:
         "204": { description: Recorded }
     delete:
+      operationId: clearVideoReaction
       tags: [child-activity]
       summary: Clear the reaction
       security:
@@ -934,6 +1025,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/VideoId"
     post:
+      operationId: recordVideoWatch
       tags: [child-activity]
       summary: Report watch progress
       description: Completion, not starts, is what the ranker weighs.
@@ -954,6 +1046,7 @@ paths:
 
   /child/requests:
     get:
+      operationId: listChildRequests
       tags: [child-activity]
       summary: This child's own requests and their outcomes
       security:
@@ -967,6 +1060,7 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Request" }
     post:
+      operationId: createChildRequest
       tags: [child-activity]
       summary: Ask for a channel
       description: |
@@ -1088,10 +1182,20 @@ components:
         on the child surface at all.
       enum: [allowed, requestable, blocked]
 
-    LoginResult:
-      oneOf:
-        - $ref: "#/components/schemas/Session"
-        - $ref: "#/components/schemas/TOTPChallenge"
+    SetupStatus:
+      type: object
+      required: [needsSetup]
+      properties:
+        needsSetup: { type: boolean }
+
+    SetupRequest:
+      type: object
+      required: [familyName, email, password]
+      properties:
+        familyName: { type: string }
+        timezone: { type: string, default: UTC }
+        email: { type: string, format: email }
+        password: { type: string, format: password }
 
     Session:
       type: object
@@ -1100,12 +1204,6 @@ components:
         token: { type: string }
         expiresAt: { type: string, format: date-time }
         parent: { $ref: "#/components/schemas/Parent" }
-
-    TOTPChallenge:
-      type: object
-      required: [challengeToken]
-      properties:
-        challengeToken: { type: string }
 
     Parent:
       type: object
@@ -1122,10 +1220,14 @@ components:
 
     Invitation:
       type: object
-      required: [code, email, expiresAt]
+      required: [code, email, role, childIds, expiresAt]
       properties:
         code: { type: string }
         email: { type: string, format: email }
+        role: { type: string, enum: [admin, parent] }
+        childIds:
+          type: array
+          items: { type: string, format: uuid }
         expiresAt: { type: string, format: date-time }
 
     Family:

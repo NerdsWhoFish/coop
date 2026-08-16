@@ -29,7 +29,7 @@ func validConfig() *Config {
 			UploadsRefreshInterval: 6 * time.Hour,
 			IngestPollInterval:     time.Minute,
 		},
-		Auth: Auth{EncryptionKey: validKey},
+		Auth: Auth{EncryptionKey: validKey, InvitationTTL: 7 * 24 * time.Hour},
 		Log:  Log{Level: "info", Format: "json"},
 	}
 }
@@ -184,6 +184,9 @@ func TestLoadDefaultsFromEnv(t *testing.T) {
 	}
 	if cfg.YouTube.IngestPollInterval != time.Minute {
 		t.Errorf("IngestPollInterval = %v, want 1m", cfg.YouTube.IngestPollInterval)
+	}
+	if cfg.Auth.InvitationTTL != 7*24*time.Hour {
+		t.Errorf("InvitationTTL = %v, want 168h", cfg.Auth.InvitationTTL)
 	}
 }
 

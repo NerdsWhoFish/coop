@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -98,6 +99,41 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	writeJSON(w, s.deps.Logger, http.StatusOK, session)
+	return nil
+}
+
+// handleAcceptParentInvitation turns a one-time invitation into an adult
+// login. The invitation code stays in the body so reverse proxies do not log it.
+func (s *Server) handleAcceptParentInvitation(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Code     string `json:"code"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	if body.Code == "" {
+		return badRequest("code is required")
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		return badRequest(err.Error())
+	}
+	parent, err := s.deps.Accounts.RedeemParentInvitation(
+		r.Context(), auth.HashToken(body.Code), hash)
+	if errors.Is(err, store.ErrNotFound) {
+		return unauthorized()
+	}
+	if err != nil {
+		return err
+	}
+
+	session, err := s.newSession(r, parent)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, s.deps.Logger, http.StatusCreated, session)
 	return nil
 }
 
@@ -270,14 +306,13 @@ func (s *Server) handleListParents(w http.ResponseWriter, r *http.Request, p aut
 	return nil
 }
 
-func (s *Server) handleCreateParent(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
+func (s *Server) handleInviteParent(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
 	if err := p.RequireAdmin(); err != nil {
 		return err
 	}
 
 	var body struct {
 		Email    string      `json:"email"`
-		Password string      `json:"password"`
 		Role     string      `json:"role"`
 		ChildIDs []uuid.UUID `json:"childIds"`
 	}
@@ -288,9 +323,15 @@ func (s *Server) handleCreateParent(w http.ResponseWriter, r *http.Request, p au
 		return badRequest("email is required")
 	}
 
-	role := domain.RoleParent
-	if body.Role == string(domain.RoleAdmin) {
-		role = domain.RoleAdmin
+	role := domain.ParentRole(body.Role)
+	if role == "" {
+		role = domain.RoleParent
+	}
+	if role != domain.RoleParent && role != domain.RoleAdmin {
+		return badRequest("role must be admin or parent")
+	}
+	if role == domain.RoleAdmin && len(body.ChildIDs) > 0 {
+		return badRequest("admin invitations cannot have a child scope")
 	}
 
 	// Every named child must belong to this family, or an admin could scope a
@@ -301,18 +342,36 @@ func (s *Server) handleCreateParent(w http.ResponseWriter, r *http.Request, p au
 		}
 	}
 
-	hash, err := auth.HashPassword(body.Password)
-	if err != nil {
-		return badRequest(err.Error())
+	if _, err := s.deps.Accounts.ParentByEmail(r.Context(), body.Email); err == nil {
+		return conflict("parent_exists", "a parent with that email already exists")
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return err
 	}
 
-	parent, err := s.deps.Accounts.CreateParent(r.Context(), p.FamilyID,
-		body.Email, hash, role, body.ChildIDs)
+	token, err := auth.NewToken()
+	if err != nil {
+		return internal(err)
+	}
+	expiresAt := s.deps.Now().Add(s.deps.Config.Auth.InvitationTTL)
+	invitation, err := s.deps.Accounts.CreateParentInvitation(r.Context(), store.ParentInvitation{
+		FamilyID:  p.FamilyID,
+		Email:     body.Email,
+		Role:      role,
+		TokenHash: token.Hash,
+		CreatedBy: p.ID,
+		ExpiresAt: expiresAt,
+	}, body.ChildIDs)
 	if err != nil {
 		return err
 	}
 
-	writeJSON(w, s.deps.Logger, http.StatusCreated, newParentDTO(parent, body.ChildIDs))
+	writeJSON(w, s.deps.Logger, http.StatusCreated, invitationDTO{
+		Code:      token.Plain,
+		Email:     invitation.Email,
+		Role:      string(invitation.Role),
+		ChildIDs:  body.ChildIDs,
+		ExpiresAt: invitation.ExpiresAt,
+	})
 	return nil
 }
 

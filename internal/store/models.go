@@ -60,6 +60,27 @@ type ParentScope struct {
 	CreatedAt time.Time
 }
 
+// ParentInvitation is a single-use credential for creating an adult login.
+// Only the token hash is persisted; the plain token is returned once.
+type ParentInvitation struct {
+	ID        uuid.UUID         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	FamilyID  uuid.UUID         `gorm:"type:uuid;not null;index"`
+	Email     string            `gorm:"not null"`
+	Role      domain.ParentRole `gorm:"type:text;not null"`
+	TokenHash string            `gorm:"not null;uniqueIndex"`
+	CreatedBy uuid.UUID         `gorm:"type:uuid;not null"`
+	ExpiresAt time.Time         `gorm:"not null;index"`
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
+// ParentInvitationScope becomes a parent scope when its invitation is redeemed.
+type ParentInvitationScope struct {
+	InvitationID uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ChildID      uuid.UUID `gorm:"type:uuid;primaryKey"`
+	CreatedAt    time.Time
+}
+
 // Child is a viewing profile. It holds no credentials and no personal data
 // beyond a display name.
 type Child struct {
@@ -297,6 +318,7 @@ type QuotaSpend struct {
 func AllModels() []any {
 	return []any{
 		&Family{}, &Parent{}, &ParentSession{}, &ParentScope{},
+		&ParentInvitation{}, &ParentInvitationScope{},
 		&Child{}, &ChildDevice{}, &PairingCode{},
 		&Channel{}, &Video{},
 		&AllowGlobal{}, &AllowChild{}, &DenyChild{}, &BlockChannel{},

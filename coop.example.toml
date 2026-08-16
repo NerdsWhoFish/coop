@@ -29,6 +29,7 @@ encryption_key = ""
 parent_session_ttl = "720h"
 child_token_ttl = "8760h"
 pairing_code_ttl = "15m"
+invitation_ttl = "168h"
 
 [youtube]
 # Google allows 10000 units per project per day and there is no paid tier.

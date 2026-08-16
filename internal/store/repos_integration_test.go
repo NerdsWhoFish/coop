@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -316,6 +317,58 @@ func TestFamiliesWithAPIKeysExcludesUnconfiguredFamilies(t *testing.T) {
 	}
 }
 
+func TestParentInvitationIsScopedAndSingleUse(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, admin, err := accounts.CreateFamily(
+		ctx, "Invitations", "UTC", uuid.NewString()+"@example.com", "admin-hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := "invitation-" + uuid.NewString()
+	invitation, err := accounts.CreateParentInvitation(ctx, ParentInvitation{
+		FamilyID:  family.ID,
+		Email:     "  INVITED@example.com ",
+		Role:      domain.RoleParent,
+		TokenHash: tokenHash,
+		CreatedBy: admin.ID,
+		ExpiresAt: now.Add(time.Hour),
+	}, []uuid.UUID{child.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invitation.Email != "invited@example.com" {
+		t.Errorf("invitation email = %q, want normalized", invitation.Email)
+	}
+
+	parent, err := accounts.RedeemParentInvitation(ctx, tokenHash, "parent-hash")
+	if err != nil {
+		t.Fatalf("RedeemParentInvitation() error = %v", err)
+	}
+	if parent.Email != "invited@example.com" || parent.PasswordHash != "parent-hash" {
+		t.Errorf("created parent = %+v", parent)
+	}
+	scope, err := accounts.ScopedChildIDs(ctx, parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scope) != 1 || scope[0] != child.ID {
+		t.Errorf("parent scope = %v, want [%s]", scope, child.ID)
+	}
+
+	if _, err := accounts.RedeemParentInvitation(ctx, tokenHash, "another-hash"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second redemption error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
 	db := migratedDB(t)
 	ctx := context.Background()
@@ -349,6 +402,15 @@ func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
 		{ID: "UCdefghijklmnopqrstuvwxyz", Title: "globally allowed but denied"},
 		{ID: "UCefghijklmnopqrstuvwxyz0", Title: "search only"},
 	}
+	t.Cleanup(func() {
+		ids := make([]string, len(channels))
+		for i, channel := range channels {
+			ids[i] = channel.ID
+		}
+		if err := db.Delete(&Channel{}, "id IN ?", ids).Error; err != nil {
+			t.Errorf("cleaning channels: %v", err)
+		}
+	})
 	if err := catalog.UpsertChannels(ctx, channels); err != nil {
 		t.Fatal(err)
 	}

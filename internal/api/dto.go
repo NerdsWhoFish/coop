@@ -39,6 +39,14 @@ type familyDTO struct {
 	APIKeyConfigured bool      `json:"apiKeyConfigured"`
 }
 
+type invitationDTO struct {
+	Code      string      `json:"code"`
+	Email     string      `json:"email"`
+	Role      string      `json:"role"`
+	ChildIDs  []uuid.UUID `json:"childIds"`
+	ExpiresAt time.Time   `json:"expiresAt"`
+}
+
 func newFamilyDTO(f store.Family) familyDTO {
 	return familyDTO{
 		ID:               f.ID,

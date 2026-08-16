@@ -72,12 +72,14 @@ func (s *Server) routes() {
 	m := s.mux
 
 	m.HandleFunc("GET /healthz", s.handleHealth)
+	m.HandleFunc("GET /api/v1/healthz", s.handleHealth)
 	m.HandleFunc("GET /version", s.handleVersion)
 
 	// Setup and sign-in are the only unauthenticated write paths.
 	m.HandleFunc("GET /api/v1/setup", s.handle(s.handleSetupStatus))
 	m.HandleFunc("POST /api/v1/setup", s.handle(s.handleSetup))
 	m.HandleFunc("POST /api/v1/parent/auth/login", s.handle(s.handleLogin))
+	m.HandleFunc("POST /api/v1/parent/auth/invitation", s.handle(s.handleAcceptParentInvitation))
 
 	parent := func(pattern string, h parentHandler) {
 		m.HandleFunc(pattern, s.handle(s.withParent(h)))
@@ -94,7 +96,7 @@ func (s *Server) routes() {
 	parent("GET /api/v1/parent/family/quota", s.handleQuota)
 
 	parent("GET /api/v1/parent/parents", s.handleListParents)
-	parent("POST /api/v1/parent/parents", s.handleCreateParent)
+	parent("POST /api/v1/parent/parents/invite", s.handleInviteParent)
 	parent("DELETE /api/v1/parent/parents/{parentId}", s.handleDeleteParent)
 	parent("PUT /api/v1/parent/parents/{parentId}/scope", s.handleSetScope)
 

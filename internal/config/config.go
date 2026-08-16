@@ -94,6 +94,9 @@ type Auth struct {
 
 	// PairingCodeTTL bounds how long a pairing code stays redeemable.
 	PairingCodeTTL time.Duration `toml:"pairing_code_ttl" env:"AUTH_PAIRING_CODE_TTL"`
+
+	// InvitationTTL bounds how long a parent invitation stays redeemable.
+	InvitationTTL time.Duration `toml:"invitation_ttl" env:"AUTH_INVITATION_TTL"`
 }
 
 // Log holds logging settings.
@@ -130,6 +133,7 @@ func Defaults() *Config {
 			ParentSessionTTL: 30 * 24 * time.Hour,
 			ChildTokenTTL:    365 * 24 * time.Hour,
 			PairingCodeTTL:   15 * time.Minute,
+			InvitationTTL:    7 * 24 * time.Hour,
 		},
 		Log: Log{Level: "info", Format: "json"},
 	}
@@ -201,6 +205,9 @@ func (c *Config) Validate() error {
 	}
 	if c.YouTube.IngestPollInterval > c.YouTube.UploadsRefreshInterval {
 		errs = append(errs, errors.New("youtube.ingest_poll_interval must not exceed uploads_refresh_interval"))
+	}
+	if c.Auth.InvitationTTL <= 0 {
+		errs = append(errs, errors.New("auth.invitation_ttl must be positive"))
 	}
 
 	switch c.Log.Format {
