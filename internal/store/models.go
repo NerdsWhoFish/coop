@@ -258,6 +258,16 @@ type APICache struct {
 	ExpiresAt time.Time `gorm:"not null;index"`
 }
 
+// ChildSearch is the per-child daily search count that Child.DailySearchLimit
+// is enforced against. Day matches QuotaSpend so both roll over together.
+type ChildSearch struct {
+	ChildID uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Day     string    `gorm:"primaryKey"`
+	Count   int       `gorm:"not null;default:0"`
+
+	UpdatedAt time.Time
+}
+
 // QuotaSpend is the daily ledger behind the circuit breaker. Day is stored in
 // Pacific time because that is when Google's quota resets.
 type QuotaSpend struct {
@@ -280,6 +290,6 @@ func AllModels() []any {
 		&Keyword{}, &VideoOverride{},
 		&Subscription{}, &Reaction{}, &WatchEvent{},
 		&Request{}, &Suppression{},
-		&APICache{}, &QuotaSpend{},
+		&APICache{}, &QuotaSpend{}, &ChildSearch{},
 	}
 }
