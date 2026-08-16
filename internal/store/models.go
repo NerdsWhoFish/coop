@@ -42,6 +42,17 @@ type Parent struct {
 	UpdatedAt time.Time
 }
 
+// ParentSession is one signed-in parent device. A row per session so a second
+// device does not sign out the first, and one can be revoked alone.
+type ParentSession struct {
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ParentID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	TokenHash  string    `gorm:"not null;uniqueIndex"`
+	ExpiresAt  time.Time `gorm:"not null;index"`
+	LastSeenAt *time.Time
+	CreatedAt  time.Time
+}
+
 // ParentScope grants a non-admin parent access to one child.
 type ParentScope struct {
 	ParentID  uuid.UUID `gorm:"type:uuid;primaryKey"`
@@ -284,7 +295,8 @@ type QuotaSpend struct {
 // a matching migration.
 func AllModels() []any {
 	return []any{
-		&Family{}, &Parent{}, &ParentScope{}, &Child{}, &ChildDevice{}, &PairingCode{},
+		&Family{}, &Parent{}, &ParentSession{}, &ParentScope{},
+		&Child{}, &ChildDevice{}, &PairingCode{},
 		&Channel{}, &Video{},
 		&AllowGlobal{}, &AllowChild{}, &DenyChild{}, &BlockChannel{},
 		&Keyword{}, &VideoOverride{},

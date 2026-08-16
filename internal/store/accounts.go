@@ -226,6 +226,57 @@ func setScopeTx(tx *gorm.DB, parentID uuid.UUID, childIDs []uuid.UUID) error {
 	return nil
 }
 
+// CreateSession records a signed-in parent device.
+func (a *Accounts) CreateSession(ctx context.Context, parentID uuid.UUID,
+	tokenHash string, expiresAt time.Time) (ParentSession, error) {
+
+	session := ParentSession{ParentID: parentID, TokenHash: tokenHash, ExpiresAt: expiresAt}
+	err := a.db.WithContext(ctx).Create(&session).Error
+	return session, wrap(err, "creating session")
+}
+
+// SessionByToken resolves a session token to its parent, rejecting expired
+// sessions as though they never existed.
+func (a *Accounts) SessionByToken(ctx context.Context, tokenHash string) (ParentSession, Parent, error) {
+	var session ParentSession
+	err := a.db.WithContext(ctx).
+		First(&session, "token_hash = ? AND expires_at > ?", tokenHash, a.now()).Error
+	if err != nil {
+		return ParentSession{}, Parent{}, wrap(err, "reading session")
+	}
+
+	var parent Parent
+	if err := a.db.WithContext(ctx).First(&parent, "id = ?", session.ParentID).Error; err != nil {
+		return ParentSession{}, Parent{}, wrap(err, "reading session parent")
+	}
+	return session, parent, nil
+}
+
+// TouchSession records that a session was used, best effort.
+func (a *Accounts) TouchSession(ctx context.Context, sessionID uuid.UUID) error {
+	now := a.now()
+	return wrap(a.db.WithContext(ctx).Model(&ParentSession{}).
+		Where("id = ?", sessionID).
+		Update("last_seen_at", now).Error, "touching session")
+}
+
+// DeleteSession signs one device out.
+func (a *Accounts) DeleteSession(ctx context.Context, sessionID uuid.UUID) error {
+	return wrap(a.db.WithContext(ctx).
+		Delete(&ParentSession{}, "id = ?", sessionID).Error, "deleting session")
+}
+
+// PurgeExpiredSessions drops sessions past their expiry.
+func (a *Accounts) PurgeExpiredSessions(ctx context.Context) (int64, error) {
+	result := a.db.WithContext(ctx).
+		Where("expires_at <= ?", a.now()).
+		Delete(&ParentSession{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("purging sessions: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
 // CreateChild adds a viewing profile.
 func (a *Accounts) CreateChild(ctx context.Context, familyID uuid.UUID, name, avatarID string) (Child, error) {
 	child := Child{
