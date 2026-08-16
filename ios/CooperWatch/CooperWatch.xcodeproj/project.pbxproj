@@ -13,13 +13,17 @@
 		3CE098DF15ED14EDF63DFB73 /* ChildAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17DB97E074DC486B076F205 /* ChildAppModel.swift */; };
 		44FEADFD2D04D297C39BD40E /* ChildDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F505F2CFC2E49120031FDDE4 /* ChildDashboard.swift */; };
 		51546BFAB8F53D96769CB029 /* CooperWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8574B65886590196410E6CB /* CooperWatchTests.swift */; };
+		572BF383DE30E9ECC676D7EB /* ShortEmbeddedPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB7E4D2DB80084A81A969AF /* ShortEmbeddedPlayer.swift */; };
+		5B396E626218992A88D44212 /* ShortsFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC30EB2C441F8287349E4A3 /* ShortsFeedView.swift */; };
 		63B08D2E7E98D520AA5270D7 /* CooperWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E86E9A4AC4B3415C166CFC /* CooperWatchApp.swift */; };
 		64CE30B0C813335D92031068 /* ChildSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78177997C79BC196C892669F /* ChildSearchView.swift */; };
 		7B77FF825FA0E449D84BC319 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E0EE7B3EA6E78F00C8FD8A /* PairingView.swift */; };
+		93DE8EC80DEE9A0918641A26 /* CooperWatchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E673C35DD68853F479EA11 /* CooperWatchUITests.swift */; };
 		94C7C3DF17066F89D5D4C6D1 /* ChannelPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E82E953F0DCA636B8D8D3D0 /* ChannelPageView.swift */; };
 		9AE6858FBDF50AF24C85239F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD2F6EF4BA5769869A22E3F3 /* HomeView.swift */; };
 		A19BA1FA9E59402C1E87B9E4 /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20E388A16C40CA23F7FC372 /* WatchTheme.swift */; };
 		AA87AE1486C4BF27D4B7B571 /* VideoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55E4B135EDDA821C30106CEA /* VideoCard.swift */; };
+		CF08EE71802925761FC7A0C4 /* ShortPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7F014777E8985C0E1FFD7B /* ShortPageView.swift */; };
 		E0A36CCE3CE9B4E740D1AF43 /* SubscriptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239D30DFF25873E82BCE02AE /* SubscriptionsView.swift */; };
 		EFC277FB81DE4BB266F78319 /* WatchPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52D6143ECBAEA2D40D1F2435 /* WatchPageView.swift */; };
 /* End PBXBuildFile section */
@@ -32,10 +36,18 @@
 			remoteGlobalIDString = 4564E1929B6929DFBB5FB8BD;
 			remoteInfo = CooperWatch;
 		};
+		A02AA3F36CFD0208EDD0DFEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CC4A16527D287CBD55D63EA9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4564E1929B6929DFBB5FB8BD;
+			remoteInfo = CooperWatch;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		00E0EE7B3EA6E78F00C8FD8A /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		0FC30EB2C441F8287349E4A3 /* ShortsFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortsFeedView.swift; sourceTree = "<group>"; };
 		22E33F4CB246B3DB86A07F49 /* ChildRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildRootView.swift; sourceTree = "<group>"; };
 		239D30DFF25873E82BCE02AE /* SubscriptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionsView.swift; sourceTree = "<group>"; };
 		2E82E953F0DCA636B8D8D3D0 /* ChannelPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPageView.swift; sourceTree = "<group>"; };
@@ -44,14 +56,18 @@
 		78177997C79BC196C892669F /* ChildSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildSearchView.swift; sourceTree = "<group>"; };
 		92892C912773F57371E07472 /* CoopKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CoopKit; path = ../CoopKit; sourceTree = SOURCE_ROOT; };
 		99162D89BC9EDD3B8AA62CA6 /* CooperWatch.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CooperWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2CB0CD92F151B352B6141B5 /* CooperWatchUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B17DB97E074DC486B076F205 /* ChildAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildAppModel.swift; sourceTree = "<group>"; };
 		B1E86E9A4AC4B3415C166CFC /* CooperWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperWatchApp.swift; sourceTree = "<group>"; };
 		B8574B65886590196410E6CB /* CooperWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperWatchTests.swift; sourceTree = "<group>"; };
 		C1915E402A4C72CBAF358DAD /* CooperWatchTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDB7E4D2DB80084A81A969AF /* ShortEmbeddedPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortEmbeddedPlayer.swift; sourceTree = "<group>"; };
+		E0E673C35DD68853F479EA11 /* CooperWatchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperWatchUITests.swift; sourceTree = "<group>"; };
 		E20E388A16C40CA23F7FC372 /* WatchTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTheme.swift; sourceTree = "<group>"; };
 		F505F2CFC2E49120031FDDE4 /* ChildDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildDashboard.swift; sourceTree = "<group>"; };
 		F8E37811CB8A7D9409E7C9D9 /* ChildRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildRequestsView.swift; sourceTree = "<group>"; };
 		FD2F6EF4BA5769869A22E3F3 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		FF7F014777E8985C0E1FFD7B /* ShortPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortPageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +103,7 @@
 			children = (
 				99162D89BC9EDD3B8AA62CA6 /* CooperWatch.app */,
 				C1915E402A4C72CBAF358DAD /* CooperWatchTests.xctest */,
+				A2CB0CD92F151B352B6141B5 /* CooperWatchUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,6 +124,15 @@
 			path = Requests;
 			sourceTree = "<group>";
 		};
+		6E710D18F1B1B2E85843641E /* CooperWatchUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E0E673C35DD68853F479EA11 /* CooperWatchUITests.swift */,
+			);
+			name = CooperWatchUITests;
+			path = ../CooperWatchUITests;
+			sourceTree = "<group>";
+		};
 		6F9B1A6EA35F212D4C47EE2C /* Subscriptions */ = {
 			isa = PBXGroup;
 			children = (
@@ -124,6 +150,7 @@
 				583476207A63D54559BA1723 /* Requests */,
 				E284B0FBF1CB3D9D5889E394 /* Search */,
 				155390AB5C0533BFC7946780 /* Shared */,
+				C9145BD45F70E5CCC5BC45DB /* Shorts */,
 				6F9B1A6EA35F212D4C47EE2C /* Subscriptions */,
 				F44FF2930B7D9023D66E6728 /* Watch */,
 			);
@@ -157,11 +184,22 @@
 			path = Pairing;
 			sourceTree = "<group>";
 		};
+		C9145BD45F70E5CCC5BC45DB /* Shorts */ = {
+			isa = PBXGroup;
+			children = (
+				DDB7E4D2DB80084A81A969AF /* ShortEmbeddedPlayer.swift */,
+				FF7F014777E8985C0E1FFD7B /* ShortPageView.swift */,
+				0FC30EB2C441F8287349E4A3 /* ShortsFeedView.swift */,
+			);
+			path = Shorts;
+			sourceTree = "<group>";
+		};
 		C9F76F80BE5D3C74BA4946C6 = {
 			isa = PBXGroup;
 			children = (
 				B6D73111912CBD48B4382C4E /* App */,
 				FA4C2FF92FCF88ABF17E732C /* CooperWatchTests */,
+				6E710D18F1B1B2E85843641E /* CooperWatchUITests */,
 				1EB314632748B38DFF1926DB /* DesignSystem */,
 				79F37FEDA379CDCCC3C6AEDE /* Features */,
 				4EC5EFC053162D7146FA7C19 /* Packages */,
@@ -205,6 +243,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		12181DDCEC435B121331C387 /* CooperWatchUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC92C1934FB53F0D50107EB6 /* Build configuration list for PBXNativeTarget "CooperWatchUITests" */;
+			buildPhases = (
+				8EC5B1E7FE4BD04899741137 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				104F7546C402266AB6BB79AA /* PBXTargetDependency */,
+			);
+			name = CooperWatchUITests;
+			packageProductDependencies = (
+			);
+			productName = CooperWatchUITests;
+			productReference = A2CB0CD92F151B352B6141B5 /* CooperWatchUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		4564E1929B6929DFBB5FB8BD /* CooperWatch */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A3F1D5B862C500386C26C7AE /* Build configuration list for PBXNativeTarget "CooperWatch" */;
@@ -251,6 +307,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					12181DDCEC435B121331C387 = {
+						TestTargetID = 4564E1929B6929DFBB5FB8BD;
+					};
 				};
 			};
 			buildConfigurationList = 1D9923140BADB5381CEFFF6D /* Build configuration list for PBXProject "CooperWatch" */;
@@ -272,6 +331,7 @@
 			targets = (
 				4564E1929B6929DFBB5FB8BD /* CooperWatch */,
 				F6C3FD0AA1A3A5312C20C889 /* CooperWatchTests */,
+				12181DDCEC435B121331C387 /* CooperWatchUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -290,6 +350,9 @@
 				63B08D2E7E98D520AA5270D7 /* CooperWatchApp.swift in Sources */,
 				9AE6858FBDF50AF24C85239F /* HomeView.swift in Sources */,
 				7B77FF825FA0E449D84BC319 /* PairingView.swift in Sources */,
+				572BF383DE30E9ECC676D7EB /* ShortEmbeddedPlayer.swift in Sources */,
+				CF08EE71802925761FC7A0C4 /* ShortPageView.swift in Sources */,
+				5B396E626218992A88D44212 /* ShortsFeedView.swift in Sources */,
 				E0A36CCE3CE9B4E740D1AF43 /* SubscriptionsView.swift in Sources */,
 				AA87AE1486C4BF27D4B7B571 /* VideoCard.swift in Sources */,
 				EFC277FB81DE4BB266F78319 /* WatchPageView.swift in Sources */,
@@ -305,9 +368,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8EC5B1E7FE4BD04899741137 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				93DE8EC80DEE9A0918641A26 /* CooperWatchUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		104F7546C402266AB6BB79AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4564E1929B6929DFBB5FB8BD /* CooperWatch */;
+			targetProxy = A02AA3F36CFD0208EDD0DFEA /* PBXContainerItemProxy */;
+		};
 		AF8C532660F72D0AA59ED049 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4564E1929B6929DFBB5FB8BD /* CooperWatch */;
@@ -491,6 +567,40 @@
 			};
 			name = Debug;
 		};
+		D77BD59DA93C658435F296C5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "fish.nerdswhofish.coop.child.ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CooperWatch;
+			};
+			name = Debug;
+		};
+		D96299DB76E0850817C25AB5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "fish.nerdswhofish.coop.child.ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CooperWatch;
+			};
+			name = Release;
+		};
 		E7B6ABD21A19F4EB9A61A77C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -528,6 +638,15 @@
 			buildConfigurations = (
 				E7B6ABD21A19F4EB9A61A77C /* Debug */,
 				87D684EDF11A97DCBE8CD8A8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BC92C1934FB53F0D50107EB6 /* Build configuration list for PBXNativeTarget "CooperWatchUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D77BD59DA93C658435F296C5 /* Debug */,
+				D96299DB76E0850817C25AB5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -18,6 +18,7 @@ final class ChildAppModel {
   var subscriptions: [Components.Schemas.Channel] = []
   var isWorking = false
   var errorMessage: String?
+  private(set) var isPreviewMode = false
 
   private var api: CoopAPI?
   private let defaults = UserDefaults.standard
@@ -30,11 +31,12 @@ final class ChildAppModel {
   init() {
     #if DEBUG
       if ProcessInfo.processInfo.environment["COOP_UI_PREVIEW"] == "1" {
+        isPreviewMode = true
         serverAddress = "https://coop.example"
         profile = Components.Schemas.ChildProfile(
           id: "preview-child",
           name: "Cooper",
-          shortsEnabled: true,
+          shortsEnabled: ProcessInfo.processInfo.environment["COOP_UI_SHORTS_DISABLED"] != "1",
           watchPageAutoplay: false,
           videoSearchTiles: true
         )
@@ -101,7 +103,28 @@ final class ChildAppModel {
   }
 
   func video(id: String) async throws -> Components.Schemas.WatchPage? {
-    try await api?.childVideo(id: id)
+    #if DEBUG
+      if isPreviewMode, let video = Self.previewShorts.first(where: { $0.id == id }) {
+        return Components.Schemas.WatchPage(
+          video: video,
+          embedUrl: "https://www.youtube-nocookie.com/embed/\(video.id)",
+          autoplay: true,
+          shareUrl: "https://www.youtube.com/watch?v=\(video.id)"
+        )
+      }
+    #endif
+    return try await api?.childVideo(id: id)
+  }
+
+  func shorts(session: String, offset: Int, limit: Int = 8) async throws
+    -> [Components.Schemas.Video]
+  {
+    #if DEBUG
+      if isPreviewMode {
+        return (0..<limit).map { Self.previewShorts[(offset + $0) % Self.previewShorts.count] }
+      }
+    #endif
+    return try await api?.childShorts(session: session, offset: offset, limit: limit) ?? []
   }
 
   func setSubscribed(_ subscribed: Bool, channelID: String) async throws {
@@ -184,6 +207,33 @@ final class ChildAppModel {
         title: "Draw a Friendly Dragon Step by Step",
         durationSeconds: 665,
         isShort: false
+      ),
+    ]
+
+    private static let previewShorts = [
+      Components.Schemas.Video(
+        id: "tiny-volcano",
+        channelId: "science",
+        channelTitle: "Crash Course Kids",
+        title: "A volcano makes its own lightning",
+        durationSeconds: 42,
+        isShort: true
+      ),
+      Components.Schemas.Video(
+        id: "octopus-dream",
+        channelId: "animals",
+        channelTitle: "Brave Wilderness",
+        title: "Yes, octopuses change color while they dream",
+        durationSeconds: 58,
+        isShort: true
+      ),
+      Components.Schemas.Video(
+        id: "dragon-trick",
+        channelId: "build",
+        channelTitle: "Art for Kids Hub",
+        title: "The easiest trick for drawing dragon wings",
+        durationSeconds: 37,
+        isShort: true
       ),
     ]
   #endif

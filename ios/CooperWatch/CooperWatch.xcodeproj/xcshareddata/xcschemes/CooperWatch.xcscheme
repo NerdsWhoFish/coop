@@ -50,6 +50,17 @@
                ReferencedContainer = "container:CooperWatch.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "12181DDCEC435B121331C387"
+               BuildableName = "CooperWatchUITests.xctest"
+               BlueprintName = "CooperWatchUITests"
+               ReferencedContainer = "container:CooperWatch.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

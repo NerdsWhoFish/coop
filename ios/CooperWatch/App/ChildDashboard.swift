@@ -3,6 +3,7 @@ import SwiftUI
 struct ChildDashboard: View {
   private enum Tab: Hashable {
     case home
+    case shorts
     case channels
     case search
   }
@@ -13,9 +14,14 @@ struct ChildDashboard: View {
   init(model: ChildAppModel) {
     self.model = model
     let requested = ProcessInfo.processInfo.environment["COOP_UI_TAB"]
-    _selectedTab = State(
-      initialValue: requested == "channels" ? .channels : (requested == "search" ? .search : .home)
-    )
+    let initialTab: Tab
+    switch requested {
+    case "shorts": initialTab = .shorts
+    case "channels": initialTab = .channels
+    case "search": initialTab = .search
+    default: initialTab = .home
+    }
+    _selectedTab = State(initialValue: initialTab)
   }
 
   var body: some View {
@@ -23,6 +29,12 @@ struct ChildDashboard: View {
       HomeView(model: model)
         .tag(Tab.home)
         .tabItem { Label("Home", systemImage: "house.fill") }
+
+      if model.profile?.shortsEnabled == true {
+        ShortsFeedView(model: model)
+          .tag(Tab.shorts)
+          .tabItem { Label("Shorts", systemImage: "bolt.fill") }
+      }
 
       SubscriptionsView(model: model)
         .tag(Tab.channels)

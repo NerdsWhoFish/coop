@@ -36,6 +36,7 @@ targets:
     scheme:
       testTargets:
         - CooperWatchTests
+        - CooperWatchUITests
 
   CooperWatchTests:
     type: bundle.unit-test
@@ -47,4 +48,16 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.child.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  CooperWatchUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ../CooperWatchUITests
+    dependencies:
+      - target: CooperWatch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.child.ui-tests
         GENERATE_INFOPLIST_FILE: "YES"
