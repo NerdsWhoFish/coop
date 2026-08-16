@@ -253,7 +253,7 @@ type Suppression struct {
 type APICache struct {
 	Key       string    `gorm:"primaryKey"`
 	Endpoint  string    `gorm:"not null;index"`
-	Response  []byte    `gorm:"type:jsonb"`
+	Response  []byte    `gorm:"type:bytea;not null"`
 	FetchedAt time.Time `gorm:"not null"`
 	ExpiresAt time.Time `gorm:"not null;index"`
 }

@@ -249,10 +249,12 @@ CREATE UNIQUE INDEX idx_suppression_unique ON suppression (child_id, video_id, k
 
 -- Quota accounting ----------------------------------------------------------
 
+-- response is BYTEA rather than JSONB because this caches raw upstream bodies,
+-- and the channel feeds are XML. Nothing queries into it.
 CREATE TABLE api_cache (
     key        TEXT PRIMARY KEY,
     endpoint   TEXT        NOT NULL,
-    response   JSONB,
+    response   BYTEA       NOT NULL,
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL
 );
