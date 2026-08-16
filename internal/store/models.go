@@ -10,66 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-)
 
-// ParentRole controls how much of a family a parent can see and change.
-type ParentRole string
-
-const (
-	// RoleAdmin manages parents, holds the API key, and sees every child.
-	RoleAdmin ParentRole = "admin"
-	// RoleParent sees only the children granted by ParentScope.
-	RoleParent ParentRole = "parent"
-)
-
-// LiveState classifies a video against livestreaming. Archived is separate
-// because a finished stream reverts to liveBroadcastContent "none" while
-// keeping liveStreamingDetails, so one field lets old streams through.
-type LiveState string
-
-const (
-	LiveNone     LiveState = "none"
-	LiveLive     LiveState = "live"
-	LiveUpcoming LiveState = "upcoming"
-	LiveArchived LiveState = "archived"
-)
-
-// ShortSource records how a video's Shorts classification was decided. The RSS
-// window only moves forward, so a duration guess is permanent for that row and
-// repair is a manual pass, not a scheduled one. See docs/PLAN.md §8.
-type ShortSource string
-
-const (
-	// ShortSourceRSS is authoritative: YouTube's own canonical URL said so.
-	ShortSourceRSS ShortSource = "rss"
-	// ShortSourceDuration is a guess, used only for back catalog.
-	ShortSourceDuration ShortSource = "duration"
-)
-
-// RequestStatus tracks a child's ask through parent review.
-type RequestStatus string
-
-const (
-	RequestPending  RequestStatus = "pending"
-	RequestApproved RequestStatus = "approved"
-	RequestDenied   RequestStatus = "denied"
-)
-
-// ReactionKind is a child's local like or dislike, never sent to YouTube.
-type ReactionKind string
-
-const (
-	ReactionLike    ReactionKind = "like"
-	ReactionDislike ReactionKind = "dislike"
-)
-
-// QuotaPurpose partitions daily spend so backfill cannot starve the feed.
-type QuotaPurpose string
-
-const (
-	PurposeFeed     QuotaPurpose = "feed"
-	PurposeSearch   QuotaPurpose = "search"
-	PurposeBackfill QuotaPurpose = "backfill"
+	"github.com/nerdswhofish/coop/internal/domain"
 )
 
 // Family is the top-level tenant. One deployment may host several.
@@ -87,11 +29,11 @@ type Family struct {
 
 // Parent is an adult login.
 type Parent struct {
-	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	FamilyID     uuid.UUID  `gorm:"type:uuid;not null;index"`
-	Email        string     `gorm:"not null;uniqueIndex"`
-	PasswordHash string     `gorm:"not null"`
-	Role         ParentRole `gorm:"type:text;not null"`
+	ID           uuid.UUID         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	FamilyID     uuid.UUID         `gorm:"type:uuid;not null;index"`
+	Email        string            `gorm:"not null;uniqueIndex"`
+	PasswordHash string            `gorm:"not null"`
+	Role         domain.ParentRole `gorm:"type:text;not null"`
 
 	// EncryptedTOTPSecret is nil until the parent enrolls a second factor.
 	EncryptedTOTPSecret []byte
@@ -173,11 +115,11 @@ type Video struct {
 	PublishedAt     time.Time `gorm:"index"`
 	ThumbnailURL    string
 
-	IsShort     bool        `gorm:"not null;default:false;index"`
-	ShortSource ShortSource `gorm:"type:text"`
+	IsShort     bool               `gorm:"not null;default:false;index"`
+	ShortSource domain.ShortSource `gorm:"type:text"`
 
-	LiveState   LiveState `gorm:"type:text;not null;default:'none';index"`
-	MadeForKids bool      `gorm:"not null;default:false"`
+	LiveState   domain.LiveState `gorm:"type:text;not null;default:'none';index"`
+	MadeForKids bool             `gorm:"not null;default:false"`
 
 	FetchedAt time.Time `gorm:"index"`
 	CreatedAt time.Time
@@ -256,9 +198,9 @@ type Subscription struct {
 
 // Reaction is a local like or dislike, never written to YouTube.
 type Reaction struct {
-	ChildID   uuid.UUID    `gorm:"type:uuid;primaryKey"`
-	VideoID   string       `gorm:"primaryKey"`
-	Kind      ReactionKind `gorm:"type:text;not null"`
+	ChildID   uuid.UUID           `gorm:"type:uuid;primaryKey"`
+	VideoID   string              `gorm:"primaryKey"`
+	Kind      domain.ReactionKind `gorm:"type:text;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -285,8 +227,8 @@ type Request struct {
 	// which gives the reviewing parent context.
 	PromptedByVideoID *string
 
-	Status       RequestStatus `gorm:"type:text;not null;default:'pending';index"`
-	DecidedBy    *uuid.UUID    `gorm:"type:uuid"`
+	Status       domain.RequestStatus `gorm:"type:text;not null;default:'pending';index"`
+	DecidedBy    *uuid.UUID           `gorm:"type:uuid"`
 	DecidedAt    *time.Time
 	DecisionNote string
 
@@ -319,11 +261,11 @@ type APICache struct {
 // QuotaSpend is the daily ledger behind the circuit breaker. Day is stored in
 // Pacific time because that is when Google's quota resets.
 type QuotaSpend struct {
-	FamilyID uuid.UUID    `gorm:"type:uuid;primaryKey"`
-	Day      string       `gorm:"primaryKey"`
-	Purpose  QuotaPurpose `gorm:"type:text;primaryKey"`
-	Units    int          `gorm:"not null;default:0"`
-	Calls    int          `gorm:"not null;default:0"`
+	FamilyID uuid.UUID           `gorm:"type:uuid;primaryKey"`
+	Day      string              `gorm:"primaryKey"`
+	Purpose  domain.QuotaPurpose `gorm:"type:text;primaryKey"`
+	Units    int                 `gorm:"not null;default:0"`
+	Calls    int                 `gorm:"not null;default:0"`
 
 	UpdatedAt time.Time
 }
