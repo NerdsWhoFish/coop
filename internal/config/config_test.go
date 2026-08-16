@@ -22,10 +22,12 @@ func validConfig() *Config {
 		},
 		Database: Database{DSN: "postgres://u:p@localhost:5432/coop"},
 		YouTube: YouTube{
-			DailyUnitBudget:    8000,
-			DailySearchBudget:  90,
-			BackfillCallBudget: 500,
-			CacheTTLDefault:    time.Hour,
+			DailyUnitBudget:        8000,
+			DailySearchBudget:      90,
+			BackfillCallBudget:     500,
+			CacheTTLDefault:        time.Hour,
+			UploadsRefreshInterval: 6 * time.Hour,
+			IngestPollInterval:     time.Minute,
 		},
 		Auth: Auth{EncryptionKey: validKey},
 		Log:  Log{Level: "info", Format: "json"},
@@ -83,6 +85,21 @@ func TestValidate(t *testing.T) {
 			name:    "negative backfill budget",
 			mutate:  func(c *Config) { c.YouTube.BackfillCallBudget = -1 },
 			wantErr: "backfill_call_budget must not be negative",
+		},
+		{
+			name:    "refresh interval not positive",
+			mutate:  func(c *Config) { c.YouTube.UploadsRefreshInterval = 0 },
+			wantErr: "uploads_refresh_interval must be positive",
+		},
+		{
+			name:    "ingest poll interval not positive",
+			mutate:  func(c *Config) { c.YouTube.IngestPollInterval = 0 },
+			wantErr: "ingest_poll_interval must be positive",
+		},
+		{
+			name:    "ingest poll slower than refresh",
+			mutate:  func(c *Config) { c.YouTube.IngestPollInterval = 7 * time.Hour },
+			wantErr: "ingest_poll_interval must not exceed uploads_refresh_interval",
 		},
 		{
 			name:    "bad log format",
@@ -164,6 +181,9 @@ func TestLoadDefaultsFromEnv(t *testing.T) {
 	}
 	if cfg.YouTube.CacheTTLDefault != time.Hour {
 		t.Errorf("CacheTTLDefault = %v, want 1h", cfg.YouTube.CacheTTLDefault)
+	}
+	if cfg.YouTube.IngestPollInterval != time.Minute {
+		t.Errorf("IngestPollInterval = %v, want 1m", cfg.YouTube.IngestPollInterval)
 	}
 }
 

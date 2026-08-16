@@ -13,12 +13,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/nerdswhofish/coop/internal/api"
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
+	"github.com/nerdswhofish/coop/internal/ingest"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
+	"github.com/nerdswhofish/coop/internal/youtubeclient"
 )
 
 func main() {
@@ -143,6 +147,20 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	rules := store.NewRules(db, time.Now)
 	catalog := store.NewCatalog(db, time.Now)
 	activity := store.NewActivity(db, time.Now)
+	cache := store.NewAPICacheStore(db, time.Now)
+	quota := store.NewQuotaStore(db, time.Now)
+	youtubeClients, err := youtubeclient.NewFactory(cfg.YouTube, accounts, cache, quota, sealer, time.Now)
+	if err != nil {
+		return err
+	}
+	ingester, err := ingest.New(accounts, catalog,
+		func(ctx context.Context, familyID uuid.UUID) (ingest.Client, error) {
+			return youtubeClients.ForFamily(ctx, familyID)
+		},
+		cfg.YouTube.IngestPollInterval, cfg.YouTube.UploadsRefreshInterval, logger, time.Now)
+	if err != nil {
+		return err
+	}
 
 	api, err := api.NewServer(api.Deps{
 		Config:   cfg,
@@ -152,9 +170,9 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		Catalog:  catalog,
 		Activity: activity,
 		Feed:     feed.New(catalog, rules, activity),
-		Cache:    store.NewAPICacheStore(db, time.Now),
-		Quota:    store.NewQuotaStore(db, time.Now),
+		Quota:    quota,
 		Sealer:   sealer,
+		YouTube:  youtubeClients,
 		DB:       db,
 		Now:      time.Now,
 	})
@@ -170,6 +188,17 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	}
 
 	errCh := make(chan error, 1)
+	workerCtx, stopWorker := context.WithCancel(ctx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		ingester.Run(workerCtx)
+	}()
+	defer func() {
+		stopWorker()
+		<-workerDone
+	}()
+
 	go func() {
 		logger.Info("listening", "addr", cfg.Server.Addr, "public_url", cfg.Server.PublicURL)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

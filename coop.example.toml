@@ -46,6 +46,10 @@ cache_ttl_default = "1h"
 
 uploads_refresh_interval = "6h"
 
+# Cheap database poll for new approvals. This does not call YouTube unless a
+# channel has never been ingested or its uploads refresh interval has elapsed.
+ingest_poll_interval = "1m"
+
 [log]
 level = "info"
 format = "json"

@@ -3,7 +3,7 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status as of the last commit on `main`: **Phase 0 and Phase 1 are complete.**
+Status as of the last commit on `main`: **Phase 0, Phase 1, and the ingest worker are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
 No iOS code exists yet.
 
@@ -11,7 +11,7 @@ No iOS code exists yet.
 
 ## What works right now
 
-Start it and you get a working multi-tenant backend:
+Start it and you get a working multi-parent, multi-child backend:
 
 ```sh
 make dev-db                     # local Postgres on :5433
@@ -34,11 +34,12 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - Requests: a child asks, a parent approves or denies, approval grants access in the same step.
 - Suppression log and per-video overrides.
 - YouTube Data API client with response caching, per-purpose daily budgets, and a circuit breaker.
+- Scheduled ingest of recent uploads from approved channels, including authoritative RSS Shorts classification.
+- One-minute approval polling separated from the six-hour quota-bearing uploads refresh.
 - Thumbnail proxy.
 
 ### Not built yet
 
-- **An ingest worker.** This is the biggest gap and the reason feeds come back empty. Nothing currently polls approved channels, so the catalog stays empty unless something writes to it. See "Next" below.
 - **Scheduled cleanup.** `PurgeExpired`, `PurgeExpiredSessions`, `PurgeExpiredPairingCodes`, `PurgeBefore` and `PurgeSearchesBefore` all exist and are tested, but nothing calls them on a timer.
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Video search for children.** `/child/search` returns channels correctly but always an empty `videos` array, even when `videoSearchTiles` is on.
@@ -55,7 +56,9 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 | `internal/domain` | Shared value types. Imports nothing. |
 | `internal/policy` | What a child may see. Pure, no I/O. |
 | `internal/youtube` | Data API client, cache, quota budgets, RSS parsing. |
+| `internal/youtubeclient` | Builds family-scoped clients from the current encrypted key and shared cache and quota stores. |
 | `internal/store` | Postgres models, migrations, repositories. |
+| `internal/ingest` | Refreshes approved channels and stores their recent uploads. |
 | `internal/feed` | Composes catalog and policy into feeds. |
 | `internal/auth` | Passwords, tokens, pairing codes, scoping rules. |
 | `internal/crypto` | AES-256-GCM sealing for stored secrets. |
@@ -104,8 +107,13 @@ A video already outside it when backfilled is never revisited, so its duration-b
 One short-TTL call site can drain it, and it cannot be bought back.
 
 **Migrations are now forward-only.**
-`000001` through `000003` are pushed and CI has run them.
+`000001` through `000004` are committed history.
 Add a new migration; do not edit an existing one.
+
+**Channel metadata and upload refreshes have separate clocks.**
+`channel.fetched_at` changes when metadata is searched or refreshed.
+`channel.uploads_fetched_at` changes only after the ingest worker completes a channel.
+Combining them makes a newly approved channel look refreshed before its first video has been fetched.
 
 **Keyword suppression is silent to the child and visible to the parent.**
 A locked tile reading "Scary Monster Compilation" defeats the point of blocking the word "scary".
@@ -122,25 +130,12 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Ingest worker.** The one thing standing between this and a usable app.
+**1. Cleanup scheduler.** Call the five purge methods on a daily ticker.
 
-A background loop that, per family:
-
-- Finds channels due a refresh with `Catalog.StaleChannelIDs`.
-- Calls `Client.UploadIDs` for each, then `Client.Videos` in batches of 50.
-- Calls `Client.ChannelFeed` and `Catalog.ApplyFeedClassification` for the authoritative Shorts pass.
-- Upserts via `Catalog.UpsertChannels` and `Catalog.UpsertVideos`.
-- Spends against `domain.PurposeFeed`, and stops cleanly when the budget returns `youtube.ErrBudgetExhausted`.
-
-Every piece it needs already exists and is tested.
-The work is the loop, its scheduling, and deciding what happens when one family's key is missing or invalid.
-
-**2. Cleanup scheduler.** Call the five purge methods on a daily ticker.
-
-**3. Video search for children.** `/child/search` currently returns channels only.
+**2. Video search for children.** `/child/search` currently returns channels only.
 Note that video search costs from the same 100-call bucket, so decide whether it is worth the spend before building it.
 
-**4. Then Phase 2**, the parent iOS app. PLAN.md §13.
+**3. Then Phase 2**, the parent iOS app. PLAN.md §13.
 
 ---
 

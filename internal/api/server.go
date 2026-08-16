@@ -17,6 +17,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
 	"github.com/nerdswhofish/coop/internal/youtube"
+	"github.com/nerdswhofish/coop/internal/youtubeclient"
 )
 
 // Deps is everything the HTTP layer needs. Assembled by the composition root
@@ -29,9 +30,9 @@ type Deps struct {
 	Catalog  *store.Catalog
 	Activity *store.Activity
 	Feed     *feed.Service
-	Cache    *store.APICacheStore
 	Quota    *store.QuotaStore
 	Sealer   *crypto.Sealer
+	YouTube  *youtubeclient.Factory
 	DB       *store.DB
 	Now      func() time.Time
 }
@@ -46,6 +47,9 @@ type Server struct {
 func NewServer(deps Deps) (*Server, error) {
 	if deps.Config == nil {
 		return nil, errors.New("api: config is required")
+	}
+	if deps.YouTube == nil {
+		return nil, errors.New("api: YouTube client factory is required")
 	}
 	if deps.Logger == nil {
 		deps.Logger = slog.Default()
@@ -185,37 +189,12 @@ func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
 // rather than cached, since a stale client would keep spending against a key
 // the parent has already replaced.
 func (s *Server) youtubeFor(ctx context.Context, familyID uuid.UUID) (*youtube.Client, error) {
-	family, err := s.deps.Accounts.Family(ctx, familyID)
-	if err != nil {
-		return nil, err
-	}
-	if len(family.EncryptedAPIKey) == 0 {
+	client, err := s.deps.YouTube.ForFamily(ctx, familyID)
+	if errors.Is(err, youtubeclient.ErrNoAPIKey) {
 		return nil, conflict("no_api_key", "this family has no YouTube API key configured")
 	}
-
-	apiKey, err := s.deps.Sealer.OpenString(family.EncryptedAPIKey)
 	if err != nil {
 		return nil, internal(err)
 	}
-
-	return youtube.New(youtube.Config{
-		APIKey:   apiKey,
-		FamilyID: familyID,
-		Cache:    s.deps.Cache,
-		Ledger:   s.deps.Quota,
-		Budget: youtube.Budget{
-			Units:    s.deps.Config.YouTube.DailyUnitBudget,
-			Searches: s.deps.Config.YouTube.DailySearchBudget,
-			Backfill: s.deps.Config.YouTube.BackfillCallBudget,
-		},
-		TTLs: youtube.TTLs{
-			Default: s.deps.Config.YouTube.CacheTTLDefault,
-			Channel: 30 * 24 * time.Hour,
-			Uploads: s.deps.Config.YouTube.UploadsRefreshInterval,
-			Video:   30 * 24 * time.Hour,
-			Feed:    s.deps.Config.YouTube.UploadsRefreshInterval,
-			Search:  24 * time.Hour,
-		},
-		Now: s.deps.Now,
-	})
+	return client, nil
 }

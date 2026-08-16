@@ -172,7 +172,7 @@ Core tables:
 - `parent`: credentials, role (`admin` or `parent`).
 - `parent_scope`: which children a non-admin parent may manage. Admins see all.
 - `child`: profile name, avatar, pairing state, per-child settings.
-- `channel`: cached metadata, `fetched_at`.
+- `channel`: cached metadata, `fetched_at`, and a separate `uploads_fetched_at` ingest clock.
 - `video`: title, description, tags, duration, `is_short`, `live_state`, `made_for_kids`, `fetched_at`.
 - `allow_global`, `allow_child`, `deny_child`: the three allowlist tables.
 - `block_channel`: channels invisible everywhere, which cannot be surfaced or requested.
@@ -536,7 +536,10 @@ Repo scaffold, module path, OpenAPI spec, Postgres schema and GORM models, migra
 ADRs for the four real decisions: embedded player versus proxying the stream, Shorts classification via channel RSS rather than duration, allowlist resolution semantics, multi-parent permission model.
 
 **Phase 1, backend core.**
-YouTube client with caching, budgets, and quota accounting. Policy engine with exhaustive table-driven tests. Auth, pairing, multi-parent scoping. Full REST surface. Thumbnail proxy.
+YouTube client with caching, budgets, quota accounting, and scheduled ingest of approved channels.
+New approvals are discovered by a cheap database poll without shortening the six-hour YouTube refresh interval.
+Policy engine with exhaustive table-driven tests.
+Auth, pairing, multi-parent scoping, full REST surface, and thumbnail proxy.
 Ends with a backend that is complete and exercisable via curl.
 
 **Phase 2, parent app.**

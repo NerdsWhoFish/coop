@@ -71,6 +71,10 @@ type YouTube struct {
 
 	// UploadsRefreshInterval is how often subscribed channels are re-polled.
 	UploadsRefreshInterval time.Duration `toml:"uploads_refresh_interval" env:"YOUTUBE_UPLOADS_REFRESH_INTERVAL"`
+
+	// IngestPollInterval controls how quickly a newly approved channel is
+	// noticed without shortening the quota-bearing uploads refresh interval.
+	IngestPollInterval time.Duration `toml:"ingest_poll_interval" env:"YOUTUBE_INGEST_POLL_INTERVAL"`
 }
 
 // Auth holds credential and token settings.
@@ -120,6 +124,7 @@ func Defaults() *Config {
 			BackfillCallBudget:     500,
 			CacheTTLDefault:        CacheFloor,
 			UploadsRefreshInterval: 6 * time.Hour,
+			IngestPollInterval:     time.Minute,
 		},
 		Auth: Auth{
 			ParentSessionTTL: 30 * 24 * time.Hour,
@@ -187,6 +192,15 @@ func (c *Config) Validate() error {
 	}
 	if c.YouTube.BackfillCallBudget < 0 {
 		errs = append(errs, errors.New("youtube.backfill_call_budget must not be negative"))
+	}
+	if c.YouTube.UploadsRefreshInterval <= 0 {
+		errs = append(errs, errors.New("youtube.uploads_refresh_interval must be positive"))
+	}
+	if c.YouTube.IngestPollInterval <= 0 {
+		errs = append(errs, errors.New("youtube.ingest_poll_interval must be positive"))
+	}
+	if c.YouTube.IngestPollInterval > c.YouTube.UploadsRefreshInterval {
+		errs = append(errs, errors.New("youtube.ingest_poll_interval must not exceed uploads_refresh_interval"))
 	}
 
 	switch c.Log.Format {

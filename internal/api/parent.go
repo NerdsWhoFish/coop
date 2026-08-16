@@ -190,18 +190,7 @@ func (s *Server) handleSetAPIKey(w http.ResponseWriter, r *http.Request, p auth.
 		return badRequest("apiKey is required")
 	}
 
-	probe, err := youtube.New(youtube.Config{
-		APIKey:   body.APIKey,
-		FamilyID: p.FamilyID,
-		Cache:    s.deps.Cache,
-		Ledger:   s.deps.Quota,
-		Budget: youtube.Budget{
-			Units:    s.deps.Config.YouTube.DailyUnitBudget,
-			Searches: s.deps.Config.YouTube.DailySearchBudget,
-			Backfill: s.deps.Config.YouTube.BackfillCallBudget,
-		},
-		Now: s.deps.Now,
-	})
+	probe, err := s.deps.YouTube.ForAPIKey(p.FamilyID, body.APIKey)
 	if err != nil {
 		return internal(err)
 	}

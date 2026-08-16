@@ -14,7 +14,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/domain"
 )
 
-// Family is the top-level tenant. One deployment may host several.
+// Family is the top-level tenant. Setup currently provisions one per instance.
 type Family struct {
 	ID       uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name     string    `gorm:"not null"`
@@ -109,9 +109,10 @@ type Channel struct {
 	// UploadsPlaylistID is derived from ID, never fetched. See docs/PLAN.md §8.
 	UploadsPlaylistID string
 
-	FetchedAt time.Time `gorm:"index"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	FetchedAt        time.Time  `gorm:"index"`
+	UploadsFetchedAt *time.Time `gorm:"index"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Video caches YouTube video metadata. Keyed by YouTube's own ID.

@@ -8,8 +8,8 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
-> **Status: pre-alpha.** The backend builds, migrates and serves; there is no iOS app yet, and
-> nothing populates the catalog, so feeds come back empty until an ingest worker exists.
+> **Status: pre-alpha.** The backend builds, migrates, serves, and keeps approved channels ingested.
+> There is no iOS app yet.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where things stand, the
 > invariants worth not breaking, and what to build next. The full design is in
@@ -51,6 +51,8 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `internal/store` | Postgres models and migrations |
 | `internal/policy` | Allowlist and keyword evaluation. Pure, no I/O |
 | `internal/youtube` | Data API client, response cache, quota budgets |
+| `internal/youtubeclient` | Family-scoped YouTube client construction |
+| `internal/ingest` | Scheduled approved-channel catalog refresh |
 | `internal/rank` | Recommendation scoring. Pure, no I/O |
 | `api/openapi.yaml` | The API contract, source of truth for both clients |
 | `adr/` | Architecture decision records |

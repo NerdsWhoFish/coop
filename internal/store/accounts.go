@@ -94,6 +94,18 @@ func (a *Accounts) Family(ctx context.Context, id uuid.UUID) (Family, error) {
 	return family, wrap(err, "reading family")
 }
 
+// FamiliesWithAPIKeys lists the tenants that can perform YouTube work.
+// Instances normally contain one family, but keeping the worker tenant-aware
+// costs nothing and preserves the isolation already enforced by the ledger.
+func (a *Accounts) FamiliesWithAPIKeys(ctx context.Context) ([]Family, error) {
+	var families []Family
+	err := a.db.WithContext(ctx).
+		Where("encrypted_api_key IS NOT NULL AND octet_length(encrypted_api_key) > 0").
+		Order("created_at").
+		Find(&families).Error
+	return families, wrap(err, "listing families with api keys")
+}
+
 // UpdateFamily changes a family's display settings.
 func (a *Accounts) UpdateFamily(ctx context.Context, id uuid.UUID, name, timezone string) error {
 	updates := map[string]any{"updated_at": a.now()}

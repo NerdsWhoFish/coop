@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nerdswhofish/coop/internal/domain"
+	"github.com/nerdswhofish/coop/internal/youtube"
 )
 
 func migratedDB(t *testing.T) *DB {
@@ -291,5 +292,117 @@ func TestQuotaPurgeBefore(t *testing.T) {
 	}
 	if len(recent) == 0 {
 		t.Error("recent day was purged, want it kept")
+	}
+}
+
+func TestFamiliesWithAPIKeysExcludesUnconfiguredFamilies(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	configured := newFamily(t, db)
+	_ = newFamily(t, db)
+
+	if err := NewAccounts(db, nil).SetAPIKey(ctx, configured, []byte("sealed")); err != nil {
+		t.Fatal(err)
+	}
+	families, err := NewAccounts(db, nil).FamiliesWithAPIKeys(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, family := range families {
+		if family.ID != configured {
+			t.Fatalf("FamiliesWithAPIKeys() included unconfigured family %s", family.ID)
+		}
+	}
+}
+
+func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(ctx, "Ingest", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Delete(&AllowGlobal{}, "family_id = ?", family.ID).Error; err != nil {
+			t.Errorf("cleaning global allows: %v", err)
+		}
+		if err := db.Delete(&AllowChild{}, "child_id = ?", child.ID).Error; err != nil {
+			t.Errorf("cleaning child allows: %v", err)
+		}
+		if err := db.Delete(&Family{}, "id = ?", family.ID).Error; err != nil {
+			t.Errorf("cleaning family: %v", err)
+		}
+	})
+
+	catalog := NewCatalog(db, fixedClock(now))
+	channels := []youtube.Channel{
+		{ID: "UCabcdefghijklmnopqrstuv", Title: "new global"},
+		{ID: "UCbcdefghijklmnopqrstuvwx", Title: "stale child"},
+		{ID: "UCcdefghijklmnopqrstuvwxy", Title: "fresh global"},
+		{ID: "UCdefghijklmnopqrstuvwxyz", Title: "globally allowed but denied"},
+		{ID: "UCefghijklmnopqrstuvwxyz0", Title: "search only"},
+	}
+	if err := catalog.UpsertChannels(ctx, channels); err != nil {
+		t.Fatal(err)
+	}
+
+	rules := NewRules(db, fixedClock(now))
+	if err := rules.AllowGlobally(ctx, family.ID, channels[0].ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.AllowForChild(ctx, child.ID, channels[1].ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.AllowGlobally(ctx, family.ID, channels[2].ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.AllowGlobally(ctx, family.ID, channels[3].ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.DenyForChild(ctx, child.ID, channels[3].ID); err != nil {
+		t.Fatal(err)
+	}
+
+	staleAt := now.Add(-12 * time.Hour)
+	freshAt := now.Add(-time.Hour)
+	if err := db.Model(&Channel{}).Where("id = ?", channels[1].ID).
+		Update("uploads_fetched_at", staleAt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&Channel{}).Where("id = ?", channels[2].ID).
+		Update("uploads_fetched_at", freshAt).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := catalog.StaleApprovedChannelIDs(ctx, family.ID, now.Add(-6*time.Hour), 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{channels[0].ID: true, channels[1].ID: true}
+	if len(ids) != len(want) {
+		t.Fatalf("StaleApprovedChannelIDs() = %v, want the new and stale approved channels", ids)
+	}
+	for _, id := range ids {
+		if !want[id] {
+			t.Errorf("StaleApprovedChannelIDs() included %s", id)
+		}
+	}
+
+	if err := catalog.MarkChannelRefreshed(ctx, channels[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	ids, err = catalog.StaleApprovedChannelIDs(ctx, family.ID, now.Add(-6*time.Hour), 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != channels[1].ID {
+		t.Fatalf("after MarkChannelRefreshed() = %v, want only %s", ids, channels[1].ID)
 	}
 }

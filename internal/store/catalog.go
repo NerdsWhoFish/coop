@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/gorm/clause"
 
@@ -174,11 +175,77 @@ func (c *Catalog) Video(ctx context.Context, id string) (Video, error) {
 func (c *Catalog) StaleChannelIDs(ctx context.Context, olderThan time.Time, limit int) ([]string, error) {
 	var ids []string
 	err := c.db.WithContext(ctx).Model(&Channel{}).
-		Where("fetched_at < ?", olderThan).
-		Order("fetched_at").
+		Where("uploads_fetched_at IS NULL OR uploads_fetched_at < ?", olderThan).
+		Order("uploads_fetched_at NULLS FIRST, id").
 		Limit(limit).
 		Pluck("id", &ids).Error
 	return ids, wrap(err, "listing stale channels")
+}
+
+// StaleApprovedChannelIDs lists only channels that at least one child in the
+// family may watch. Search results and explicitly blocked channels must not
+// consume the family's feed budget merely because they exist in the cache.
+func (c *Catalog) StaleApprovedChannelIDs(ctx context.Context, familyID uuid.UUID,
+	olderThan time.Time, limit int) ([]string, error) {
+
+	if limit <= 0 {
+		limit = 500
+	}
+
+	var ids []string
+	err := c.db.WithContext(ctx).Raw(`
+		SELECT channel.id
+		FROM channel
+		WHERE (channel.uploads_fetched_at IS NULL OR channel.uploads_fetched_at < ?)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM block_channel
+		      WHERE block_channel.family_id = ?
+		        AND block_channel.channel_id = channel.id
+		  )
+		  AND (
+		      EXISTS (
+		          SELECT 1 FROM allow_global
+		          WHERE allow_global.family_id = ?
+		            AND allow_global.channel_id = channel.id
+		            AND EXISTS (
+		                SELECT 1 FROM child
+		                WHERE child.family_id = ?
+		                  AND NOT EXISTS (
+		                      SELECT 1 FROM deny_child
+		                      WHERE deny_child.child_id = child.id
+		                        AND deny_child.channel_id = channel.id
+		                  )
+		            )
+		      )
+		      OR EXISTS (
+		          SELECT 1
+		          FROM allow_child
+		          JOIN child ON child.id = allow_child.child_id
+		          WHERE child.family_id = ?
+		            AND allow_child.channel_id = channel.id
+		      )
+		  )
+		ORDER BY channel.uploads_fetched_at NULLS FIRST, channel.id
+		LIMIT ?`, olderThan, familyID, familyID, familyID, familyID, limit).
+		Scan(&ids).Error
+	return ids, wrap(err, "listing stale approved channels")
+}
+
+// MarkChannelRefreshed advances only the uploads clock. Metadata writes use a
+// separate timestamp because approving a freshly searched channel must still
+// trigger its first ingest immediately.
+func (c *Catalog) MarkChannelRefreshed(ctx context.Context, channelID string) error {
+	now := c.now()
+	result := c.db.WithContext(ctx).Model(&Channel{}).
+		Where("id = ?", channelID).
+		Updates(map[string]any{"uploads_fetched_at": now, "updated_at": now})
+	if result.Error != nil {
+		return fmt.Errorf("marking channel refreshed: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // FeedQuery selects videos for a feed page.
