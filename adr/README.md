@@ -19,3 +19,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0007](0007-explainable-local-recommendation-ranking.md) | Rank the approved pool with local explainable signals and hard diversity constraints | accepted | 2026-08-16 |
 | [0008](0008-single-replica-kubernetes-deployment.md) | Ship an application-only Helm chart with one Coop replica | accepted | 2026-08-16 |
 | [0009](0009-production-authentication-and-audit-boundary.md) | Require challenge-based TOTP, persistent throttling, and transactional audit events | accepted | 2026-08-16 |
+| [0010](0010-serve-ad-hoc-builds-from-a-local-ota-portal.md) | Serve Ad Hoc builds from a local OTA portal | accepted | 2026-08-16 |

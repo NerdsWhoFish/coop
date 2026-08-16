@@ -65,6 +65,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `adr/` | Architecture decision records |
 | `docs/PLAN.md` | Full design document |
 | `docs/DEPLOYMENT.md` | Production setup, device restrictions, recovery, and operations |
+| `deploy/ota` | Registered-device Ad Hoc builds and the local HTTPS install portal |
 
 The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the Phase 6 recommendation mixer.
 The child app (`Cooper Watch`) includes the complete Phase 3 and Phase 4 viewing experience.
@@ -109,6 +110,8 @@ xcodebuild -skipPackagePluginValidation \
   -scheme CooperWatch -destination 'generic/platform=iOS Simulator' build \
   CODE_SIGNING_ALLOWED=NO
 ```
+
+Build and serve both registered-device Ad Hoc packages from the local OTA portal with `scripts/ota.sh all` after configuring `deploy/ota/.env`.
 
 ## Contributing
 
