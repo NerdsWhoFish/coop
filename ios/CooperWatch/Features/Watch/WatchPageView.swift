@@ -79,8 +79,26 @@ struct WatchPageView: View {
               .buttonStyle(.bordered)
             }
           }
+
+          let recommendations = model.watchNext(excluding: page.video.id)
+          if !recommendations.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+              Text("Watch next")
+                .font(.title2.bold())
+                .accessibilityIdentifier("watch-next-heading")
+
+              VideoGrid(
+                videos: recommendations,
+                model: model,
+                accessibilityPrefix: "watch-next",
+                style: .list
+              )
+            }
+            .padding(.top, 8)
+          }
         }
         .padding()
+        .padding(.bottom, 84)
       } else {
         ProgressView().padding(.top, 80)
       }

@@ -50,6 +50,35 @@ final class CooperWatchUITests: XCTestCase {
   }
 
   @MainActor
+  func testWatchPageOffersPolicySafeNextVideos() throws {
+    let app = previewApp()
+    app.launch()
+
+    let currentVideo = app.staticTexts["Why Do Volcanoes Erupt?"]
+    XCTAssertTrue(currentVideo.waitForExistence(timeout: 5))
+    currentVideo.tap()
+
+    let heading = app.descendants(matching: .any)["watch-next-heading"]
+    for _ in 0..<4 where !heading.isHittable { app.swipeUp() }
+    XCTAssertTrue(heading.isHittable)
+    app.swipeUp()
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Watch next recommendations"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+
+    let nextVideo = app.descendants(matching: .any)["watch-next-octopus"]
+    XCTAssertTrue(nextVideo.waitForExistence(timeout: 3))
+    nextVideo.tap()
+
+    XCTAssertTrue(
+      element(labeled: "Playing Meeting the Cleverest Octopus in the Ocean", in: app)
+        .waitForExistence(timeout: 5)
+    )
+  }
+
+  @MainActor
   func testShortsSwipeMovesTheOnlyActivePlayer() throws {
     let app = previewApp(tab: "shorts")
     app.launch()

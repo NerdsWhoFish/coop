@@ -1,3 +1,4 @@
+import CoopKit
 import Foundation
 import Testing
 
@@ -8,6 +9,20 @@ import Testing
 func startsAtPairing() {
   let model = ChildAppModel()
   #expect(model.destination == .pairing)
+}
+
+@MainActor
+@Test("watch-next keeps ranked regular videos and removes the current video")
+func watchNextFiltersCurrentVideoAndShorts() {
+  let model = ChildAppModel()
+  model.feed = [
+    video(id: "current"),
+    video(id: "first"),
+    video(id: "short", isShort: true),
+    video(id: "second"),
+  ]
+
+  #expect(model.watchNext(excluding: "current").map(\.id) == ["first", "second"])
 }
 
 @Test("Short playback enables inline autoplay and YouTube's loop contract")
@@ -75,5 +90,15 @@ func youtubeEmbedRequestRejectsUnexpectedURLs() {
       url: URL(string: "https://www.youtube.com/embed/abc123")!,
       bundleIdentifier: bundleIdentifier
     ) == nil
+  )
+}
+
+private func video(id: String, isShort: Bool = false) -> Components.Schemas.Video {
+  Components.Schemas.Video(
+    id: id,
+    channelId: "approved-channel",
+    title: id,
+    durationSeconds: 120,
+    isShort: isShort
   )
 }

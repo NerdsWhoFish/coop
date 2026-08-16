@@ -118,6 +118,10 @@ final class ChildAppModel {
     return try await api?.childVideo(id: id)
   }
 
+  func watchNext(excluding videoID: String, limit: Int = 12) -> [Components.Schemas.Video] {
+    Array(feed.lazy.filter { $0.id != videoID && !$0.isShort }.prefix(limit))
+  }
+
   func shorts(session: String, offset: Int, limit: Int = 8) async throws
     -> [Components.Schemas.Video]
   {
@@ -205,6 +209,7 @@ final class ChildAppModel {
         channelTitle: "Crash Course Kids",
         title: "Why Do Volcanoes Erupt?",
         durationSeconds: 542,
+        publishedAt: Date(timeIntervalSinceNow: -86_400 * 12),
         isShort: false
       ),
       Components.Schemas.Video(
@@ -213,6 +218,7 @@ final class ChildAppModel {
         channelTitle: "Brave Wilderness",
         title: "Meeting the Cleverest Octopus in the Ocean",
         durationSeconds: 781,
+        publishedAt: Date(timeIntervalSinceNow: -86_400 * 4),
         isShort: false
       ),
       Components.Schemas.Video(
@@ -221,6 +227,7 @@ final class ChildAppModel {
         channelTitle: "Art for Kids Hub",
         title: "Draw a Friendly Dragon Step by Step",
         durationSeconds: 665,
+        publishedAt: Date(timeIntervalSinceNow: -86_400 * 20),
         isShort: false
       ),
     ]
