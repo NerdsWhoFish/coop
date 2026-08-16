@@ -9,6 +9,8 @@ struct RootView: View {
         NavigationStack {
           RecommendationTuningView(child: AppModel.recommendationPreviewChild, model: model)
         }
+      } else if AppModel.showsFamilyPreview {
+        FamilyView(model: model)
       } else {
         switch model.destination {
         case .connecting:

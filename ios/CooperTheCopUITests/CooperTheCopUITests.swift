@@ -2,6 +2,19 @@ import XCTest
 
 final class CooperTheCopUITests: XCTestCase {
   @MainActor
+  func testFamilyInstanceRowsStayCompact() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SCREEN"] = "family"
+    app.launch()
+
+    let youtubeAPI = app.staticTexts["YouTube API"]
+    let replaceAPIKey = app.buttons["Replace API key"]
+    XCTAssertTrue(youtubeAPI.waitForExistence(timeout: 5))
+    XCTAssertTrue(replaceAPIKey.waitForExistence(timeout: 5))
+    XCTAssertLessThan(replaceAPIKey.frame.minY - youtubeAPI.frame.maxY, 80)
+  }
+
+  @MainActor
   func testChannelMixerReordersTheExplainablePreview() throws {
     let app = XCUIApplication()
     app.launchEnvironment["COOP_UI_SCREEN"] = "recommendations"

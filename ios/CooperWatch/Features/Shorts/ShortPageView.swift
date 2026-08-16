@@ -109,7 +109,7 @@ struct ShortPageView: View {
       if isActive, model.isPreviewMode {
         ShortPreviewPlayer(accent: accent)
       } else if isActive, let playerURL {
-        ShortEmbeddedPlayer(url: playerURL)
+        YouTubeEmbeddedPlayer(url: playerURL)
           .transition(.opacity)
       }
 

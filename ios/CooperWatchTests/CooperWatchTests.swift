@@ -37,3 +37,40 @@ func shortPlaybackRejectsUnexpectedHost() {
   )
   #expect(url == nil)
 }
+
+@Test("YouTube embeds identify the app and request inline playback")
+func youtubeEmbedRequest() throws {
+  let request = try #require(
+    YouTubeEmbedRequest.make(
+      url: URL(string: "https://www.youtube-nocookie.com/embed/abc123?rel=0&playsinline=0")!,
+      bundleIdentifier: "fish.NerdsWhoFish.Coop.Child"
+    )
+  )
+  let components = try #require(
+    URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+  )
+  let query = Dictionary(
+    uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+
+  #expect(request.value(forHTTPHeaderField: "Referer") == "https://fish.nerdswhofish.coop.child")
+  #expect(query["rel"] == "0")
+  #expect(query["playsinline"] == "1")
+}
+
+@Test("YouTube embeds reject untrusted player URLs")
+func youtubeEmbedRequestRejectsUnexpectedURLs() {
+  let bundleIdentifier = "fish.nerdswhofish.coop.child"
+
+  #expect(
+    YouTubeEmbedRequest.make(
+      url: URL(string: "http://www.youtube-nocookie.com/embed/abc123")!,
+      bundleIdentifier: bundleIdentifier
+    ) == nil
+  )
+  #expect(
+    YouTubeEmbedRequest.make(
+      url: URL(string: "https://www.youtube.com/embed/abc123")!,
+      bundleIdentifier: bundleIdentifier
+    ) == nil
+  )
+}

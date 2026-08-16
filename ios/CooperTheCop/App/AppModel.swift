@@ -40,13 +40,17 @@ final class AppModel {
     "outdoors": -1,
   ]
 
-  static var showsRecommendationPreview: Bool {
+  static var uiPreviewScreen: String? {
     #if DEBUG
-      return ProcessInfo.processInfo.environment["COOP_UI_SCREEN"] == "recommendations"
+      return ProcessInfo.processInfo.environment["COOP_UI_SCREEN"]
     #else
-      return false
+      return nil
     #endif
   }
+
+  static var isUIPreview: Bool { uiPreviewScreen != nil }
+  static var showsRecommendationPreview: Bool { uiPreviewScreen == "recommendations" }
+  static var showsFamilyPreview: Bool { uiPreviewScreen == "family" }
 
   static let recommendationPreviewChild = Components.Schemas.Child(
     value1: .init(id: "preview-child", name: "River", deviceCount: 2, pendingRequestCount: 1),
@@ -58,8 +62,31 @@ final class AppModel {
     )
   )
 
+  static let familyPreview = Components.Schemas.Family(
+    id: "preview-family",
+    name: "Stouts",
+    timezone: "America/New_York",
+    apiKeyConfigured: true
+  )
+
+  static let familyPreviewQuota = [
+    Components.Schemas.QuotaStatus(purpose: .feed, used: 11, budget: 8_000),
+    Components.Schemas.QuotaStatus(purpose: .search, used: 2, budget: 90),
+    Components.Schemas.QuotaStatus(purpose: .backfill, used: 0, budget: 500),
+  ]
+
+  static let familyPreviewParent = Components.Schemas.Parent(
+    id: "preview-parent",
+    email: "joey@theoutdoorprogrammer.com",
+    role: .admin,
+    totpEnrolled: true
+  )
+
   init() {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
+    if Self.showsFamilyPreview {
+      parent = Self.familyPreviewParent
+    }
   }
 
   func restore() async {
@@ -328,6 +355,7 @@ final class AppModel {
   }
 
   func family() async throws -> Components.Schemas.Family? {
+    if Self.showsFamilyPreview { return Self.familyPreview }
     guard let api else { return nil }
     return try await api.family()
   }
@@ -344,6 +372,7 @@ final class AppModel {
   }
 
   func familyQuota() async throws -> [Components.Schemas.QuotaStatus] {
+    if Self.showsFamilyPreview { return Self.familyPreviewQuota }
     guard let api else { return [] }
     return try await api.familyQuota()
   }
@@ -354,6 +383,7 @@ final class AppModel {
   }
 
   func parents() async throws -> [Components.Schemas.Parent] {
+    if Self.showsFamilyPreview { return [Self.familyPreviewParent] }
     guard let api else { return [] }
     return try await api.parents()
   }
@@ -407,11 +437,12 @@ final class AppModel {
   }
 
   private func continueAuthentication(_ challenge: Components.Schemas.AuthChallenge) {
-    destination = .totp(PendingAuthentication(
-      challenge: challenge.challenge,
-      secret: challenge.enrollment?.secret,
-      provisioningURL: challenge.enrollment?.provisioningUrl
-    ))
+    destination = .totp(
+      PendingAuthentication(
+        challenge: challenge.challenge,
+        secret: challenge.enrollment?.secret,
+        provisioningURL: challenge.enrollment?.provisioningUrl
+      ))
   }
 
   private func perform(_ operation: () async throws -> Void) async {

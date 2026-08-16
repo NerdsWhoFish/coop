@@ -18,7 +18,9 @@ struct FamilyView: View {
           Section("Instance") {
             LabeledContent("Family", value: family.name)
             LabeledContent("Timezone", value: family.timezone)
-            LabeledContent("YouTube API") {
+            HStack {
+              Text("YouTube API")
+              Spacer()
               Label(
                 family.apiKeyConfigured ? "Connected" : "Needs a key",
                 systemImage: family.apiKeyConfigured

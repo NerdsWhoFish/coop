@@ -9,7 +9,7 @@ struct CooperTheCopApp: App {
       RootView(model: model)
         .preferredColorScheme(.dark)
         .task {
-          if !AppModel.showsRecommendationPreview { await model.restore() }
+          if !AppModel.isUIPreview { await model.restore() }
         }
     }
   }

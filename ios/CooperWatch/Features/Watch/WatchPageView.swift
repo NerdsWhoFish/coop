@@ -1,6 +1,5 @@
 import CoopKit
 import SwiftUI
-import WebKit
 
 struct WatchPageView: View {
   let videoID: String
@@ -16,7 +15,7 @@ struct WatchPageView: View {
         VStack(alignment: .leading, spacing: 18) {
           Group {
             if playerLoaded, let url = URL(string: page.embedUrl) {
-              EmbeddedPlayer(url: url)
+              YouTubeEmbeddedPlayer(url: url)
             } else {
               Button {
                 loadPlayer()
@@ -108,20 +107,4 @@ struct WatchPageView: View {
       await model.recordWatch(videoID: videoID, startedAt: startedAt, secondsWatched: seconds)
     }
   }
-}
-
-private struct EmbeddedPlayer: UIViewRepresentable {
-  let url: URL
-
-  func makeUIView(context: Context) -> WKWebView {
-    let configuration = WKWebViewConfiguration()
-    configuration.allowsInlineMediaPlayback = true
-    configuration.mediaTypesRequiringUserActionForPlayback = []
-    let view = WKWebView(frame: .zero, configuration: configuration)
-    view.scrollView.isScrollEnabled = false
-    view.load(URLRequest(url: url))
-    return view
-  }
-
-  func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
