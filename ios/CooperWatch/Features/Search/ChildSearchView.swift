@@ -2,6 +2,7 @@ import CoopKit
 import SwiftUI
 
 struct ChildSearchView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Bindable var model: ChildAppModel
   @State private var query = ""
   @State private var results: Components.Schemas.SearchResults?
@@ -112,7 +113,7 @@ struct ChildSearchView: View {
     Task {
       do {
         try await model.requestChannel(channelID: video.channelId, videoID: video.id)
-        _ = withAnimation(.spring(duration: 0.3, bounce: 0.35)) {
+        _ = withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) {
           askedChannels.insert(video.channelId)
         }
       } catch { model.errorMessage = error.localizedDescription }

@@ -11,10 +11,16 @@ struct VideoCard: View {
         AsyncImage(url: video.thumbnailUrl.flatMap(URL.init(string:))) { image in
           image.resizable().scaledToFill()
         } placeholder: {
-          Rectangle().fill(WatchTheme.surface)
-            .overlay {
-              Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(WatchTheme.muted)
-            }
+          Rectangle().fill(
+            LinearGradient(
+              colors: [WatchTheme.purple.opacity(0.72), WatchTheme.cyan.opacity(0.42)],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+          .overlay {
+            Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(WatchTheme.muted)
+          }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .clipShape(.rect(cornerRadius: 14))

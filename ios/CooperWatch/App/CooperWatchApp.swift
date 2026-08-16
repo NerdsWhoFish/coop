@@ -7,6 +7,7 @@ struct CooperWatchApp: App {
   var body: some Scene {
     WindowGroup {
       ChildRootView(model: model)
+        .preferredColorScheme(.dark)
         .task { await model.restore() }
     }
   }

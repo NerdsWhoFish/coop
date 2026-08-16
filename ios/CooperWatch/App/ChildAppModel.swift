@@ -28,6 +28,22 @@ final class ChildAppModel {
   private static let serverKey = "coop.child.server.address"
 
   init() {
+    #if DEBUG
+      if ProcessInfo.processInfo.environment["COOP_UI_PREVIEW"] == "1" {
+        serverAddress = "https://coop.example"
+        profile = Components.Schemas.ChildProfile(
+          id: "preview-child",
+          name: "Cooper",
+          shortsEnabled: true,
+          watchPageAutoplay: false,
+          videoSearchTiles: true
+        )
+        feed = Self.previewVideos
+        subscriptions = Self.previewChannels
+        destination = .watch
+        return
+      }
+    #endif
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
   }
 
@@ -133,4 +149,42 @@ final class ChildAppModel {
       errorMessage = error.localizedDescription
     }
   }
+
+  #if DEBUG
+    private static let previewChannels = [
+      Components.Schemas.Channel(
+        id: "science", title: "Crash Course Kids", subscriberCount: 910_000),
+      Components.Schemas.Channel(
+        id: "animals", title: "Brave Wilderness", subscriberCount: 21_500_000),
+      Components.Schemas.Channel(
+        id: "build", title: "Art for Kids Hub", subscriberCount: 9_300_000),
+    ]
+
+    private static let previewVideos = [
+      Components.Schemas.Video(
+        id: "volcanoes",
+        channelId: "science",
+        channelTitle: "Crash Course Kids",
+        title: "Why Do Volcanoes Erupt?",
+        durationSeconds: 542,
+        isShort: false
+      ),
+      Components.Schemas.Video(
+        id: "octopus",
+        channelId: "animals",
+        channelTitle: "Brave Wilderness",
+        title: "Meeting the Cleverest Octopus in the Ocean",
+        durationSeconds: 781,
+        isShort: false
+      ),
+      Components.Schemas.Video(
+        id: "dragon",
+        channelId: "build",
+        channelTitle: "Art for Kids Hub",
+        title: "Draw a Friendly Dragon Step by Step",
+        durationSeconds: 665,
+        isShort: false
+      ),
+    ]
+  #endif
 }

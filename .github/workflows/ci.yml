@@ -115,7 +115,7 @@ jobs:
             --skip-rule operation-4xx-response
 
   ios:
-    name: Parent app
+    name: Native apps
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -126,13 +126,25 @@ jobs:
       - name: Test CoopKit
         run: swift test --package-path ios/CoopKit
 
-      - name: Generate the project
-        run: xcodegen generate --spec ios/CooperTheCop/project.yml
+      - name: Generate the projects
+        run: |
+          xcodegen generate --spec ios/CooperTheCop/project.yml
+          xcodegen generate --spec ios/CooperWatch/project.yml
 
       - name: Build the parent app
         run: |
           xcodebuild -quiet \
+            -skipPackagePluginValidation \
             -project ios/CooperTheCop/CooperTheCop.xcodeproj \
             -scheme CooperTheCop \
+            -destination 'generic/platform=iOS Simulator' \
+            build CODE_SIGNING_ALLOWED=NO
+
+      - name: Build the child app
+        run: |
+          xcodebuild -quiet \
+            -skipPackagePluginValidation \
+            -project ios/CooperWatch/CooperWatch.xcodeproj \
+            -scheme CooperWatch \
             -destination 'generic/platform=iOS Simulator' \
             build CODE_SIGNING_ALLOWED=NO
