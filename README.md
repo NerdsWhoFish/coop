@@ -8,8 +8,12 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
-> **Status: pre-alpha.** Phase 0 (foundations) is the current work. Nothing runs yet.
-> The full design lives in [docs/PLAN.md](docs/PLAN.md), and the decisions behind it in [adr/](adr/).
+> **Status: pre-alpha.** The backend builds, migrates and serves; there is no iOS app yet, and
+> nothing populates the catalog, so feeds come back empty until an ingest worker exists.
+>
+> **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where things stand, the
+> invariants worth not breaking, and what to build next. The full design is in
+> [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls in [adr/](adr/).
 
 ## How it works
 
