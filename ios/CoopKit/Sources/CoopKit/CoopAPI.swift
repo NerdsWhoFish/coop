@@ -15,6 +15,7 @@ public actor CoopAPI {
     }
     client = Client(
       serverURL: serverURL,
+      configuration: .init(dateTranscoder: FlexibleISO8601DateTranscoder()),
       transport: URLSessionTransport(),
       middlewares: middlewares
     )
