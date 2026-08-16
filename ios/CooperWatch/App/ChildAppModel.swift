@@ -104,7 +104,9 @@ final class ChildAppModel {
 
   func video(id: String) async throws -> Components.Schemas.WatchPage? {
     #if DEBUG
-      if isPreviewMode, let video = Self.previewShorts.first(where: { $0.id == id }) {
+      if isPreviewMode,
+        let video = (Self.previewVideos + Self.previewShorts).first(where: { $0.id == id })
+      {
         return Components.Schemas.WatchPage(
           video: video,
           embedUrl: "https://www.youtube-nocookie.com/embed/\(video.id)",

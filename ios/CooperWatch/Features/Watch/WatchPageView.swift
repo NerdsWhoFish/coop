@@ -10,32 +10,52 @@ struct WatchPageView: View {
   @State private var startedAt: Date?
 
   var body: some View {
+    GeometryReader { proxy in
+      let isLandscape = proxy.size.width > proxy.size.height
+
+      Group {
+        if isLandscape {
+          landscapeContent
+        } else {
+          portraitContent
+        }
+      }
+      .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
+      .toolbar(isLandscape ? .hidden : .visible, for: .tabBar)
+      .statusBarHidden(isLandscape)
+      .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
+    }
+    .navigationTitle("Now watching")
+    .navigationBarTitleDisplayMode(.inline)
+    .task { await load() }
+    .onAppear { CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(true) }
+    .onDisappear {
+      CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(false)
+      recordWatch()
+    }
+    .watchBackground()
+  }
+
+  @ViewBuilder
+  private var landscapeContent: some View {
+    ZStack {
+      Color.black.ignoresSafeArea()
+      if let page {
+        player(for: page)
+          .ignoresSafeArea()
+      } else {
+        ProgressView()
+      }
+    }
+  }
+
+  private var portraitContent: some View {
     ScrollView {
       if let page {
         VStack(alignment: .leading, spacing: 18) {
-          Group {
-            if playerLoaded, let url = URL(string: page.embedUrl) {
-              YouTubeEmbeddedPlayer(url: url)
-            } else {
-              Button {
-                loadPlayer()
-              } label: {
-                ZStack {
-                  AsyncImage(url: page.video.thumbnailUrl.flatMap(URL.init(string:))) { image in
-                    image.resizable().scaledToFill()
-                  } placeholder: {
-                    Rectangle().fill(WatchTheme.surface)
-                  }
-                  Image(systemName: "play.circle.fill")
-                    .font(.system(size: 70)).foregroundStyle(WatchTheme.foreground, WatchTheme.pink)
-                    .shadow(radius: 12)
-                }
-              }
-              .buttonStyle(.plain)
-            }
-          }
-          .aspectRatio(16 / 9, contentMode: .fit)
-          .clipShape(.rect(cornerRadius: 16))
+          player(for: page)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: 16))
 
           Text(page.video.title).font(.title2.bold())
           NavigationLink {
@@ -61,12 +81,40 @@ struct WatchPageView: View {
         ProgressView().padding(.top, 80)
       }
     }
-    .navigationTitle("Now watching")
-    .navigationBarTitleDisplayMode(.inline)
     .refreshable { await load() }
-    .task { await load() }
-    .onDisappear { recordWatch() }
-    .watchBackground()
+  }
+
+  @ViewBuilder
+  private func player(for page: Components.Schemas.WatchPage) -> some View {
+    if model.isPreviewMode {
+      ZStack {
+        Color.black
+        Image(systemName: "play.rectangle.fill")
+          .font(.system(size: 72, weight: .bold))
+          .foregroundStyle(WatchTheme.cyan)
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Playing \(page.video.title)")
+      .accessibilityIdentifier("regular-video-player")
+    } else if playerLoaded, let url = URL(string: page.embedUrl) {
+      YouTubeEmbeddedPlayer(url: url)
+    } else {
+      Button {
+        loadPlayer()
+      } label: {
+        ZStack {
+          AsyncImage(url: page.video.thumbnailUrl.flatMap(URL.init(string:))) { image in
+            image.resizable().scaledToFill()
+          } placeholder: {
+            Rectangle().fill(WatchTheme.surface)
+          }
+          Image(systemName: "play.circle.fill")
+            .font(.system(size: 70)).foregroundStyle(WatchTheme.foreground, WatchTheme.pink)
+            .shadow(radius: 12)
+        }
+      }
+      .buttonStyle(.plain)
+    }
   }
 
   private func load() async {

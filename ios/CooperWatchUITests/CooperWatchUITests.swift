@@ -2,6 +2,54 @@ import XCTest
 
 final class CooperWatchUITests: XCTestCase {
   @MainActor
+  func testShortsStayPortraitWhenDeviceRotates() throws {
+    let app = previewApp(tab: "shorts")
+    app.launch()
+
+    let player = app.descendants(matching: .any)["active-short-player"]
+    XCTAssertTrue(player.waitForExistence(timeout: 5))
+
+    XCUIDevice.shared.orientation = .landscapeLeft
+    defer { XCUIDevice.shared.orientation = .portrait }
+
+    let portrait = NSPredicate { _, _ in app.frame.height > app.frame.width }
+    expectation(for: portrait, evaluatedWith: app)
+    waitForExpectations(timeout: 3)
+  }
+
+  @MainActor
+  func testRegularVideoUsesTheWholeScreenInLandscape() throws {
+    let app = previewApp()
+    app.launch()
+
+    let video = app.staticTexts["Why Do Volcanoes Erupt?"]
+    XCTAssertTrue(video.waitForExistence(timeout: 5))
+    video.tap()
+
+    let player = app.descendants(matching: .any)["regular-video-player"]
+    XCTAssertTrue(player.waitForExistence(timeout: 5))
+
+    XCUIDevice.shared.orientation = .landscapeLeft
+    defer { XCUIDevice.shared.orientation = .portrait }
+
+    let landscape = NSPredicate { _, _ in
+      app.frame.width > app.frame.height
+        && abs(player.frame.width - app.frame.width) <= 1
+        && abs(player.frame.height - app.frame.height) <= 1
+    }
+    expectation(for: landscape, evaluatedWith: app)
+    waitForExpectations(timeout: 5)
+
+    XCTAssertFalse(element(labeled: "Home", in: app).exists)
+    XCTAssertFalse(app.navigationBars["Now watching"].exists)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Regular video fullscreen landscape"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testShortsSwipeMovesTheOnlyActivePlayer() throws {
     let app = previewApp(tab: "shorts")
     app.launch()
