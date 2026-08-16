@@ -243,14 +243,16 @@ func (c *Catalog) Videos(ctx context.Context, q FeedQuery) (FeedPage, error) {
 	page := FeedPage{}
 	if len(rows) > q.Limit {
 		last := rows[q.Limit-1]
-		page.NextCursor = encodeCursor(last.PublishedAt, last.ID)
+		page.NextCursor = EncodeCursor(last.PublishedAt, last.ID)
 		rows = rows[:q.Limit]
 	}
 	page.Videos = rows
 	return page, nil
 }
 
-func encodeCursor(publishedAt time.Time, videoID string) string {
+// EncodeCursor builds the keyset cursor for a page boundary. Exported so a
+// caller that trims a page can keep the cursor aligned with what it served.
+func EncodeCursor(publishedAt time.Time, videoID string) string {
 	raw := strconv.FormatInt(publishedAt.UTC().UnixNano(), 10) + ":" + videoID
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }

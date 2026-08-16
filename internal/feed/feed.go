@@ -1,0 +1,415 @@
+// Package feed assembles what a child sees, composing the cached catalog with
+// the policy engine and recording what was filtered.
+package feed
+
+import (
+	"context"
+	"fmt"
+	"hash/fnv"
+	"math/rand/v2"
+	"slices"
+
+	"github.com/google/uuid"
+
+	"github.com/nerdswhofish/coop/internal/domain"
+	"github.com/nerdswhofish/coop/internal/policy"
+	"github.com/nerdswhofish/coop/internal/store"
+)
+
+// maxRefillRounds bounds how hard a page tries to fill itself after keyword
+// suppression removes rows. Without a bound, a child whose filters exclude
+// almost everything would walk their entire history on one request.
+const maxRefillRounds = 4
+
+// shortsPoolSize caps how many Shorts take part in the shuffle. Large enough
+// that the feed does not feel repetitive, small enough to shuffle per request.
+const shortsPoolSize = 2000
+
+// Service builds feeds for one family's children.
+type Service struct {
+	catalog  *store.Catalog
+	rules    *store.Rules
+	activity *store.Activity
+}
+
+// New builds the service.
+func New(catalog *store.Catalog, rules *store.Rules, activity *store.Activity) *Service {
+	return &Service{catalog: catalog, rules: rules, activity: activity}
+}
+
+// Page is one page of videos.
+type Page struct {
+	Videos     []store.Video
+	NextCursor string
+}
+
+// Home returns recent uploads from channels the child both subscribes to and
+// is allowed to watch.
+func (s *Service) Home(ctx context.Context, familyID, childID uuid.UUID,
+	limit int, cursor string) (Page, error) {
+
+	channelIDs, evaluator, err := s.watchableChannels(ctx, familyID, childID, true)
+	if err != nil {
+		return Page{}, err
+	}
+	if len(channelIDs) == 0 {
+		return Page{}, nil
+	}
+
+	return s.filteredPage(ctx, childID, evaluator, store.FeedQuery{
+		ChannelIDs:    channelIDs,
+		ExcludeShorts: true,
+		Limit:         limit,
+		Cursor:        cursor,
+	})
+}
+
+// Shorts returns a shuffled, looping feed of short videos. It pages by offset
+// rather than cursor because it wraps: a cursor has no meaning once the pool
+// starts again from the top.
+func (s *Service) Shorts(ctx context.Context, familyID, childID uuid.UUID,
+	seed string, limit, offset int) (Page, error) {
+
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+
+	channelIDs, evaluator, err := s.watchableChannels(ctx, familyID, childID, false)
+	if err != nil {
+		return Page{}, err
+	}
+	if len(channelIDs) == 0 {
+		return Page{}, nil
+	}
+
+	pool, err := s.catalog.Videos(ctx, store.FeedQuery{
+		ChannelIDs: channelIDs,
+		ShortsOnly: true,
+		Limit:      shortsPoolSize,
+	})
+	if err != nil {
+		return Page{}, err
+	}
+
+	served, suppressed := evaluator.Filter(toPolicyVideos(pool.Videos))
+	if err := s.logSuppressions(ctx, childID, suppressed); err != nil {
+		return Page{}, err
+	}
+
+	videos := selectByID(pool.Videos, served)
+	if len(videos) == 0 {
+		return Page{}, nil
+	}
+
+	shuffleDeterministically(videos, seed)
+
+	// Wrapping rather than ending: a Shorts feed that stops is broken, and the
+	// pool is finite by design.
+	page := make([]store.Video, 0, limit)
+	for i := range limit {
+		page = append(page, videos[(offset+i)%len(videos)])
+	}
+
+	return Page{Videos: page}, nil
+}
+
+// ChannelView is a channel page as one child sees it.
+type ChannelView struct {
+	Channel        store.Channel
+	State          domain.ChannelState
+	Subscribed     bool
+	PendingRequest bool
+	Videos         []store.Video
+	NextCursor     string
+}
+
+// Channel returns a channel page. Blocked reports ErrNotFound, the same as a
+// channel that does not exist. Requestable returns branding but no videos,
+// which is what makes the ask meaningful.
+func (s *Service) Channel(ctx context.Context, familyID, childID uuid.UUID,
+	channelID string, limit int, cursor string) (ChannelView, error) {
+
+	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
+	if err != nil {
+		return ChannelView{}, err
+	}
+
+	state := evaluator.Channel(channelID)
+	if state == domain.StateBlocked {
+		return ChannelView{}, store.ErrNotFound
+	}
+
+	channel, err := s.catalog.Channel(ctx, channelID)
+	if err != nil {
+		return ChannelView{}, err
+	}
+
+	subscribed, err := s.activity.IsSubscribed(ctx, childID, channelID)
+	if err != nil {
+		return ChannelView{}, err
+	}
+
+	view := ChannelView{
+		Channel:    channel,
+		State:      state,
+		Subscribed: subscribed,
+	}
+
+	if state != domain.StateAllowed {
+		pending, err := s.hasPendingRequest(ctx, childID, channelID)
+		if err != nil {
+			return ChannelView{}, err
+		}
+		view.PendingRequest = pending
+		return view, nil
+	}
+
+	page, err := s.filteredPage(ctx, childID, evaluator, store.FeedQuery{
+		ChannelIDs: []string{channelID},
+		Limit:      limit,
+		Cursor:     cursor,
+	})
+	if err != nil {
+		return ChannelView{}, err
+	}
+	view.Videos = page.Videos
+	view.NextCursor = page.NextCursor
+	return view, nil
+}
+
+// Watchable reports whether a child may play a video, and returns it.
+func (s *Service) Watchable(ctx context.Context, familyID, childID uuid.UUID,
+	videoID string) (store.Video, error) {
+
+	video, err := s.catalog.Video(ctx, videoID)
+	if err != nil {
+		return store.Video{}, err
+	}
+
+	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
+	if err != nil {
+		return store.Video{}, err
+	}
+
+	if !evaluator.Video(toPolicyVideo(video)).Served() {
+		// Every refusal reads as "no such video", so a child cannot map out
+		// what exists by probing IDs.
+		return store.Video{}, store.ErrNotFound
+	}
+	return video, nil
+}
+
+// watchableChannels resolves which channels a feed may draw from. Subscriptions
+// make the home feed the child's own rather than everything ever approved;
+// Shorts skips that, since a subscribed-only pool runs dry too fast.
+func (s *Service) watchableChannels(ctx context.Context, familyID, childID uuid.UUID,
+	subscribedOnly bool) ([]string, *policy.Evaluator, error) {
+
+	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var candidates []string
+	if subscribedOnly {
+		candidates, err = s.activity.SubscribedChannelIDs(ctx, childID)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		candidates, err = s.allowedChannelIDs(ctx, familyID, childID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	allowed := make([]string, 0, len(candidates))
+	for _, id := range candidates {
+		if evaluator.Channel(id) == domain.StateAllowed {
+			allowed = append(allowed, id)
+		}
+	}
+	return allowed, evaluator, nil
+}
+
+func (s *Service) allowedChannelIDs(ctx context.Context, familyID, childID uuid.UUID) ([]string, error) {
+	global, err := s.rules.GlobalAllowlist(ctx, familyID)
+	if err != nil {
+		return nil, err
+	}
+	perChild, err := s.rules.ChildAllowlist(ctx, childID)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(global)+len(perChild))
+	ids := make([]string, 0, len(global)+len(perChild))
+	add := func(id string) {
+		if _, dup := seen[id]; dup {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for _, row := range global {
+		add(row.ChannelID)
+	}
+	for _, row := range perChild {
+		add(row.ChannelID)
+	}
+	return ids, nil
+}
+
+// filteredPage refills a page when keyword suppression thins it. A short page
+// reads to the client as the end of the feed, which is how active filters turn
+// into an apparently empty app.
+func (s *Service) filteredPage(ctx context.Context, childID uuid.UUID,
+	evaluator *policy.Evaluator, query store.FeedQuery) (Page, error) {
+
+	limit := query.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+
+	out := make([]store.Video, 0, limit)
+	cursor := query.Cursor
+
+	for round := 0; round < maxRefillRounds && len(out) < limit; round++ {
+		q := query
+		q.Cursor = cursor
+		// Over-fetch so one round usually suffices even with active filters.
+		q.Limit = min((limit-len(out))*2, 100)
+
+		page, err := s.catalog.Videos(ctx, q)
+		if err != nil {
+			return Page{}, err
+		}
+		if len(page.Videos) == 0 {
+			return Page{Videos: out}, nil
+		}
+
+		served, suppressed := evaluator.Filter(toPolicyVideos(page.Videos))
+		if err := s.logSuppressions(ctx, childID, suppressed); err != nil {
+			return Page{}, err
+		}
+
+		out = append(out, selectByID(page.Videos, served)...)
+		cursor = page.NextCursor
+		if cursor == "" {
+			return Page{Videos: trim(out, limit)}, nil
+		}
+	}
+
+	if len(out) > limit {
+		// The extra rows are dropped rather than served, so the cursor stays
+		// aligned with what the client actually received.
+		out = out[:limit]
+		cursor = encodeFrom(out)
+	}
+	return Page{Videos: out, NextCursor: cursor}, nil
+}
+
+func (s *Service) logSuppressions(ctx context.Context, childID uuid.UUID,
+	suppressed []policy.Suppression) error {
+
+	if len(suppressed) == 0 {
+		return nil
+	}
+	if err := s.activity.LogSuppressions(ctx, childID, suppressed); err != nil {
+		return fmt.Errorf("logging suppressions: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) hasPendingRequest(ctx context.Context, childID uuid.UUID, channelID string) (bool, error) {
+	requests, err := s.activity.ChildRequests(ctx, childID, 100)
+	if err != nil {
+		return false, err
+	}
+	for _, r := range requests {
+		if r.ChannelID == channelID && r.Status == domain.RequestPending {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func toPolicyVideo(v store.Video) policy.Video {
+	return policy.Video{
+		ID:          v.ID,
+		ChannelID:   v.ChannelID,
+		Title:       v.Title,
+		Description: v.Description,
+		Tags:        v.Tags,
+		LiveState:   v.LiveState,
+	}
+}
+
+func toPolicyVideos(videos []store.Video) []policy.Video {
+	out := make([]policy.Video, len(videos))
+	for i, v := range videos {
+		out[i] = toPolicyVideo(v)
+	}
+	return out
+}
+
+// selectByID keeps the store rows the evaluator served, in their original
+// order, so ranking and pagination stay stable.
+func selectByID(rows []store.Video, served []policy.Video) []store.Video {
+	if len(served) == 0 {
+		return nil
+	}
+	keep := make(map[string]struct{}, len(served))
+	for _, v := range served {
+		keep[v.ID] = struct{}{}
+	}
+
+	out := make([]store.Video, 0, len(served))
+	for _, row := range rows {
+		if _, ok := keep[row.ID]; ok {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func trim(videos []store.Video, limit int) []store.Video {
+	if len(videos) > limit {
+		return videos[:limit]
+	}
+	return videos
+}
+
+func encodeFrom(videos []store.Video) string {
+	if len(videos) == 0 {
+		return ""
+	}
+	last := videos[len(videos)-1]
+	return store.EncodeCursor(last.PublishedAt, last.ID)
+}
+
+// shuffleDeterministically orders videos by a seed, so one browsing session
+// keeps a stable order while different sessions differ.
+func shuffleDeterministically(videos []store.Video, seed string) {
+	// Sorting first makes the shuffle depend only on the seed, not on whatever
+	// order the database happened to return.
+	slices.SortFunc(videos, func(a, b store.Video) int {
+		switch {
+		case a.ID < b.ID:
+			return -1
+		case a.ID > b.ID:
+			return 1
+		default:
+			return 0
+		}
+	})
+
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(seed))
+	sum := h.Sum64()
+
+	rng := rand.New(rand.NewPCG(sum, sum>>32))
+	rng.Shuffle(len(videos), func(i, j int) {
+		videos[i], videos[j] = videos[j], videos[i]
+	})
+}
