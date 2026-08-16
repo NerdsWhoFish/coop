@@ -8,7 +8,19 @@ struct ChildDevicesView: View {
   @State private var revoking: Components.Schemas.Device?
 
   var body: some View {
-    Group {
+    List(devices, id: \.id) { device in
+      VStack(alignment: .leading, spacing: 4) {
+        Text(device.name).font(.headline)
+        Text(lastSeen(device))
+          .font(.caption).foregroundStyle(CoopTheme.foreground.opacity(0.62))
+      }
+      .swipeActions {
+        Button("Revoke", role: .destructive) { revoking = device }
+      }
+      .listRowBackground(CoopTheme.surface)
+    }
+    .scrollContentBackground(.hidden)
+    .overlay {
       if devices.isEmpty {
         ContentUnavailableView(
           "No paired devices",
@@ -16,22 +28,10 @@ struct ChildDevicesView: View {
           description: Text(
             "Create a one-time code from the child settings screen to pair their first device.")
         )
-      } else {
-        List(devices, id: \.id) { device in
-          VStack(alignment: .leading, spacing: 4) {
-            Text(device.name).font(.headline)
-            Text(lastSeen(device))
-              .font(.caption).foregroundStyle(CoopTheme.foreground.opacity(0.62))
-          }
-          .swipeActions {
-            Button("Revoke", role: .destructive) { revoking = device }
-          }
-          .listRowBackground(CoopTheme.surface)
-        }
-        .scrollContentBackground(.hidden)
-        .refreshable { await load() }
+        .allowsHitTesting(false)
       }
     }
+    .refreshable { await load() }
     .navigationTitle("\(child.value1.name)’s devices")
     .navigationBarTitleDisplayMode(.inline)
     .task { await load() }

@@ -77,6 +77,7 @@ struct ChannelPageView: View {
     }
     .navigationTitle(page?.channel.title ?? "Channel")
     .navigationBarTitleDisplayMode(.inline)
+    .refreshable { await load() }
     .task { await load() }
     .watchBackground()
   }

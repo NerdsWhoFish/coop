@@ -5,21 +5,20 @@ struct HomeView: View {
 
   var body: some View {
     NavigationStack {
-      Group {
+      ScrollView {
         if model.feed.isEmpty {
           ContentUnavailableView(
             "Your shelf is ready",
             systemImage: "sparkles.tv",
             description: Text("New videos from your approved channels will show up here.")
           )
+          .containerRelativeFrame(.vertical, alignment: .center)
         } else {
-          ScrollView {
-            VideoGrid(videos: model.feed, model: model)
-              .padding()
-          }
-          .refreshable { await model.loadLibrary() }
+          VideoGrid(videos: model.feed, model: model)
+            .padding()
         }
       }
+      .refreshable { await model.loadLibrary() }
       .navigationTitle("Hey, \(model.profile?.name ?? "there")!")
       .toolbar {
         ToolbarItemGroup(placement: .topBarTrailing) {

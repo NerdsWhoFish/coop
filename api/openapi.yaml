@@ -800,11 +800,7 @@ paths:
                   default: child
                 note: { type: string }
       responses:
-        "200":
-          description: Approved
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Request" }
+        "204": { description: Approved }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /parent/requests/{requestId}/deny:
@@ -826,11 +822,7 @@ paths:
                   type: boolean
                   default: false
       responses:
-        "200":
-          description: Denied
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Request" }
+        "204": { description: Denied }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # Suppressions -------------------------------------------------------------

@@ -7,26 +7,26 @@ struct ChildrenView: View {
 
   var body: some View {
     NavigationStack {
-      Group {
+      List(model.children, id: \.value1.id) { child in
+        NavigationLink {
+          ChildSettingsView(child: child, model: model)
+        } label: {
+          ChildRow(child: child)
+        }
+        .listRowBackground(CoopTheme.surface)
+      }
+      .scrollContentBackground(.hidden)
+      .overlay {
         if model.children.isEmpty {
           ContentUnavailableView(
             "No child profiles",
             systemImage: "figure.2.and.child.holdinghands",
             description: Text("Add a child to configure what they can find and watch.")
           )
-        } else {
-          List(model.children, id: \.value1.id) { child in
-            NavigationLink {
-              ChildSettingsView(child: child, model: model)
-            } label: {
-              ChildRow(child: child)
-            }
-            .listRowBackground(CoopTheme.surface)
-          }
-          .scrollContentBackground(.hidden)
-          .refreshable { await model.loadChildren() }
+          .allowsHitTesting(false)
         }
       }
+      .refreshable { await model.loadChildren() }
       .navigationTitle("Children")
       .toolbar {
         if model.parent?.role == .admin {

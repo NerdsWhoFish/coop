@@ -6,25 +6,24 @@ struct RequestQueueView: View {
 
   var body: some View {
     NavigationStack {
-      Group {
+      ScrollView {
         if model.requests.isEmpty {
           ContentUnavailableView(
             "All clear",
             systemImage: "checkmark.seal.fill",
             description: Text("New channel requests will show up here.")
           )
+          .containerRelativeFrame(.vertical, alignment: .center)
         } else {
-          ScrollView {
-            LazyVStack(spacing: 16) {
-              ForEach(model.requests, id: \.id) { request in
-                RequestCard(request: request, model: model)
-              }
+          LazyVStack(spacing: 16) {
+            ForEach(model.requests, id: \.id) { request in
+              RequestCard(request: request, model: model)
             }
-            .padding()
           }
-          .refreshable { await model.loadRequests() }
+          .padding()
         }
       }
+      .refreshable { await model.loadRequests() }
       .navigationTitle("Dispatch queue")
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
@@ -83,6 +82,22 @@ private struct RequestCard: View {
 
       HStack(spacing: 10) {
         Menu {
+          Button("Approve for \(request.childName ?? "this child")") {
+            decide(.approved, globally: false, blockChannel: false)
+          }
+          Button("Approve for every child") {
+            decide(.approved, globally: true, blockChannel: false)
+          }
+        } label: {
+          Label("Approve", systemImage: "checkmark")
+            .fontWeight(.bold)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(CoopTheme.green)
+        .foregroundStyle(CoopTheme.background)
+
+        Menu {
           Button("Deny request") { decide(.denied, globally: false, blockChannel: false) }
           Button("Deny and block channel", role: .destructive) {
             decide(.denied, globally: false, blockChannel: true)
@@ -93,22 +108,6 @@ private struct RequestCard: View {
         }
         .buttonStyle(.bordered)
         .tint(CoopTheme.red)
-
-        Menu {
-          Button("Clear for \(request.childName ?? "this child")") {
-            decide(.approved, globally: false, blockChannel: false)
-          }
-          Button("Clear for every child") {
-            decide(.approved, globally: true, blockChannel: false)
-          }
-        } label: {
-          Label("Clear", systemImage: "checkmark")
-            .fontWeight(.bold)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(CoopTheme.green)
-        .foregroundStyle(CoopTheme.background)
       }
       .disabled(isWorking)
     }
@@ -152,7 +151,7 @@ private struct ResolutionStamp: View {
   let resolution: RequestCard.Resolution
 
   var body: some View {
-    Text(resolution == .approved ? "CLEARED" : "DENIED")
+    Text(resolution == .approved ? "APPROVED" : "DENIED")
       .font(.title2.weight(.black))
       .tracking(3)
       .foregroundStyle(resolution == .approved ? CoopTheme.green : CoopTheme.red)

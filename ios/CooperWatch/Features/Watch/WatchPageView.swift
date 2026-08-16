@@ -64,6 +64,7 @@ struct WatchPageView: View {
     }
     .navigationTitle("Now watching")
     .navigationBarTitleDisplayMode(.inline)
+    .refreshable { await load() }
     .task { await load() }
     .onDisappear { recordWatch() }
     .watchBackground()

@@ -586,30 +586,22 @@ public actor CoopAPI {
     return try response.body.json.items
   }
 
-  @discardableResult
-  public func approveRequest(id: String, globally: Bool) async throws -> Components.Schemas.Request
-  {
+  public func approveRequest(id: String, globally: Bool) async throws {
     let path = Operations.ApproveRequest.Input.Path(requestId: id)
     let payload = Operations.ApproveRequest.Input.Body.JsonPayload(
       scope: globally ? .global : .child
     )
-    let output = try await client.approveRequest(path: path, body: .json(payload))
-    guard case .ok(let response) = output else {
+    guard case .noContent = try await client.approveRequest(path: path, body: .json(payload)) else {
       throw CoopAPIError.unexpectedResponse
     }
-    return try response.body.json
   }
 
-  @discardableResult
-  public func denyRequest(id: String, blockChannel: Bool) async throws -> Components.Schemas.Request
-  {
+  public func denyRequest(id: String, blockChannel: Bool) async throws {
     let path = Operations.DenyRequest.Input.Path(requestId: id)
     let payload = Operations.DenyRequest.Input.Body.JsonPayload(block: blockChannel)
-    let output = try await client.denyRequest(path: path, body: .json(payload))
-    guard case .ok(let response) = output else {
+    guard case .noContent = try await client.denyRequest(path: path, body: .json(payload)) else {
       throw CoopAPIError.unexpectedResponse
     }
-    return try response.body.json
   }
 }
 

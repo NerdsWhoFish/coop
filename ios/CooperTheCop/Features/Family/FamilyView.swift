@@ -111,7 +111,9 @@ struct FamilyView: View {
         }
         Button("Cancel", role: .cancel) {}
       } message: {
-        Text("This permanently deletes every parent account, child profile, rule, activity record, and audit event. This cannot be undone.")
+        Text(
+          "This permanently deletes every parent account, child profile, rule, activity record, and audit event. This cannot be undone."
+        )
       }
       .coopBackground()
     }
@@ -158,18 +160,23 @@ private struct AuditView: View {
     .overlay {
       if events.isEmpty {
         ContentUnavailableView("No changes yet", systemImage: "clock.arrow.circlepath")
+          .allowsHitTesting(false)
       }
     }
-    .task {
-      do {
-        events = try await model.auditEvents()
-      } catch {
-        model.errorMessage = error.localizedDescription
-      }
+    .refreshable { await load() }
+    .task { await load() }
+  }
+
+  private func load() async {
+    do {
+      events = try await model.auditEvents()
+    } catch {
+      model.errorMessage = error.localizedDescription
     }
   }
 
   private func title(for action: String) -> String {
-    action.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ").capitalized
+    action.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")
+      .capitalized
   }
 }

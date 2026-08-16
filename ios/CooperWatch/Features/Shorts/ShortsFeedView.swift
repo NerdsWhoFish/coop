@@ -27,7 +27,11 @@ struct ShortsFeedView: View {
           ProgressView("Mixing your Shorts…")
             .controlSize(.large)
         } else if items.isEmpty {
-          emptyState
+          ScrollView {
+            emptyState
+              .containerRelativeFrame(.vertical, alignment: .center)
+          }
+          .refreshable { await reshuffle() }
         } else {
           feed
         }
@@ -70,6 +74,7 @@ struct ShortsFeedView: View {
     .scrollIndicators(.hidden)
     .scrollPosition(id: $currentID)
     .scrollTargetBehavior(.paging)
+    .refreshable { await reshuffle() }
     .sensoryFeedback(.selection, trigger: currentID)
     .overlay(alignment: .top) {
       if let loadError {
