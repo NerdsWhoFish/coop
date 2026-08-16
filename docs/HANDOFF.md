@@ -3,9 +3,9 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status as of the last commit on `main`: **Phase 0 and Phase 1 are complete.**
+Status: **Phase 0 and Phase 1 are complete, and Phase 2 is in progress.**
 The backend builds, migrates, serves, and is exercisable end to end.
-No iOS code exists yet.
+The parent app has its generated client, setup and login flow, Keychain session storage, and pending request queue.
 
 ---
 
@@ -28,6 +28,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 ### Verified working
 
 - First-run setup, password login, session tokens, argon2id hashing.
+- One-time expiring parent invitations with atomic account and scope creation.
 - Multi-parent with per-child scoping, admin versus scoped roles.
 - Children, settings patching, pairing codes, device registration and revocation.
 - Allowlists (global, per child, per-child deny), family block list, negative keywords.
@@ -36,7 +37,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - YouTube Data API client with response caching, per-purpose daily budgets, and a circuit breaker.
 - Scheduled ingest of recent uploads from approved channels, including authoritative RSS Shorts classification.
 - One-minute approval polling separated from the six-hour quota-bearing uploads refresh.
-- Daily cleanup of expired cache entries, sessions, pairing codes, and prior-day ledgers.
+- Daily cleanup of expired cache entries, sessions, pairing codes, parent invitations, and prior-day ledgers.
 - Mixed channel-and-video child search with locked requestable results and full policy filtering.
 - Thumbnail proxy.
 
@@ -44,7 +45,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Backfill.** The budget reserve exists; nothing spends it.
-- **Both iOS apps.** Phases 2 through 4.
+- **The rest of the parent app and the child app.** Phases 2 through 4.
 - **The ranker** (`internal/rank`). Phase 6, deliberately last.
 
 ---
@@ -65,6 +66,8 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 | `internal/crypto` | AES-256-GCM sealing for stored secrets. |
 | `internal/api` | HTTP surface. |
 | `cmd/coopd` | Composition root. |
+| `ios/CoopKit` | Swift package containing the generated API client and shared transport code. |
+| `ios/CooperTheCop` | XcodeGen source and SwiftUI parent application. |
 
 ---
 
@@ -112,7 +115,7 @@ A video already outside it when backfilled is never revisited, so its duration-b
 One short-TTL call site can drain it, and it cannot be bought back.
 
 **Migrations are now forward-only.**
-`000001` through `000004` are committed history.
+`000001` through `000005` are committed history.
 Add a new migration; do not edit an existing one.
 
 **Channel metadata and upload refreshes have separate clocks.**
@@ -135,7 +138,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Phase 2**, the parent iOS app. PLAN.md §13.
+**1. Finish Phase 2**, starting with children and policy management, then suppressions, channel search, YouTube deep links, and parent invitations.
 
 ---
 
@@ -145,6 +148,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 go test ./...                                    # unit tests
 make dev-db && make test-integration             # needs Postgres
 ./scripts/smoke.sh                               # end to end, needs a running server
+swift test --package-path ios/CoopKit            # generated client and shared Swift code
 ```
 
 Integration tests are behind a build tag and skip without `COOP_TEST_DATABASE_DSN`.

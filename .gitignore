@@ -22,3 +22,4 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 .swiftpm/
+.build/

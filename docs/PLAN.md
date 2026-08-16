@@ -408,7 +408,7 @@ A single app with a "switch to parent mode" toggle is a bad idea, because the ch
 ### Shared Swift package
 
 `CoopKit`: API client, models, auth, shared by both apps.
-The OpenAPI spec in the repo is the source of truth, with the Go handlers and the Swift client both generated from it, so drift is a build error rather than a runtime surprise.
+The OpenAPI spec in the repo is the source of truth for the generated Swift client, and a server route contract test prevents documented operations from drifting away from the Go implementation.
 
 ### Child app
 

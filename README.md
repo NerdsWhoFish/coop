@@ -9,7 +9,7 @@ When they find something new, they ask, and a parent approves it from their own 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
 > **Status: pre-alpha.** The backend builds, migrates, serves, and keeps approved channels ingested.
-> There is no iOS app yet.
+> The parent app now connects to an instance, performs setup or login, stores its session in Keychain, and works the live request queue.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where things stand, the
 > invariants worth not breaking, and what to build next. The full design is in
@@ -57,16 +57,20 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `internal/cleanup` | Daily expiry and ledger cleanup |
 | `internal/rank` | Recommendation scoring. Pure, no I/O |
 | `api/openapi.yaml` | The API contract, source of truth for both clients |
+| `ios/CoopKit` | Generated Swift API client and shared native code |
+| `ios/CooperTheCop` | SwiftUI parent app and XcodeGen project source |
 | `adr/` | Architecture decision records |
 | `docs/PLAN.md` | Full design document |
 
-The iOS apps (`Cooper The Cop` for parents, `Cooper Watch` for children) land in later phases.
+The parent app (`Cooper The Cop`) is in progress in Phase 2.
+The child app (`Cooper Watch`) lands in Phases 3 and 4.
 
 ## Requirements
 
 - Go 1.26 or newer
 - Postgres 16 or newer
 - A Google Cloud project with the YouTube Data API v3 enabled, and an API key
+- Xcode 16 or newer and XcodeGen 2.46 or newer for the parent app
 
 Every family needs their own API key.
 The YouTube API Developer Policies forbid embedding API credentials in open source projects, so there is no shared key and there never will be.
@@ -81,6 +85,16 @@ make migrate       # apply migrations
 make run           # run the server
 make test          # run tests
 make lint          # vet and staticcheck
+```
+
+The shared Swift package and parent app can be checked independently:
+
+```sh
+swift test --package-path ios/CoopKit
+xcodegen generate --spec ios/CooperTheCop/project.yml
+xcodebuild -project ios/CooperTheCop/CooperTheCop.xcodeproj \
+  -scheme CooperTheCop -destination 'generic/platform=iOS Simulator' build \
+  CODE_SIGNING_ALLOWED=NO
 ```
 
 ## Contributing

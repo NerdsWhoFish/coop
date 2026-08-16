@@ -1,0 +1,50 @@
+name: CooperTheCop
+
+options:
+  minimumXcodeGenVersion: 2.46.0
+  deploymentTarget:
+    iOS: "18.0"
+
+packages:
+  CoopKit:
+    path: ../CoopKit
+
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  CooperTheCop:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - DesignSystem
+      - Features
+    dependencies:
+      - package: CoopKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.parent
+        PRODUCT_NAME: CooperTheCop
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: Cooper The Cop
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+    scheme:
+      testTargets:
+        - CooperTheCopTests
+
+  CooperTheCopTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ../CooperTheCopTests
+    dependencies:
+      - target: CooperTheCop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.parent.tests
+        GENERATE_INFOPLIST_FILE: "YES"
