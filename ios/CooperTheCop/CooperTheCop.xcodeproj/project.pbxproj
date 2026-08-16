@@ -20,6 +20,7 @@
 		C7ACE781E3581E40D70A3F84 /* ParentDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED2CC0E3A16B3D5A083C0CF /* ParentDashboard.swift */; };
 		C8E5CEBE6FAB5818049F96E1 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09443C460292AC0B137AAE9F /* ConnectView.swift */; };
 		C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EEC45B1391EF07F6893444 /* AppModel.swift */; };
+		CE4AD722BCEB888EA31691E4 /* SuppressionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D86FF0D6AD4B7AA35B7BB3 /* SuppressionsView.swift */; };
 		D671422F0390536A04E279D0 /* CoopKit in Frameworks */ = {isa = PBXBuildFile; productRef = 95F7E2D164CF9D386EB89BA0 /* CoopKit */; };
 		DC59C32474E6CA1C7DB64B10 /* AddKeywordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFC7D5338D31D3BC114F4EF /* AddKeywordView.swift */; };
 		FC3963E291052C6AC56FC448 /* ChildSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */; };
@@ -52,6 +53,7 @@
 		DADDB6272E3B22D78B81F996 /* CooperTheCopTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperTheCopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC129F7D8EDB00629539AD99 /* ChildrenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildrenView.swift; sourceTree = "<group>"; };
 		F7B41CEE512EC6B27DC83900 /* CoopKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CoopKit; path = ../CoopKit; sourceTree = SOURCE_ROOT; };
+		F9D86FF0D6AD4B7AA35B7BB3 /* SuppressionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuppressionsView.swift; sourceTree = "<group>"; };
 		FB25E912F258E653A65C838F /* CooperTheCop.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CooperTheCop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC8E2450BD9CD97B605B272D /* ChannelSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSearchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -68,6 +70,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0598343279F17F5968FE6386 /* Suppressions */ = {
+			isa = PBXGroup;
+			children = (
+				F9D86FF0D6AD4B7AA35B7BB3 /* SuppressionsView.swift */,
+			);
+			path = Suppressions;
+			sourceTree = "<group>";
+		};
 		2D90C84C8ACF0BF1BBD51963 /* Authentication */ = {
 			isa = PBXGroup;
 			children = (
@@ -84,6 +94,7 @@
 				62DCA39940CBBE1B2D5223A2 /* Children */,
 				9A86BCD28DA239B1AD368646 /* Requests */,
 				4DACE4818F83B3E521760038 /* Rules */,
+				0598343279F17F5968FE6386 /* Suppressions */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -266,6 +277,7 @@
 				14BC785746067A4818F975D9 /* RequestQueueView.swift in Sources */,
 				377E96EEC17FA29AAB0ED8EF /* RootView.swift in Sources */,
 				2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */,
+				CE4AD722BCEB888EA31691E4 /* SuppressionsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

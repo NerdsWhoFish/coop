@@ -199,6 +199,16 @@ final class AppModel {
     try await api.deleteKeyword(id: id)
   }
 
+  func suppressions(childID: String) async throws -> [Components.Schemas.Suppression] {
+    guard let api else { return [] }
+    return try await api.suppressions(childID: childID)
+  }
+
+  func overrideSuppression(id: String, familyWide: Bool) async throws {
+    guard let api else { return }
+    try await api.overrideSuppression(id: id, familyWide: familyWide)
+  }
+
   func approve(requestID: String, globally: Bool) async throws {
     guard let api else { return }
     try await api.approveRequest(id: requestID, globally: globally)

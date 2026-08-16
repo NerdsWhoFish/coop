@@ -66,6 +66,12 @@ struct ChildSettingsView: View {
             .foregroundStyle(CoopTheme.foreground.opacity(0.65))
         }
       }
+
+      Section("Audit") {
+        NavigationLink("Hidden videos") {
+          SuppressionsView(child: child, model: model)
+        }
+      }
     }
     .scrollContentBackground(.hidden)
     .background(CoopTheme.background)
