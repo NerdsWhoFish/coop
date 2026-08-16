@@ -17,3 +17,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0005](0005-mixed-child-search-with-detail-hydration.md) | Use one mixed child search call and hydrate results before policy evaluation | accepted | 2026-08-15 |
 | [0006](0006-native-client-project-generation.md) | Generate the Xcode project and Swift API client from text sources | accepted | 2026-08-16 |
 | [0007](0007-explainable-local-recommendation-ranking.md) | Rank the approved pool with local explainable signals and hard diversity constraints | accepted | 2026-08-16 |
+| [0008](0008-single-replica-kubernetes-deployment.md) | Ship an application-only Helm chart with one Coop replica | accepted | 2026-08-16 |
