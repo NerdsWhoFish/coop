@@ -131,14 +131,19 @@ jobs:
           xcodegen generate --spec ios/CooperTheCop/project.yml
           xcodegen generate --spec ios/CooperWatch/project.yml
 
-      - name: Build the parent app
+      - name: Test the parent app
         run: |
+          COOP_IOS_SIMULATOR_ID="$(
+            xcrun simctl list devices available --json |
+              jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid'
+          )"
+          test -n "$COOP_IOS_SIMULATOR_ID"
           xcodebuild -quiet \
             -skipPackagePluginValidation \
             -project ios/CooperTheCop/CooperTheCop.xcodeproj \
             -scheme CooperTheCop \
-            -destination 'generic/platform=iOS Simulator' \
-            build CODE_SIGNING_ALLOWED=NO
+            -destination "platform=iOS Simulator,id=$COOP_IOS_SIMULATOR_ID" \
+            test CODE_SIGNING_ALLOWED=NO
 
       - name: Test the child app
         run: |

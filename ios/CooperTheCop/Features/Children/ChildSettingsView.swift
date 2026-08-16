@@ -73,6 +73,9 @@ struct ChildSettingsView: View {
       }
 
       Section("Audit") {
+        NavigationLink("Recommendation mix") {
+          RecommendationTuningView(child: child, model: model)
+        }
         NavigationLink("Hidden videos") {
           SuppressionsView(child: child, model: model)
         }

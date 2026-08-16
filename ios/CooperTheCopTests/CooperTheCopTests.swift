@@ -19,4 +19,13 @@ struct CooperTheCopTests {
     }
     Issue.record("AppModel did not start at server connection")
   }
+
+  @Test("channel preference labels cover every stored weight")
+  func channelPreferenceLabels() {
+    #expect(ChannelPreference.allCases.map(\.rawValue) == [-2, -1, 0, 1, 2])
+    #expect(
+      ChannelPreference.allCases.map(\.label) == [
+        "Much less", "Less", "Balanced", "More", "Much more",
+      ])
+  }
 }

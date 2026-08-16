@@ -27,6 +27,30 @@ final class AppModel {
   private let defaults = UserDefaults.standard
   private static let serverKey = "coop.server.address"
 
+  private var previewChannelWeights = [
+    "science": 1,
+    "drawing": 0,
+    "outdoors": -1,
+  ]
+
+  static var showsRecommendationPreview: Bool {
+    #if DEBUG
+      return ProcessInfo.processInfo.environment["COOP_UI_SCREEN"] == "recommendations"
+    #else
+      return false
+    #endif
+  }
+
+  static let recommendationPreviewChild = Components.Schemas.Child(
+    value1: .init(id: "preview-child", name: "River", deviceCount: 2, pendingRequestCount: 1),
+    value2: .init(
+      shortsEnabled: true,
+      watchPageAutoplay: false,
+      videoSearchTiles: true,
+      dailySearchLimit: 12
+    )
+  )
+
   init() {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
   }
@@ -164,6 +188,61 @@ final class AppModel {
   func childAllowlist(childID: String) async throws -> [Components.Schemas.EffectiveChannel] {
     guard let api else { return [] }
     return try await api.childAllowlist(childID: childID)
+  }
+
+  func feedRecommendations(childID: String) async throws -> [FeedRecommendation] {
+    if Self.showsRecommendationPreview {
+      return Self.previewRecommendations.sorted { left, right in
+        (previewChannelWeights[left.channelID] ?? 0) > (previewChannelWeights[right.channelID] ?? 0)
+      }
+    }
+    guard let api else { return [] }
+    let page = try await api.childRecommendations(childID: childID)
+    return page.items.map { item in
+      FeedRecommendation(
+        id: item.video.id,
+        channelID: item.video.channelId,
+        channelTitle: item.video.channelTitle ?? "Approved channel",
+        title: item.video.title,
+        thumbnailURL: item.video.thumbnailUrl.flatMap(URL.init(string:)),
+        reason: item.reason,
+        signal: RecommendationSignal(item.reasonKind)
+      )
+    }
+  }
+
+  func tunableChannels(childID: String) async throws -> [TunableChannel] {
+    if Self.showsRecommendationPreview { return Self.previewChannels }
+    let channels = try await childAllowlist(childID: childID)
+    return channels.compactMap { entry in
+      guard !(entry.value2.deniedForChild ?? false) else { return nil }
+      let channel = entry.value1.value1
+      return TunableChannel(
+        id: channel.id,
+        title: channel.title,
+        thumbnailURL: channel.thumbnailUrl.flatMap(URL.init(string:))
+      )
+    }
+  }
+
+  func recommendationChannelWeights(childID: String) async throws -> [String: Int] {
+    if Self.showsRecommendationPreview { return previewChannelWeights }
+    guard let api else { return [:] }
+    return Dictionary(
+      uniqueKeysWithValues: try await api.childChannelWeights(childID: childID)
+        .map { ($0.channelId, $0.weight) }
+    )
+  }
+
+  func setRecommendationChannelWeight(_ weight: Int, channelID: String, childID: String)
+    async throws
+  {
+    if Self.showsRecommendationPreview {
+      previewChannelWeights[channelID] = weight
+      return
+    }
+    guard let api else { return }
+    try await api.setChildChannelWeight(weight, channelID: channelID, childID: childID)
   }
 
   func blocklist() async throws -> [Components.Schemas.BlockedChannel] {
@@ -313,4 +392,50 @@ final class AppModel {
       errorMessage = error.localizedDescription
     }
   }
+
+  private static let previewChannels = [
+    TunableChannel(id: "science", title: "Deep Sea Lab", thumbnailURL: nil),
+    TunableChannel(id: "drawing", title: "Draw Every Day", thumbnailURL: nil),
+    TunableChannel(id: "outdoors", title: "Trail Kids", thumbnailURL: nil),
+    TunableChannel(id: "music", title: "Tiny Orchestra", thumbnailURL: nil),
+  ]
+
+  private static let previewRecommendations = [
+    FeedRecommendation(
+      id: "anglerfish",
+      channelID: "science",
+      channelTitle: "Deep Sea Lab",
+      title: "Why anglerfish glow in the dark",
+      thumbnailURL: nil,
+      reason: "You asked Coop to show more from this channel.",
+      signal: .parentMore
+    ),
+    FeedRecommendation(
+      id: "owl",
+      channelID: "drawing",
+      channelTitle: "Draw Every Day",
+      title: "Draw a snowy owl in ten shapes",
+      thumbnailURL: nil,
+      reason: "They chose to watch this video more than once.",
+      signal: .rewatched
+    ),
+    FeedRecommendation(
+      id: "camp",
+      channelID: "outdoors",
+      channelTitle: "Trail Kids",
+      title: "Build a tiny camp stove safely",
+      thumbnailURL: nil,
+      reason: "You asked Coop to show this channel less often.",
+      signal: .parentLess
+    ),
+    FeedRecommendation(
+      id: "cello",
+      channelID: "music",
+      channelTitle: "Tiny Orchestra",
+      title: "Meet the cello",
+      thumbnailURL: nil,
+      reason: "Something new from an approved channel.",
+      signal: .unwatched
+    ),
+  ]
 }

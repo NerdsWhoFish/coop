@@ -8,7 +8,9 @@ struct CooperTheCopApp: App {
     WindowGroup {
       RootView(model: model)
         .preferredColorScheme(.dark)
-        .task { await model.restore() }
+        .task {
+          if !AppModel.showsRecommendationPreview { await model.restore() }
+        }
     }
   }
 }

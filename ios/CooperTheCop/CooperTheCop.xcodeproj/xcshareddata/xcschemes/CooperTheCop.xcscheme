@@ -50,6 +50,17 @@
                ReferencedContainer = "container:CooperTheCop.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D2B84290CFB1FF6C5A3742F2"
+               BuildableName = "CooperTheCopUITests.xctest"
+               BlueprintName = "CooperTheCopUITests"
+               ReferencedContainer = "container:CooperTheCop.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

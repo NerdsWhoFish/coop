@@ -36,6 +36,7 @@ targets:
     scheme:
       testTargets:
         - CooperTheCopTests
+        - CooperTheCopUITests
 
   CooperTheCopTests:
     type: bundle.unit-test
@@ -47,4 +48,16 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.parent.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  CooperTheCopUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ../CooperTheCopUITests
+    dependencies:
+      - target: CooperTheCop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.parent.ui-tests
         GENERATE_INFOPLIST_FILE: "YES"

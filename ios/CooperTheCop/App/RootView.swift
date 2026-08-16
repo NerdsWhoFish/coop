@@ -5,13 +5,19 @@ struct RootView: View {
 
   var body: some View {
     Group {
-      switch model.destination {
-      case .connecting:
-        ConnectView(model: model)
-      case .authentication(let needsSetup):
-        AuthenticationView(model: model, needsSetup: needsSetup)
-      case .dashboard:
-        ParentDashboard(model: model)
+      if AppModel.showsRecommendationPreview {
+        NavigationStack {
+          RecommendationTuningView(child: AppModel.recommendationPreviewChild, model: model)
+        }
+      } else {
+        switch model.destination {
+        case .connecting:
+          ConnectView(model: model)
+        case .authentication(let needsSetup):
+          AuthenticationView(model: model, needsSetup: needsSetup)
+        case .dashboard:
+          ParentDashboard(model: model)
+        }
       }
     }
     .alert("Couldn’t finish that", isPresented: errorIsPresented) {
