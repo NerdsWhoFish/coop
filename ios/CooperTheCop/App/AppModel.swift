@@ -130,6 +130,75 @@ final class AppModel {
     return try await api.createPairingCode(childID: childID)
   }
 
+  func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {
+    guard let api else { return [] }
+    return try await api.globalAllowlist()
+  }
+
+  func childAllowlist(childID: String) async throws -> [Components.Schemas.EffectiveChannel] {
+    guard let api else { return [] }
+    return try await api.childAllowlist(childID: childID)
+  }
+
+  func blocklist() async throws -> [Components.Schemas.BlockedChannel] {
+    guard let api else { return [] }
+    return try await api.blocklist()
+  }
+
+  func keywords(childID: String?) async throws -> [Components.Schemas.Keyword] {
+    guard let api else { return [] }
+    return try await api.keywords(childID: childID)
+  }
+
+  func searchChannels(query: String) async throws -> [Components.Schemas.Channel] {
+    guard let api else { return [] }
+    return try await api.searchChannels(query: query)
+  }
+
+  func allowChannel(_ channelID: String, childID: String?) async throws {
+    guard let api else { return }
+    try await api.allowChannel(channelID, childID: childID)
+  }
+
+  func removeChannel(_ channelID: String, childID: String?) async throws {
+    guard let api else { return }
+    try await api.removeChannel(channelID, childID: childID)
+  }
+
+  func setChannelDenied(_ denied: Bool, channelID: String, childID: String) async throws {
+    guard let api else { return }
+    try await api.setChannelDenied(denied, channelID: channelID, childID: childID)
+  }
+
+  func setChannelBlocked(_ blocked: Bool, channelID: String, reason: String? = nil) async throws {
+    guard let api else { return }
+    try await api.setChannelBlocked(blocked, channelID: channelID, reason: reason)
+  }
+
+  func createKeyword(
+    term: String,
+    childID: String?,
+    matchTitle: Bool,
+    matchTags: Bool,
+    matchDescription: Bool,
+    wholeWord: Bool
+  ) async throws {
+    guard let api else { return }
+    _ = try await api.createKeyword(
+      term: term,
+      childID: childID,
+      matchTitle: matchTitle,
+      matchTags: matchTags,
+      matchDescription: matchDescription,
+      wholeWord: wholeWord
+    )
+  }
+
+  func deleteKeyword(id: String) async throws {
+    guard let api else { return }
+    try await api.deleteKeyword(id: id)
+  }
+
   func approve(requestID: String, globally: Bool) async throws {
     guard let api else { return }
     try await api.approveRequest(id: requestID, globally: globally)

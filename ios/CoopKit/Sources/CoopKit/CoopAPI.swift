@@ -115,6 +115,157 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {
+    let output = try await client.getGlobalAllowlist()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func childAllowlist(childID: String) async throws -> [Components.Schemas.EffectiveChannel]
+  {
+    let path = Operations.GetChildAllowlist.Input.Path(childId: childID)
+    let output = try await client.getChildAllowlist(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func blocklist() async throws -> [Components.Schemas.BlockedChannel] {
+    let output = try await client.getChannelBlocklist()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func keywords(childID: String? = nil) async throws -> [Components.Schemas.Keyword] {
+    let query = Operations.ListKeywords.Input.Query(childId: childID)
+    let output = try await client.listKeywords(query: query)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func searchChannels(query: String) async throws -> [Components.Schemas.Channel] {
+    let input = Operations.SearchChannelsForParent.Input.Query(q: query)
+    let output = try await client.searchChannelsForParent(query: input)
+    switch output {
+    case .ok(let response):
+      return try response.body.json
+    case .tooManyRequests:
+      throw CoopAPIError.searchBudgetExhausted
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func allowChannel(_ channelID: String, childID: String? = nil) async throws {
+    if let childID {
+      let path = Operations.AllowChannelForChild.Input.Path(childId: childID)
+      let payload = Operations.AllowChannelForChild.Input.Body.JsonPayload(channelId: channelID)
+      guard
+        case .noContent = try await client.allowChannelForChild(path: path, body: .json(payload))
+      else { throw CoopAPIError.unexpectedResponse }
+    } else {
+      let payload = Operations.AllowChannelGlobally.Input.Body.JsonPayload(channelId: channelID)
+      guard case .noContent = try await client.allowChannelGlobally(body: .json(payload)) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  public func removeChannel(_ channelID: String, childID: String? = nil) async throws {
+    if let childID {
+      let path = Operations.DisallowChannelForChild.Input.Path(
+        childId: childID,
+        channelId: channelID
+      )
+      guard case .noContent = try await client.disallowChannelForChild(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    } else {
+      let path = Operations.DisallowChannelGlobally.Input.Path(channelId: channelID)
+      guard case .noContent = try await client.disallowChannelGlobally(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  public func setChannelDenied(_ denied: Bool, channelID: String, childID: String) async throws {
+    if denied {
+      let path = Operations.DenyChannelForChild.Input.Path(childId: childID, channelId: channelID)
+      guard case .noContent = try await client.denyChannelForChild(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    } else {
+      let path = Operations.RemoveChildChannelDenial.Input.Path(
+        childId: childID,
+        channelId: channelID
+      )
+      guard case .noContent = try await client.removeChildChannelDenial(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  public func setChannelBlocked(_ blocked: Bool, channelID: String, reason: String? = nil)
+    async throws
+  {
+    if blocked {
+      let payload = Operations.BlockChannel.Input.Body.JsonPayload(
+        channelId: channelID, reason: reason)
+      guard case .noContent = try await client.blockChannel(body: .json(payload)) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    } else {
+      let path = Operations.UnblockChannel.Input.Path(channelId: channelID)
+      guard case .noContent = try await client.unblockChannel(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  @discardableResult
+  public func createKeyword(
+    term: String,
+    childID: String?,
+    matchTitle: Bool = true,
+    matchTags: Bool = true,
+    matchDescription: Bool = false,
+    wholeWord: Bool = true
+  ) async throws -> Components.Schemas.Keyword {
+    let payload = Components.Schemas.KeywordInput(
+      term: term,
+      childId: childID,
+      matchTitle: matchTitle,
+      matchTags: matchTags,
+      matchDescription: matchDescription,
+      wholeWord: wholeWord
+    )
+    let output = try await client.createKeyword(body: .json(payload))
+    guard case .created(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func deleteKeyword(id: String) async throws {
+    let path = Operations.DeleteKeyword.Input.Path(keywordId: id)
+    guard case .noContent = try await client.deleteKeyword(path: path) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func suppressions(childID: String) async throws -> [Components.Schemas.Suppression] {
+    let path = Operations.ListSuppressions.Input.Path(childId: childID)
+    let output = try await client.listSuppressions(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json.items
+  }
+
+  public func overrideSuppression(id: String, familyWide: Bool) async throws {
+    let path = Operations.OverrideSuppression.Input.Path(suppressionId: id)
+    let payload = Operations.OverrideSuppression.Input.Body.JsonPayload(
+      scope: familyWide ? .family : .child
+    )
+    guard case .noContent = try await client.overrideSuppression(path: path, body: .json(payload))
+    else { throw CoopAPIError.unexpectedResponse }
+  }
+
   public func pendingRequests() async throws -> [Components.Schemas.Request] {
     let query = Operations.ListParentRequests.Input.Query(status: .pending)
     let output = try await client.listParentRequests(query: query)
@@ -154,6 +305,7 @@ public actor CoopAPI {
 public enum CoopAPIError: LocalizedError {
   case invalidCredentials
   case invalidSession
+  case searchBudgetExhausted
   case unexpectedResponse
 
   public var errorDescription: String? {
@@ -162,6 +314,8 @@ public enum CoopAPIError: LocalizedError {
       "That email and password did not match."
     case .invalidSession:
       "Your parent session has expired. Sign in again."
+    case .searchBudgetExhausted:
+      "The family’s YouTube search budget is used up for today. Try again after it resets."
     case .unexpectedResponse:
       "The Coop server returned an unexpected response."
     }

@@ -11,12 +11,8 @@ struct ParentDashboard: View {
       ChildrenView(model: model)
         .tabItem { Label("Children", systemImage: "person.2.fill") }
 
-      PlaceholderSection(
-        title: "Rules",
-        detail: "Global allowlists, keywords, and blocks land here.",
-        symbol: "slider.horizontal.3"
-      )
-      .tabItem { Label("Rules", systemImage: "slider.horizontal.3") }
+      RulesView(model: model)
+        .tabItem { Label("Rules", systemImage: "slider.horizontal.3") }
 
       PlaceholderSection(
         title: "Family",
