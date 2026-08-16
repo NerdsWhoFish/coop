@@ -15,6 +15,16 @@ type parentHandler func(http.ResponseWriter, *http.Request, auth.Parent) error
 // childHandler runs with an authenticated child device.
 type childHandler func(http.ResponseWriter, *http.Request, auth.Child) error
 
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // withParent authenticates a parent session and resolves their scope here
 // rather than per handler, so no handler can serve a request having forgotten
 // to ask which children the caller may see.

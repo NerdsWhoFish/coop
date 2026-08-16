@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -33,10 +34,13 @@ type Config struct {
 
 // Server holds HTTP listener settings.
 type Server struct {
-	Addr            string        `toml:"addr"             env:"SERVER_ADDR"`
-	ReadTimeout     time.Duration `toml:"read_timeout"     env:"SERVER_READ_TIMEOUT"`
-	WriteTimeout    time.Duration `toml:"write_timeout"    env:"SERVER_WRITE_TIMEOUT"`
-	ShutdownTimeout time.Duration `toml:"shutdown_timeout" env:"SERVER_SHUTDOWN_TIMEOUT"`
+	Addr              string        `toml:"addr"             env:"SERVER_ADDR"`
+	ReadTimeout       time.Duration `toml:"read_timeout"     env:"SERVER_READ_TIMEOUT"`
+	ReadHeaderTimeout time.Duration `toml:"read_header_timeout" env:"SERVER_READ_HEADER_TIMEOUT"`
+	WriteTimeout      time.Duration `toml:"write_timeout"    env:"SERVER_WRITE_TIMEOUT"`
+	IdleTimeout       time.Duration `toml:"idle_timeout"     env:"SERVER_IDLE_TIMEOUT"`
+	ShutdownTimeout   time.Duration `toml:"shutdown_timeout" env:"SERVER_SHUTDOWN_TIMEOUT"`
+	MaxHeaderBytes    int           `toml:"max_header_bytes" env:"SERVER_MAX_HEADER_BYTES"`
 
 	// PublicURL is the externally reachable base URL. Pairing codes embed it, so
 	// a wrong value here produces devices that pair and then reach nothing.
@@ -111,10 +115,13 @@ type Log struct {
 func Defaults() *Config {
 	return &Config{
 		Server: Server{
-			Addr:            ":8080",
-			ReadTimeout:     15 * time.Second,
-			WriteTimeout:    30 * time.Second,
-			ShutdownTimeout: 20 * time.Second,
+			Addr:              ":8080",
+			ReadTimeout:       15 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			ShutdownTimeout:   20 * time.Second,
+			MaxHeaderBytes:    1 << 20,
 		},
 		Database: Database{
 			MaxOpenConns:    25,
@@ -155,6 +162,10 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	if err := overlaySecretFiles(cfg); err != nil {
+		return nil, err
+	}
+
 	if err := env.ParseWithOptions(cfg, env.Options{Prefix: "COOP_"}); err != nil {
 		return nil, fmt.Errorf("parsing environment: %w", err)
 	}
@@ -163,6 +174,27 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func overlaySecretFiles(cfg *Config) error {
+	for _, secret := range []struct {
+		envName string
+		target  *string
+	}{
+		{envName: "COOP_DATABASE_DSN_FILE", target: &cfg.Database.DSN},
+		{envName: "COOP_AUTH_ENCRYPTION_KEY_FILE", target: &cfg.Auth.EncryptionKey},
+	} {
+		path := os.Getenv(secret.envName)
+		if path == "" {
+			continue
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", secret.envName, err)
+		}
+		*secret.target = strings.TrimRight(string(contents), "\r\n")
+	}
+	return nil
 }
 
 // Validate reports every problem it finds rather than only the first, because
@@ -175,6 +207,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.PublicURL == "" {
 		errs = append(errs, errors.New("server.public_url (COOP_PUBLIC_URL) is required, child devices embed it during pairing"))
+	}
+	if c.Server.ReadHeaderTimeout <= 0 {
+		errs = append(errs, errors.New("server.read_header_timeout must be positive"))
+	}
+	if c.Server.IdleTimeout <= 0 {
+		errs = append(errs, errors.New("server.idle_timeout must be positive"))
+	}
+	if c.Server.MaxHeaderBytes < 1024 {
+		errs = append(errs, errors.New("server.max_header_bytes must be at least 1024"))
 	}
 
 	if _, err := c.EncryptionKeyBytes(); err != nil {

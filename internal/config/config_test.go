@@ -14,11 +14,14 @@ const validKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 func validConfig() *Config {
 	return &Config{
 		Server: Server{
-			Addr:            ":8080",
-			ReadTimeout:     15 * time.Second,
-			WriteTimeout:    30 * time.Second,
-			ShutdownTimeout: 20 * time.Second,
-			PublicURL:       "https://coop.example",
+			Addr:              ":8080",
+			ReadTimeout:       15 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			ShutdownTimeout:   20 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+			PublicURL:         "https://coop.example",
 		},
 		Database: Database{DSN: "postgres://u:p@localhost:5432/coop"},
 		YouTube: YouTube{
@@ -238,6 +241,43 @@ cache_ttl_default = "2h"
 	// Defaults must still apply to keys absent from both file and environment.
 	if cfg.YouTube.DailyUnitBudget != 8000 {
 		t.Errorf("DailyUnitBudget = %d, want the 8000 default", cfg.YouTube.DailyUnitBudget)
+	}
+}
+
+func TestLoadSecretFilesWithEnvironmentOverride(t *testing.T) {
+	dir := t.TempDir()
+	dsnPath := filepath.Join(dir, "database-dsn")
+	keyPath := filepath.Join(dir, "auth-encryption-key")
+	if err := os.WriteFile(dsnPath, []byte("postgres://file@localhost:5432/coop\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, []byte(validKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("COOP_DATABASE_DSN_FILE", dsnPath)
+	t.Setenv("COOP_AUTH_ENCRYPTION_KEY_FILE", keyPath)
+	t.Setenv("COOP_DATABASE_DSN", "postgres://environment@localhost:5432/coop")
+	t.Setenv("COOP_PUBLIC_URL", "https://coop.example")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Database.DSN != "postgres://environment@localhost:5432/coop" {
+		t.Errorf("Database.DSN = %q, want direct environment value", cfg.Database.DSN)
+	}
+	if cfg.Auth.EncryptionKey != validKey {
+		t.Errorf("Auth.EncryptionKey = %q, want secret file value", cfg.Auth.EncryptionKey)
+	}
+}
+
+func TestLoadSecretFileErrorNamesVariable(t *testing.T) {
+	t.Setenv("COOP_DATABASE_DSN_FILE", filepath.Join(t.TempDir(), "missing"))
+
+	_, err := Load("")
+	if err == nil || !strings.Contains(err.Error(), "COOP_DATABASE_DSN_FILE") {
+		t.Fatalf("Load() error = %v, want named secret file error", err)
 	}
 }
 

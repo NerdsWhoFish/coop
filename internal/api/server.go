@@ -65,7 +65,7 @@ func NewServer(deps Deps) (*Server, error) {
 
 // Handler returns the fully wrapped handler.
 func (s *Server) Handler() http.Handler {
-	return s.recoverPanics(s.logRequests(s.mux))
+	return s.securityHeaders(s.recoverPanics(s.logRequests(s.mux)))
 }
 
 func (s *Server) routes() {

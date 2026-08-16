@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+bin
+dist
+deploy/compose/secrets
+ios/*/*.xcodeproj
+ios/*/.build
+ios/*/DerivedData
+*.test
+*.out

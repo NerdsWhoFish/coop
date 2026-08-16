@@ -8,6 +8,7 @@
 .env.*
 !.env.example
 coop.local.toml
+/deploy/compose/secrets/
 
 # Go
 *.test

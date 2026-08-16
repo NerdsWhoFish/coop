@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -44,6 +45,7 @@ Commands:
   serve          Run the HTTP server (default)
   migrate        Apply pending database migrations
   migrate-down   Roll back the most recent migration
+  healthcheck    Check the local server readiness endpoint
   version        Print build information
 
 Flags:
@@ -66,6 +68,9 @@ func run() error {
 	if command == "version" {
 		fmt.Println(version.String())
 		return nil
+	}
+	if command == "healthcheck" {
+		return runHealthcheck()
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -106,6 +111,24 @@ func run() error {
 		usage()
 		return fmt.Errorf("unknown command %q", command)
 	}
+}
+
+func runHealthcheck() error {
+	url := os.Getenv("COOP_HEALTHCHECK_URL")
+	if url == "" {
+		url = "http://127.0.0.1:8080/readyz"
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("healthcheck: %w", err)
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck: %s returned %s", url, response.Status)
+	}
+	return nil
 }
 
 // logVersion reports the schema version after a migration command. A dirty
@@ -187,10 +210,13 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	}
 
 	srv := &http.Server{
-		Addr:         cfg.Server.Addr,
-		Handler:      api.Handler(),
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
+		Addr:              cfg.Server.Addr,
+		Handler:           api.Handler(),
+		ReadTimeout:       cfg.Server.ReadTimeout,
+		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
+		WriteTimeout:      cfg.Server.WriteTimeout,
+		IdleTimeout:       cfg.Server.IdleTimeout,
+		MaxHeaderBytes:    cfg.Server.MaxHeaderBytes,
 	}
 
 	errCh := make(chan error, 1)

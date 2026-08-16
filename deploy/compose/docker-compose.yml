@@ -1,35 +1,106 @@
 ---
-# Single-family deployment. Copy .env.example to .env first.
+# Single-family deployment. Follow README.md before starting it.
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_USER: coop
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
       POSTGRES_DB: coop
+    secrets:
+      - postgres-password
     volumes:
       - coop-data:/var/lib/postgresql/data
+    shm_size: 128mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U coop"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
 
   coopd:
-    image: ghcr.io/nerdswhofish/coop:latest
+    image: ${COOP_IMAGE:?set COOP_IMAGE to a released version or digest}
     restart: unless-stopped
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      COOP_DATABASE_DSN: postgres://coop:${POSTGRES_PASSWORD}@postgres:5432/coop?sslmode=disable
-      COOP_PUBLIC_URL: ${COOP_PUBLIC_URL:?set COOP_PUBLIC_URL in .env}
-      COOP_AUTH_ENCRYPTION_KEY: ${COOP_AUTH_ENCRYPTION_KEY:?generate with openssl rand -base64 32}
+      COOP_DATABASE_DSN_FILE: /run/secrets/database-dsn
+      COOP_PUBLIC_URL: https://${COOP_HOSTNAME:?set COOP_HOSTNAME in .env}
+      COOP_AUTH_ENCRYPTION_KEY_FILE: /run/secrets/auth-encryption-key
       COOP_LOG_FORMAT: json
+    secrets:
+      - database-dsn
+      - auth-encryption-key
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/coopd", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    stop_grace_period: 25s
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      coopd:
+        condition: service_healthy
+    environment:
+      COOP_HOSTNAME: ${COOP_HOSTNAME:?set COOP_HOSTNAME in .env}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - frontend
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+
+secrets:
+  postgres-password:
+    file: ./secrets/postgres-password
+  database-dsn:
+    file: ./secrets/database-dsn
+  auth-encryption-key:
+    file: ./secrets/auth-encryption-key
+
+networks:
+  frontend:
+  backend:
 
 volumes:
   coop-data:
+  caddy-data:
+  caddy-config:
