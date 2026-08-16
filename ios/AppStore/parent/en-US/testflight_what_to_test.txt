@@ -1,0 +1,2 @@
+Connect to the review server, sign in, and create a child profile.
+Approve and block channels, change child-specific rules, review a channel request, generate a pairing code, and inspect the resulting feed in Cooper Watch.

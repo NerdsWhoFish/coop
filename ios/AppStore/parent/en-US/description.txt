@@ -1,0 +1,8 @@
+Cooper The Cop is the parent side of Coop, a self-hosted way to decide what your family can watch on YouTube.
+
+Approve channels, block what does not belong, handle requests, and tune each child's feed from one app.
+Coop keeps the policy and viewing history on a server you control.
+
+Cooper The Cop requires a Coop server and the companion Cooper Watch app.
+It does not include videos or a built-in catalog.
+Your family supplies and approves every channel.

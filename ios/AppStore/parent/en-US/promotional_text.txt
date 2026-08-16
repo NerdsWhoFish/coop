@@ -1,0 +1,1 @@
+Run the parent side of your family's self-hosted Coop server.

@@ -1,0 +1,7 @@
+Cooper Watch shows the YouTube channels and videos your family has approved through Coop.
+
+Browse a focused home feed, follow allowed channels, search within the family rules, and ask a parent when you find a channel that is not available yet.
+Video plays through YouTube's official embedded player.
+
+Cooper Watch requires a self-hosted Coop server configured through Cooper The Cop.
+It does not include videos or a built-in catalog.
