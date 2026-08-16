@@ -1,0 +1,7 @@
+Coop is installed as {{ include "coop.fullname" . }}.
+
+The chart deliberately runs one replica with the Recreate strategy because background workers do not yet use leader election.
+Create Secret {{ .Values.config.existingSecret }} with keys {{ .Values.config.databaseDSNKey }} and {{ .Values.config.authEncryptionKeyKey }} before installing.
+
+Readiness: /readyz
+Liveness: /livez

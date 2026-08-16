@@ -1,0 +1,73 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/nerdswhofish/coop
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: coop.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+config:
+  publicURL: https://coop.example.com
+  logLevel: info
+  logFormat: json
+  existingSecret: coop-secrets
+  databaseDSNKey: database-dsn
+  authEncryptionKeyKey: auth-encryption-key
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+networkPolicy:
+  enabled: false
+  ingressNamespaceSelector: {}
+  postgresPort: 5432
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

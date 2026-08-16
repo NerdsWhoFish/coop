@@ -71,8 +71,10 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes() {
 	m := s.mux
 
-	m.HandleFunc("GET /healthz", s.handleHealth)
-	m.HandleFunc("GET /api/v1/healthz", s.handleHealth)
+	m.HandleFunc("GET /livez", s.handleLiveness)
+	m.HandleFunc("GET /readyz", s.handleReadiness)
+	m.HandleFunc("GET /healthz", s.handleReadiness)
+	m.HandleFunc("GET /api/v1/healthz", s.handleReadiness)
 	m.HandleFunc("GET /version", s.handleVersion)
 
 	// Setup and sign-in are the only unauthenticated write paths.
@@ -173,7 +175,12 @@ func (s *Server) handle(h handlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	if err := s.deps.DB.SQL().PingContext(r.Context()); err != nil {
 		http.Error(w, "database unreachable", http.StatusServiceUnavailable)
 		return
