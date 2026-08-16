@@ -14,6 +14,9 @@ The public privacy policy, support URL, screenshots, app icons, review contact d
 - Use fictional family and account data in screenshots and reviewer fixtures.
 - Keep parent and child build numbers independent and monotonically increasing.
 - Test account deletion before submission because Apple requires account-creating apps to initiate full account deletion in the app.
+- Build a signed archive with `scripts/testflight.sh parent archive` or `scripts/testflight.sh child archive`.
+- Upload an approved archive with `scripts/testflight.sh parent upload` or `scripts/testflight.sh child upload` after setting the three App Store Connect API-key environment variables.
+- Populate the isolated reviewer environment by following `deploy/demo/README.md`.
 
 ## Decisions and approvals outside the repository
 

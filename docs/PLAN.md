@@ -559,6 +559,8 @@ Complete.
 
 **Phase 5, ship.**
 Network and device setup docs, Google Cloud project walkthrough, demo family, container, Helm, compose, TestFlight, submission.
+The repository-owned deployment, security, demo-environment, TestFlight, and submission materials are complete.
+Actual App Store submission remains gated on external legal, content-rights, signing, and owner approvals documented in `ios/AppStore/README.md`.
 
 **Phase 6, recommendations.**
 `internal/rank`, parent-tunable weights, anti-tunnel constraints, explanation strings in the parent app.

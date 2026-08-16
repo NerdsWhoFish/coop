@@ -150,7 +150,9 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Build Phase 5**, the deployment and release surface: network and device setup documentation, Google Cloud walkthrough, demo family, container images, Helm, Compose, TestFlight, and App Store submission.
+**1. Run release-candidate acceptance**, including a fresh deployment, the fictional App Review fixture, child-device restrictions, signed archives, and TestFlight distribution.
+
+**2. Resolve the external submission gates** in `ios/AppStore/README.md`, especially child-privacy review, YouTube content authorization, Kids Category placement, export compliance, and final public-copy approval.
 
 ---
 
