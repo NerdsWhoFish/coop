@@ -1,11 +1,12 @@
 # Build output
 /bin/
 /dist/
-coopd
+/coopd
 
 # Env and local config
 .env
 .env.*
+!.env.example
 coop.local.toml
 
 # Go
