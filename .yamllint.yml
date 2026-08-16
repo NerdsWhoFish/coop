@@ -3,6 +3,10 @@
 # readable at depth, and carry long description strings. Both are deliberate.
 extends: default
 
+ignore: |
+  deploy/helm/coop/templates/
+  ios/CoopKit/.build/
+
 rules:
   braces:
     min-spaces-inside: 0
