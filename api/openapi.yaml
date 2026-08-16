@@ -876,7 +876,7 @@ paths:
           description: Stable shuffle seed for one browsing session.
           schema: { type: string }
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Offset"
       responses:
         "200":
           description: OK
@@ -1133,6 +1133,10 @@ components:
       name: cursor
       in: query
       schema: { type: string }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
 
   responses:
     Unauthorized:

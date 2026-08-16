@@ -395,6 +395,27 @@ public actor CoopAPI {
     return try response.body.json.items
   }
 
+  public func childShorts(
+    session: String,
+    offset: Int,
+    limit: Int = 10
+  ) async throws -> [Components.Schemas.Video] {
+    let query = Operations.GetChildShorts.Input.Query(
+      session: session,
+      limit: limit,
+      offset: offset
+    )
+    let output = try await client.getChildShorts(query: query)
+    switch output {
+    case .ok(let response):
+      return try response.body.json.items
+    case .notFound:
+      throw CoopAPIError.shortsDisabled
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func childSubscriptions() async throws -> [Components.Schemas.Channel] {
     let output = try await client.listChildSubscriptions()
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
@@ -530,6 +551,7 @@ public enum CoopAPIError: LocalizedError {
   case invalidPairingCode
   case invalidSession
   case searchBudgetExhausted
+  case shortsDisabled
   case unexpectedResponse
 
   public var errorDescription: String? {
@@ -544,6 +566,8 @@ public enum CoopAPIError: LocalizedError {
       "Your parent session has expired. Sign in again."
     case .searchBudgetExhausted:
       "The family’s YouTube search budget is used up for today. Try again after it resets."
+    case .shortsDisabled:
+      "Shorts are not enabled for this child."
     case .unexpectedResponse:
       "The Coop server returned an unexpected response."
     }
