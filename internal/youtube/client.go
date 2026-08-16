@@ -507,7 +507,15 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 
 	resp, err := c.cfg.HTTP.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("calling youtube: %w", err)
+		cause := err
+		for {
+			urlErr, ok := cause.(*url.Error)
+			if !ok {
+				break
+			}
+			cause = urlErr.Err
+		}
+		return nil, fmt.Errorf("calling youtube: %w", cause)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,12 @@ import (
 
 	"github.com/nerdswhofish/coop/internal/domain"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
 
 type fakeCache struct {
 	entries map[string][]byte
@@ -103,6 +110,32 @@ func jsonHandler(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
+	}
+}
+
+func TestTransportErrorDoesNotExposeAPIKey(t *testing.T) {
+	const apiKey = "secret-api-key"
+	client, err := New(Config{
+		APIKey:   apiKey,
+		FamilyID: uuid.New(),
+		Cache:    newFakeCache(),
+		Ledger:   newFakeLedger(),
+		Budget:   Budget{Units: 100, Searches: 10, Backfill: 20},
+		HTTP: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			return nil, &url.Error{Op: "Get", URL: request.URL.String(), Err: errors.New("offline")}
+		})},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Channels(context.Background(),
+		[]string{"UCabcdefghijklmnopqrstuv"}, domain.PurposeFeed)
+	if err == nil {
+		t.Fatal("Channels() error = nil, want transport failure")
+	}
+	if strings.Contains(err.Error(), apiKey) {
+		t.Fatalf("transport error exposed API key: %v", err)
 	}
 }
 

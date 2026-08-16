@@ -32,8 +32,16 @@ func validConfig() *Config {
 			UploadsRefreshInterval: 6 * time.Hour,
 			IngestPollInterval:     time.Minute,
 		},
-		Auth: Auth{EncryptionKey: validKey, InvitationTTL: 7 * 24 * time.Hour},
-		Log:  Log{Level: "info", Format: "json"},
+		Auth: Auth{
+			EncryptionKey:        validKey,
+			InvitationTTL:        7 * 24 * time.Hour,
+			ChallengeTTL:         5 * time.Minute,
+			ChallengeMaxAttempts: 5,
+			FailureWindow:        15 * time.Minute,
+			MaxFailures:          5,
+			LockoutDuration:      15 * time.Minute,
+		},
+		Log: Log{Level: "info", Format: "json"},
 	}
 }
 

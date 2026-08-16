@@ -64,6 +64,80 @@ func TestAPICacheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAuthChallengeCompletionRejectsTOTPStepReplay(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Auth Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+
+	first := ParentAuthChallenge{
+		ParentID: parent.ID, TokenHash: uuid.NewString(), Purpose: AuthPurposeEnroll,
+		EncryptedTOTPSecret: []byte("sealed"), ExpiresAt: now.Add(time.Minute),
+	}
+	if err := accounts.CreateAuthChallenge(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	stored, _, err := accounts.AuthChallengeByToken(ctx, first.TokenHash, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.CompleteAuthChallenge(ctx, stored.ID, 100, 5,
+		ParentSession{TokenHash: uuid.NewString(), ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("first CompleteAuthChallenge() error = %v", err)
+	}
+
+	second := ParentAuthChallenge{
+		ParentID: parent.ID, TokenHash: uuid.NewString(), Purpose: AuthPurposeLogin,
+		ExpiresAt: now.Add(time.Minute),
+	}
+	if err := accounts.CreateAuthChallenge(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	stored, _, err = accounts.AuthChallengeByToken(ctx, second.TokenHash, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = accounts.CompleteAuthChallenge(ctx, stored.ID, 100, 5,
+		ParentSession{TokenHash: uuid.NewString(), ExpiresAt: now.Add(time.Hour)})
+	if !errors.Is(err, ErrTOTPReplay) {
+		t.Fatalf("replayed CompleteAuthChallenge() error = %v, want ErrTOTPReplay", err)
+	}
+}
+
+func TestAuthThrottlePersistsLockout(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	key := uuid.NewString()
+	accounts := NewAccounts(db, fixedClock(now))
+	t.Cleanup(func() { db.Delete(&AuthThrottle{}, "key_hash = ?", key) })
+
+	for range 3 {
+		if err := accounts.RecordAuthFailure(ctx, "test", []string{key},
+			3, time.Minute, 5*time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	until, locked, err := accounts.AuthLocked(ctx, "test", []string{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !locked || !until.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("AuthLocked() = (%v, %v), want lock until %v", until, locked, now.Add(5*time.Minute))
+	}
+
+	reopened := NewAccounts(db, fixedClock(now.Add(time.Minute)))
+	if _, locked, err := reopened.AuthLocked(ctx, "test", []string{key}); err != nil || !locked {
+		t.Fatalf("AuthLocked() after repository recreation = (%v, %v), want persisted lock", locked, err)
+	}
+}
+
 // The response column has to hold raw upstream bodies, and channel feeds are
 // XML rather than JSON.
 func TestAPICacheStoresXML(t *testing.T) {

@@ -72,10 +72,11 @@ paths:
             schema: { $ref: "#/components/schemas/SetupRequest" }
       responses:
         "201":
-          description: Family created and authenticated
+          description: Family created; TOTP enrollment is required
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Session" }
+              schema: { $ref: "#/components/schemas/AuthChallenge" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "409":
           description: The instance is already configured
           content:
@@ -112,10 +113,10 @@ paths:
                 password: { type: string, format: password }
       responses:
         "200":
-          description: Authenticated
+          description: Password accepted; TOTP verification is required
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Session" }
+              schema: { $ref: "#/components/schemas/AuthChallenge" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
@@ -137,11 +138,37 @@ paths:
                 password: { type: string, format: password }
       responses:
         "201":
-          description: Parent created and authenticated
+          description: Parent created; TOTP enrollment is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthChallenge" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /parent/auth/totp/verify:
+    post:
+      operationId: verifyParentTOTP
+      tags: [parent-auth]
+      summary: Complete parent authentication with TOTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge, code]
+              properties:
+                challenge: { type: string }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Authenticated
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 
   /parent/me:
     get:
@@ -1267,6 +1294,23 @@ components:
         token: { type: string }
         expiresAt: { type: string, format: date-time }
         parent: { $ref: "#/components/schemas/Parent" }
+
+    AuthChallenge:
+      type: object
+      required: [challenge, expiresAt, method]
+      properties:
+        challenge: { type: string }
+        expiresAt: { type: string, format: date-time }
+        method: { type: string, enum: [totp] }
+        enrollment:
+          $ref: "#/components/schemas/TOTPEnrollment"
+
+    TOTPEnrollment:
+      type: object
+      required: [secret, provisioningUrl]
+      properties:
+        secret: { type: string }
+        provisioningUrl: { type: string, format: uri }
 
     Parent:
       type: object

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -36,12 +37,21 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &body); err != nil {
 		return err
 	}
+	setupKeys := []string{auth.HashToken("client-address:" + s.clientAddress(r))}
+	if until, locked, err := s.deps.Accounts.AuthLocked(r.Context(), "initial-setup", setupKeys); err != nil {
+		return err
+	} else if locked {
+		return rateLimited(until.Sub(s.deps.Now()))
+	}
 
 	count, err := s.deps.Accounts.FamilyCount(r.Context())
 	if err != nil {
 		return err
 	}
 	if count > 0 {
+		if err := s.recordThrottleFailure(r, "initial-setup", setupKeys); err != nil {
+			return err
+		}
 		return conflict("already_set_up", "this instance already has a family")
 	}
 
@@ -57,17 +67,23 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(err.Error())
 	}
 
-	_, parent, err := s.deps.Accounts.CreateFamily(r.Context(),
+	_, parent, err := s.deps.Accounts.CreateInitialFamily(r.Context(),
 		body.FamilyName, body.Timezone, body.Email, hash)
+	if errors.Is(err, store.ErrAlreadySetup) {
+		if failureErr := s.recordThrottleFailure(r, "initial-setup", setupKeys); failureErr != nil {
+			return failureErr
+		}
+		return conflict("already_set_up", "this instance already has a family")
+	}
 	if err != nil {
 		return err
 	}
 
-	session, err := s.newSession(r, parent)
+	challenge, err := s.beginParentAuth(r, parent)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusCreated, session)
+	writeJSON(w, s.deps.Logger, http.StatusCreated, challenge)
 	return nil
 }
 
@@ -80,25 +96,35 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &body); err != nil {
 		return err
 	}
+	keys := s.authThrottleKeys(body.Email, r)
+	if err := s.rejectLockedAuth(r, keys); err != nil {
+		return err
+	}
 
 	parent, err := s.deps.Accounts.ParentByEmail(r.Context(), body.Email)
 	if err != nil {
 		// Spend the same work as a real verification, so response timing does
 		// not reveal which email addresses have accounts.
 		auth.SpendVerifyTime()
+		if failureErr := s.recordAuthFailure(r, keys); failureErr != nil {
+			return failureErr
+		}
 		return unauthorized()
 	}
 
 	ok, err := auth.VerifyPassword(parent.PasswordHash, body.Password)
 	if err != nil || !ok {
+		if failureErr := s.recordAuthFailure(r, keys); failureErr != nil {
+			return failureErr
+		}
 		return unauthorized()
 	}
 
-	session, err := s.newSession(r, parent)
+	challenge, err := s.beginParentAuth(r, parent)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusOK, session)
+	writeJSON(w, s.deps.Logger, http.StatusOK, challenge)
 	return nil
 }
 
@@ -115,6 +141,15 @@ func (s *Server) handleAcceptParentInvitation(w http.ResponseWriter, r *http.Req
 	if body.Code == "" {
 		return badRequest("code is required")
 	}
+	keys := []string{
+		auth.HashToken("parent-invitation:" + body.Code),
+		auth.HashToken("client-address:" + s.clientAddress(r)),
+	}
+	if until, locked, err := s.deps.Accounts.AuthLocked(r.Context(), "parent-invitation", keys); err != nil {
+		return err
+	} else if locked {
+		return rateLimited(until.Sub(s.deps.Now()))
+	}
 
 	hash, err := auth.HashPassword(body.Password)
 	if err != nil {
@@ -123,41 +158,163 @@ func (s *Server) handleAcceptParentInvitation(w http.ResponseWriter, r *http.Req
 	parent, err := s.deps.Accounts.RedeemParentInvitation(
 		r.Context(), auth.HashToken(body.Code), hash)
 	if errors.Is(err, store.ErrNotFound) {
+		if failureErr := s.recordThrottleFailure(r, "parent-invitation", keys); failureErr != nil {
+			return failureErr
+		}
 		return unauthorized()
 	}
 	if err != nil {
 		return err
 	}
+	if err := s.deps.Accounts.ClearAuthThrottle(r.Context(), "parent-invitation", keys); err != nil {
+		return err
+	}
 
-	session, err := s.newSession(r, parent)
+	challenge, err := s.beginParentAuth(r, parent)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusCreated, session)
+	writeJSON(w, s.deps.Logger, http.StatusCreated, challenge)
 	return nil
 }
 
-func (s *Server) newSession(r *http.Request, parent store.Parent) (sessionDTO, error) {
-	token, err := auth.NewToken()
+func (s *Server) beginParentAuth(r *http.Request, parent store.Parent) (authChallengeDTO, error) {
+	challengeToken, err := auth.NewToken()
 	if err != nil {
-		return sessionDTO{}, internal(err)
+		return authChallengeDTO{}, internal(err)
+	}
+	expiresAt := s.deps.Now().Add(s.deps.Config.Auth.ChallengeTTL)
+	challenge := store.ParentAuthChallenge{
+		ParentID:  parent.ID,
+		TokenHash: challengeToken.Hash,
+		Purpose:   store.AuthPurposeLogin,
+		ExpiresAt: expiresAt,
+	}
+	response := authChallengeDTO{
+		Challenge: challengeToken.Plain,
+		ExpiresAt: expiresAt,
+		Method:    "totp",
+	}
+
+	if len(parent.EncryptedTOTPSecret) == 0 {
+		secret, provisioningURL, err := auth.NewTOTPSecret(parent.Email)
+		if err != nil {
+			return authChallengeDTO{}, internal(err)
+		}
+		sealed, err := s.deps.Sealer.SealString(secret)
+		if err != nil {
+			return authChallengeDTO{}, internal(err)
+		}
+		challenge.Purpose = store.AuthPurposeEnroll
+		challenge.EncryptedTOTPSecret = sealed
+		response.Enroll = &authEnrollmentDTO{Secret: secret, ProvisioningURL: provisioningURL}
+	}
+
+	if err := s.deps.Accounts.CreateAuthChallenge(r.Context(), challenge); err != nil {
+		return authChallengeDTO{}, err
+	}
+	return response, nil
+}
+
+func (s *Server) handleVerifyTOTP(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Challenge string `json:"challenge"`
+		Code      string `json:"code"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	if body.Challenge == "" || body.Code == "" {
+		return badRequest("challenge and code are required")
+	}
+
+	challengeHash := auth.HashToken(body.Challenge)
+	challenge, parent, err := s.deps.Accounts.AuthChallengeByToken(
+		r.Context(), challengeHash, s.deps.Config.Auth.ChallengeMaxAttempts)
+	if err != nil {
+		return unauthorized()
+	}
+	keys := s.authThrottleKeys(parent.Email, r)
+	if err := s.rejectLockedAuth(r, keys); err != nil {
+		return err
+	}
+
+	sealed := parent.EncryptedTOTPSecret
+	if challenge.Purpose == store.AuthPurposeEnroll {
+		sealed = challenge.EncryptedTOTPSecret
+	}
+	secret, err := s.deps.Sealer.OpenString(sealed)
+	if err != nil {
+		return internal(err)
+	}
+	step, ok := auth.MatchTOTPStep(body.Code, secret, s.deps.Now())
+	if !ok {
+		if err := s.deps.Accounts.FailAuthChallenge(r.Context(), challengeHash); err != nil {
+			return err
+		}
+		if err := s.recordAuthFailure(r, keys); err != nil {
+			return err
+		}
+		return unauthorized()
 	}
 
 	expiresAt := s.deps.Now().Add(s.deps.Config.Auth.ParentSessionTTL)
-	if _, err := s.deps.Accounts.CreateSession(r.Context(), parent.ID, token.Hash, expiresAt); err != nil {
-		return sessionDTO{}, err
+	token, err := auth.NewToken()
+	if err != nil {
+		return internal(err)
+	}
+	parent, err = s.deps.Accounts.CompleteAuthChallenge(
+		r.Context(), challenge.ID, step, s.deps.Config.Auth.ChallengeMaxAttempts,
+		store.ParentSession{TokenHash: token.Hash, ExpiresAt: expiresAt})
+	if errors.Is(err, store.ErrAuthChallengeInvalid) || errors.Is(err, store.ErrTOTPReplay) {
+		return unauthorized()
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.deps.Accounts.ClearAuthThrottle(r.Context(), "parent-login", keys); err != nil {
+		return err
 	}
 
 	scoped, err := s.scopeOf(r, parent)
 	if err != nil {
-		return sessionDTO{}, err
+		return err
 	}
-
-	return sessionDTO{
+	writeJSON(w, s.deps.Logger, http.StatusOK, sessionDTO{
 		Token:     token.Plain,
 		ExpiresAt: expiresAt,
 		Parent:    newParentDTO(parent, scoped),
-	}, nil
+	})
+	return nil
+}
+
+func (s *Server) authThrottleKeys(email string, r *http.Request) []string {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	return []string{
+		auth.HashToken("parent-email:" + normalized),
+		auth.HashToken("client-address:" + s.clientAddress(r)),
+	}
+}
+
+func (s *Server) rejectLockedAuth(r *http.Request, keys []string) error {
+	until, locked, err := s.deps.Accounts.AuthLocked(r.Context(), "parent-login", keys)
+	if err != nil {
+		return err
+	}
+	if locked {
+		return rateLimited(until.Sub(s.deps.Now()))
+	}
+	return nil
+}
+
+func (s *Server) recordAuthFailure(r *http.Request, keys []string) error {
+	return s.recordThrottleFailure(r, "parent-login", keys)
+}
+
+func (s *Server) recordThrottleFailure(r *http.Request, action string, keys []string) error {
+	cfg := s.deps.Config.Auth
+	return s.deps.Accounts.RecordAuthFailure(r.Context(), action, keys,
+		cfg.MaxFailures, cfg.FailureWindow, cfg.LockoutDuration)
 }
 
 func (s *Server) scopeOf(r *http.Request, parent store.Parent) ([]uuid.UUID, error) {
@@ -234,7 +391,7 @@ func (s *Server) handleSetAPIKey(w http.ResponseWriter, r *http.Request, p auth.
 	// YouTube's own channel is a stable, always-present id to probe with.
 	if _, err := probe.Channels(r.Context(),
 		[]string{"UCBR8-60-B28hp2BmDPdntcQ"}, domain.PurposeFeed); err != nil {
-		return badRequest("YouTube rejected that API key: " + err.Error())
+		return badRequest("YouTube could not validate that API key")
 	}
 
 	sealed, err := s.deps.Sealer.SealString(body.APIKey)

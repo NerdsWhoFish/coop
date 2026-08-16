@@ -41,6 +41,7 @@ type Server struct {
 	IdleTimeout       time.Duration `toml:"idle_timeout"     env:"SERVER_IDLE_TIMEOUT"`
 	ShutdownTimeout   time.Duration `toml:"shutdown_timeout" env:"SERVER_SHUTDOWN_TIMEOUT"`
 	MaxHeaderBytes    int           `toml:"max_header_bytes" env:"SERVER_MAX_HEADER_BYTES"`
+	TrustedProxyCIDRs []string      `toml:"trusted_proxy_cidrs" env:"SERVER_TRUSTED_PROXY_CIDRS" envSeparator:","`
 
 	// PublicURL is the externally reachable base URL. Pairing codes embed it, so
 	// a wrong value here produces devices that pair and then reach nothing.
@@ -101,6 +102,12 @@ type Auth struct {
 
 	// InvitationTTL bounds how long a parent invitation stays redeemable.
 	InvitationTTL time.Duration `toml:"invitation_ttl" env:"AUTH_INVITATION_TTL"`
+
+	ChallengeTTL         time.Duration `toml:"challenge_ttl"          env:"AUTH_CHALLENGE_TTL"`
+	ChallengeMaxAttempts int           `toml:"challenge_max_attempts" env:"AUTH_CHALLENGE_MAX_ATTEMPTS"`
+	FailureWindow        time.Duration `toml:"failure_window"         env:"AUTH_FAILURE_WINDOW"`
+	MaxFailures          int           `toml:"max_failures"           env:"AUTH_MAX_FAILURES"`
+	LockoutDuration      time.Duration `toml:"lockout_duration"       env:"AUTH_LOCKOUT_DURATION"`
 }
 
 // Log holds logging settings.
@@ -137,10 +144,15 @@ func Defaults() *Config {
 			IngestPollInterval:     time.Minute,
 		},
 		Auth: Auth{
-			ParentSessionTTL: 30 * 24 * time.Hour,
-			ChildTokenTTL:    365 * 24 * time.Hour,
-			PairingCodeTTL:   15 * time.Minute,
-			InvitationTTL:    7 * 24 * time.Hour,
+			ParentSessionTTL:     30 * 24 * time.Hour,
+			ChildTokenTTL:        365 * 24 * time.Hour,
+			PairingCodeTTL:       15 * time.Minute,
+			InvitationTTL:        7 * 24 * time.Hour,
+			ChallengeTTL:         5 * time.Minute,
+			ChallengeMaxAttempts: 5,
+			FailureWindow:        15 * time.Minute,
+			MaxFailures:          5,
+			LockoutDuration:      15 * time.Minute,
 		},
 		Log: Log{Level: "info", Format: "json"},
 	}
@@ -249,6 +261,21 @@ func (c *Config) Validate() error {
 	}
 	if c.Auth.InvitationTTL <= 0 {
 		errs = append(errs, errors.New("auth.invitation_ttl must be positive"))
+	}
+	if c.Auth.ChallengeTTL <= 0 || c.Auth.ChallengeTTL > 15*time.Minute {
+		errs = append(errs, errors.New("auth.challenge_ttl must be positive and at most 15 minutes"))
+	}
+	if c.Auth.ChallengeMaxAttempts < 1 || c.Auth.ChallengeMaxAttempts > 10 {
+		errs = append(errs, errors.New("auth.challenge_max_attempts must be between 1 and 10"))
+	}
+	if c.Auth.FailureWindow <= 0 {
+		errs = append(errs, errors.New("auth.failure_window must be positive"))
+	}
+	if c.Auth.MaxFailures < 1 || c.Auth.MaxFailures > 20 {
+		errs = append(errs, errors.New("auth.max_failures must be between 1 and 20"))
+	}
+	if c.Auth.LockoutDuration <= 0 {
+		errs = append(errs, errors.New("auth.lockout_duration must be positive"))
 	}
 
 	switch c.Log.Format {

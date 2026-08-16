@@ -22,7 +22,19 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	code := auth.NormalizePairingCode(body.Code)
+	keys := []string{
+		auth.HashToken("pairing-code:" + code),
+		auth.HashToken("client-address:" + s.clientAddress(r)),
+	}
+	if until, locked, err := s.deps.Accounts.AuthLocked(r.Context(), "child-pair", keys); err != nil {
+		return err
+	} else if locked {
+		return rateLimited(until.Sub(s.deps.Now()))
+	}
 	if code == "" {
+		if err := s.recordThrottleFailure(r, "child-pair", keys); err != nil {
+			return err
+		}
 		return badRequest("that pairing code is not valid")
 	}
 	if body.DeviceName == "" {
@@ -39,8 +51,14 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) error {
 		if errors.Is(err, store.ErrNotFound) {
 			// Unknown, expired and already-used all read the same, so a code
 			// cannot be probed for.
+			if failureErr := s.recordThrottleFailure(r, "child-pair", keys); failureErr != nil {
+				return failureErr
+			}
 			return badRequest("that pairing code is not valid")
 		}
+		return err
+	}
+	if err := s.deps.Accounts.ClearAuthThrottle(r.Context(), "child-pair", keys); err != nil {
 		return err
 	}
 

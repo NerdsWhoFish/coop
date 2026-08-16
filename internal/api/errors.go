@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/store"
@@ -23,6 +25,7 @@ type apiError struct {
 	code    string
 	message string
 	cause   error
+	headers http.Header
 }
 
 func (e *apiError) Error() string {
@@ -62,6 +65,16 @@ func conflict(code, message string) *apiError {
 
 func tooManyRequests(code, message string) *apiError {
 	return &apiError{status: http.StatusTooManyRequests, code: code, message: message}
+}
+
+func rateLimited(remaining time.Duration) *apiError {
+	seconds := max(1, int((remaining+time.Second-1)/time.Second))
+	return &apiError{
+		status:  http.StatusTooManyRequests,
+		code:    "rate_limited",
+		message: "too many attempts, try again later",
+		headers: http.Header{"Retry-After": []string{strconv.Itoa(seconds)}},
+	}
 }
 
 func internal(err error) *apiError {
@@ -125,6 +138,11 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	for name, values := range apiErr.headers {
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
 	w.WriteHeader(apiErr.status)
 	_ = json.NewEncoder(w).Encode(errorBody{Code: apiErr.code, Message: apiErr.message})
 }

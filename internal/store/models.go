@@ -37,9 +37,49 @@ type Parent struct {
 
 	// EncryptedTOTPSecret is nil until the parent enrolls a second factor.
 	EncryptedTOTPSecret []byte
+	TOTPLastUsedStep    *int64
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// ParentAuthChallenge is the short-lived boundary between password and TOTP
+// verification. Only the opaque token hash is persisted.
+type ParentAuthChallenge struct {
+	ID                  uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ParentID            uuid.UUID `gorm:"type:uuid;not null;index"`
+	TokenHash           string    `gorm:"not null;uniqueIndex"`
+	Purpose             string    `gorm:"type:text;not null"`
+	EncryptedTOTPSecret []byte
+	ExpiresAt           time.Time `gorm:"not null;index"`
+	Attempts            int16     `gorm:"not null;default:0"`
+	UsedAt              *time.Time
+	CreatedAt           time.Time
+}
+
+// AuthThrottle retains failed authentication state across process restarts.
+type AuthThrottle struct {
+	KeyHash         string    `gorm:"primaryKey"`
+	Action          string    `gorm:"primaryKey"`
+	Failures        int       `gorm:"not null;default:0"`
+	WindowStartedAt time.Time `gorm:"not null"`
+	LockedUntil     *time.Time
+	UpdatedAt       time.Time `gorm:"not null"`
+}
+
+// AuditEvent is an append-only, actor-attributed record of a policy or
+// security mutation. Before and After must contain sanitized JSON only.
+type AuditEvent struct {
+	ID            uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	FamilyID      uuid.UUID  `gorm:"type:uuid;not null;index"`
+	ActorParentID *uuid.UUID `gorm:"type:uuid;index"`
+	ChildID       *uuid.UUID `gorm:"type:uuid;index"`
+	Action        string     `gorm:"not null"`
+	TargetType    string     `gorm:"not null"`
+	TargetID      string     `gorm:"not null"`
+	Before        []byte     `gorm:"type:jsonb;not null;default:'{}'"`
+	After         []byte     `gorm:"type:jsonb;not null;default:'{}'"`
+	CreatedAt     time.Time
 }
 
 // ParentSession is one signed-in parent device. A row per session so a second
@@ -327,6 +367,7 @@ type QuotaSpend struct {
 func AllModels() []any {
 	return []any{
 		&Family{}, &Parent{}, &ParentSession{}, &ParentScope{},
+		&ParentAuthChallenge{}, &AuthThrottle{}, &AuditEvent{},
 		&ParentInvitation{}, &ParentInvitationScope{},
 		&Child{}, &ChildDevice{}, &PairingCode{},
 		&Channel{}, &Video{},

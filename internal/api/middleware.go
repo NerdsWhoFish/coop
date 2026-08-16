@@ -2,12 +2,50 @@ package api
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/nerdswhofish/coop/internal/auth"
 )
+
+func (s *Server) clientAddress(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	immediate, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	if !s.trustedProxy(immediate) {
+		return immediate.String()
+	}
+
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate, err := netip.ParseAddr(strings.TrimSpace(parts[i]))
+		if err != nil {
+			continue
+		}
+		if !s.trustedProxy(candidate) {
+			return candidate.String()
+		}
+	}
+	return immediate.String()
+}
+
+func (s *Server) trustedProxy(address netip.Addr) bool {
+	for _, prefix := range s.trustedProxyPrefixes {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
+}
 
 // parentHandler runs with an authenticated parent and their scope resolved.
 type parentHandler func(http.ResponseWriter, *http.Request, auth.Parent) error

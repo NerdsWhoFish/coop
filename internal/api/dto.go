@@ -260,6 +260,18 @@ type sessionDTO struct {
 	Parent    parentDTO `json:"parent"`
 }
 
+type authEnrollmentDTO struct {
+	Secret          string `json:"secret"`
+	ProvisioningURL string `json:"provisioningUrl"`
+}
+
+type authChallengeDTO struct {
+	Challenge string             `json:"challenge"`
+	ExpiresAt time.Time          `json:"expiresAt"`
+	Method    string             `json:"method"`
+	Enroll    *authEnrollmentDTO `json:"enrollment,omitempty"`
+}
+
 type pairingCodeDTO struct {
 	Code       string    `json:"code"`
 	ExpiresAt  time.Time `json:"expiresAt"`

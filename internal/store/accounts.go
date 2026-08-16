@@ -22,6 +22,9 @@ var ErrNotFound = errors.New("store: not found")
 // itself, which nothing could undo.
 var ErrLastAdmin = errors.New("store: a family must keep at least one admin")
 
+// ErrAlreadySetup reports that the singleton first-family slot was consumed.
+var ErrAlreadySetup = errors.New("store: instance is already set up")
+
 // Accounts holds families, parents, children and paired devices.
 type Accounts struct {
 	db  *DB
@@ -65,6 +68,46 @@ func (a *Accounts) CreateFamily(ctx context.Context, familyName, timezone,
 	}
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&family).Error; err != nil {
+			return fmt.Errorf("creating family: %w", err)
+		}
+		parent.FamilyID = family.ID
+		if err := tx.Create(&parent).Error; err != nil {
+			return fmt.Errorf("creating admin parent: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return Family{}, Parent{}, err
+	}
+	return family, parent, nil
+}
+
+// CreateInitialFamily serializes the public first-run path and rechecks the
+// singleton invariant inside the transaction. The advisory lock closes the
+// race between the setup status check and family creation.
+func (a *Accounts) CreateInitialFamily(ctx context.Context, familyName, timezone,
+	email, passwordHash string) (Family, Parent, error) {
+
+	family := Family{Name: familyName, Timezone: timezone}
+	parent := Parent{
+		Email:        normalizeEmail(email),
+		PasswordHash: passwordHash,
+		Role:         domain.RoleAdmin,
+	}
+
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		const setupLockID int64 = 0x434f4f50
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", setupLockID).Error; err != nil {
+			return fmt.Errorf("locking initial setup: %w", err)
+		}
+		var count int64
+		if err := tx.Model(&Family{}).Count(&count).Error; err != nil {
+			return fmt.Errorf("checking initial setup: %w", err)
+		}
+		if count != 0 {
+			return ErrAlreadySetup
+		}
 		if err := tx.Create(&family).Error; err != nil {
 			return fmt.Errorf("creating family: %w", err)
 		}

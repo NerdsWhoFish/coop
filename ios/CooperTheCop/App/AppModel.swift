@@ -5,9 +5,16 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+  struct PendingAuthentication {
+    let challenge: String
+    let secret: String?
+    let provisioningURL: String?
+  }
+
   enum Destination {
     case connecting
     case authentication(needsSetup: Bool)
+    case totp(PendingAuthentication)
     case dashboard
   }
 
@@ -90,29 +97,35 @@ final class AppModel {
   func logIn(email: String, password: String) async {
     await perform {
       guard let api else { return }
-      let session = try await api.logIn(email: email, password: password)
-      try activate(session)
-      await loadDashboard()
+      let challenge = try await api.logIn(email: email, password: password)
+      continueAuthentication(challenge)
     }
   }
 
   func acceptInvitation(code: String, password: String) async throws {
     guard let api else { return }
-    let session = try await api.acceptInvitation(code: code, password: password)
-    try activate(session)
-    await loadDashboard()
+    let challenge = try await api.acceptInvitation(code: code, password: password)
+    continueAuthentication(challenge)
   }
 
   func setUp(familyName: String, email: String, password: String) async {
     await perform {
       guard let api else { return }
       let timezone = TimeZone.current.identifier
-      let session = try await api.setUpFamily(
+      let challenge = try await api.setUpFamily(
         familyName: familyName,
         timezone: timezone,
         email: email,
         password: password
       )
+      continueAuthentication(challenge)
+    }
+  }
+
+  func verifyTOTP(_ code: String, challenge: PendingAuthentication) async {
+    await perform {
+      guard let api else { return }
+      let session = try await api.verifyTOTP(challenge: challenge.challenge, code: code)
       try activate(session)
       await loadDashboard()
     }
@@ -380,6 +393,14 @@ final class AppModel {
     api = CoopAPI(serverURL: serverURL, token: session.token)
     parent = session.parent
     destination = .dashboard
+  }
+
+  private func continueAuthentication(_ challenge: Components.Schemas.AuthChallenge) {
+    destination = .totp(PendingAuthentication(
+      challenge: challenge.challenge,
+      secret: challenge.enrollment?.secret,
+      provisioningURL: challenge.enrollment?.provisioningUrl
+    ))
   }
 
   private func perform(_ operation: () async throws -> Void) async {

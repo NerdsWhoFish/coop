@@ -33,7 +33,7 @@ public actor CoopAPI {
     timezone: String,
     email: String,
     password: String
-  ) async throws -> Components.Schemas.Session {
+  ) async throws -> Components.Schemas.AuthChallenge {
     let request = Components.Schemas.SetupRequest(
       familyName: familyName,
       timezone: timezone,
@@ -47,7 +47,9 @@ public actor CoopAPI {
     return try response.body.json
   }
 
-  public func logIn(email: String, password: String) async throws -> Components.Schemas.Session {
+  public func logIn(email: String, password: String) async throws
+    -> Components.Schemas.AuthChallenge
+  {
     let credentials = Operations.LogInParent.Input.Body.JsonPayload(
       email: email,
       password: password
@@ -64,7 +66,7 @@ public actor CoopAPI {
   }
 
   public func acceptInvitation(code: String, password: String) async throws
-    -> Components.Schemas.Session
+    -> Components.Schemas.AuthChallenge
   {
     let payload = Operations.AcceptParentInvitation.Input.Body.JsonPayload(
       code: code,
@@ -76,6 +78,24 @@ public actor CoopAPI {
       return try response.body.json
     case .unauthorized:
       throw CoopAPIError.invalidInvitation
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func verifyTOTP(challenge: String, code: String) async throws
+    -> Components.Schemas.Session
+  {
+    let payload = Operations.VerifyParentTOTP.Input.Body.JsonPayload(
+      challenge: challenge,
+      code: code
+    )
+    let output = try await client.verifyParentTOTP(body: .json(payload))
+    switch output {
+    case .ok(let response):
+      return try response.body.json
+    case .unauthorized:
+      throw CoopAPIError.invalidCredentials
     default:
       throw CoopAPIError.unexpectedResponse
     }

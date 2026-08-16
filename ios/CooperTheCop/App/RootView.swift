@@ -15,6 +15,8 @@ struct RootView: View {
           ConnectView(model: model)
         case .authentication(let needsSetup):
           AuthenticationView(model: model, needsSetup: needsSetup)
+        case .totp(let challenge):
+          TOTPVerificationView(model: model, challenge: challenge)
         case .dashboard:
           ParentDashboard(model: model)
         }

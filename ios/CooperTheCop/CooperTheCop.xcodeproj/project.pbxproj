@@ -14,6 +14,7 @@
 		2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A939CC28E13F6BBA929C4C08 /* RulesView.swift */; };
 		377E96EEC17FA29AAB0ED8EF /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1B606E767366D7D2994319 /* RootView.swift */; };
 		3F4679FF82914E69C6399374 /* CooperTheCopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */; };
+		53D1D490390347B4DABB6636 /* TOTPVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9522A513AFB6C7D5CFB441 /* TOTPVerificationView.swift */; };
 		56F0F75BDF68AB827E800F34 /* APIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */; };
 		6D7CB0C34ACE3BFE4DF131B7 /* ChildDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CFA18E6CB0B681B7DCC526 /* ChildDevicesView.swift */; };
 		80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */; };
@@ -57,6 +58,7 @@
 		01CFA18E6CB0B681B7DCC526 /* ChildDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildDevicesView.swift; sourceTree = "<group>"; };
 		08EEC45B1391EF07F6893444 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		09443C460292AC0B137AAE9F /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		0F9522A513AFB6C7D5CFB441 /* TOTPVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOTPVerificationView.swift; sourceTree = "<group>"; };
 		1A171C50E0E32474630B0101 /* ParentScopeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentScopeView.swift; sourceTree = "<group>"; };
 		42B92356DC0DB24A410FC35F /* RecommendationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationModels.swift; sourceTree = "<group>"; };
 		46B588FF25D747955382416B /* AcceptInvitationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcceptInvitationView.swift; sourceTree = "<group>"; };
@@ -110,6 +112,7 @@
 				46B588FF25D747955382416B /* AcceptInvitationView.swift */,
 				B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */,
 				09443C460292AC0B137AAE9F /* ConnectView.swift */,
+				0F9522A513AFB6C7D5CFB441 /* TOTPVerificationView.swift */,
 			);
 			path = Authentication;
 			sourceTree = "<group>";
@@ -372,6 +375,7 @@
 				377E96EEC17FA29AAB0ED8EF /* RootView.swift in Sources */,
 				2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */,
 				CE4AD722BCEB888EA31691E4 /* SuppressionsView.swift in Sources */,
+				53D1D490390347B4DABB6636 /* TOTPVerificationView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

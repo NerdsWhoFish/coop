@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,8 +40,9 @@ type Deps struct {
 
 // Server routes and serves the API.
 type Server struct {
-	deps Deps
-	mux  *http.ServeMux
+	deps                 Deps
+	mux                  *http.ServeMux
+	trustedProxyPrefixes []netip.Prefix
 }
 
 // NewServer wires the routes.
@@ -58,7 +60,16 @@ func NewServer(deps Deps) (*Server, error) {
 		deps.Now = time.Now
 	}
 
-	s := &Server{deps: deps, mux: http.NewServeMux()}
+	prefixes := make([]netip.Prefix, 0, len(deps.Config.Server.TrustedProxyCIDRs))
+	for _, raw := range deps.Config.Server.TrustedProxyCIDRs {
+		prefix, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return nil, errors.New("api: invalid trusted proxy CIDR " + raw)
+		}
+		prefixes = append(prefixes, prefix)
+	}
+
+	s := &Server{deps: deps, mux: http.NewServeMux(), trustedProxyPrefixes: prefixes}
 	s.routes()
 	return s, nil
 }
@@ -81,6 +92,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/setup", s.handle(s.handleSetupStatus))
 	m.HandleFunc("POST /api/v1/setup", s.handle(s.handleSetup))
 	m.HandleFunc("POST /api/v1/parent/auth/login", s.handle(s.handleLogin))
+	m.HandleFunc("POST /api/v1/parent/auth/totp/verify", s.handle(s.handleVerifyTOTP))
 	m.HandleFunc("POST /api/v1/parent/auth/invitation", s.handle(s.handleAcceptParentInvitation))
 
 	parent := func(pattern string, h parentHandler) {
