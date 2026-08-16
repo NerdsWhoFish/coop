@@ -3,7 +3,7 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status as of the last commit on `main`: **Phase 0, Phase 1, and the ingest worker are complete.**
+Status as of the last commit on `main`: **Phase 0 and Phase 1 are complete, including ingest and cleanup scheduling.**
 The backend builds, migrates, serves, and is exercisable end to end.
 No iOS code exists yet.
 
@@ -36,11 +36,11 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - YouTube Data API client with response caching, per-purpose daily budgets, and a circuit breaker.
 - Scheduled ingest of recent uploads from approved channels, including authoritative RSS Shorts classification.
 - One-minute approval polling separated from the six-hour quota-bearing uploads refresh.
+- Daily cleanup of expired cache entries, sessions, pairing codes, and prior-day ledgers.
 - Thumbnail proxy.
 
 ### Not built yet
 
-- **Scheduled cleanup.** `PurgeExpired`, `PurgeExpiredSessions`, `PurgeExpiredPairingCodes`, `PurgeBefore` and `PurgeSearchesBefore` all exist and are tested, but nothing calls them on a timer.
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Video search for children.** `/child/search` returns channels correctly but always an empty `videos` array, even when `videoSearchTiles` is on.
 - **Backfill.** The budget reserve exists; nothing spends it.
@@ -59,6 +59,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 | `internal/youtubeclient` | Builds family-scoped clients from the current encrypted key and shared cache and quota stores. |
 | `internal/store` | Postgres models, migrations, repositories. |
 | `internal/ingest` | Refreshes approved channels and stores their recent uploads. |
+| `internal/cleanup` | Purges expired operational rows immediately on startup and daily thereafter. |
 | `internal/feed` | Composes catalog and policy into feeds. |
 | `internal/auth` | Passwords, tokens, pairing codes, scoping rules. |
 | `internal/crypto` | AES-256-GCM sealing for stored secrets. |
@@ -130,12 +131,10 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Cleanup scheduler.** Call the five purge methods on a daily ticker.
-
-**2. Video search for children.** `/child/search` currently returns channels only.
+**1. Video search for children.** `/child/search` currently returns channels only.
 Note that video search costs from the same 100-call bucket, so decide whether it is worth the spend before building it.
 
-**3. Then Phase 2**, the parent iOS app. PLAN.md §13.
+**2. Then Phase 2**, the parent iOS app. PLAN.md §13.
 
 ---
 

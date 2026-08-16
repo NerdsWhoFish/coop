@@ -53,6 +53,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `internal/youtube` | Data API client, response cache, quota budgets |
 | `internal/youtubeclient` | Family-scoped YouTube client construction |
 | `internal/ingest` | Scheduled approved-channel catalog refresh |
+| `internal/cleanup` | Daily expiry and ledger cleanup |
 | `internal/rank` | Recommendation scoring. Pure, no I/O |
 | `api/openapi.yaml` | The API contract, source of truth for both clients |
 | `adr/` | Architecture decision records |

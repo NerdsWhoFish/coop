@@ -10,12 +10,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/nerdswhofish/coop/internal/api"
+	"github.com/nerdswhofish/coop/internal/cleanup"
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
@@ -161,6 +163,10 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	if err != nil {
 		return err
 	}
+	cleaner, err := cleanup.New(accounts, cache, quota, activity, logger, time.Now)
+	if err != nil {
+		return err
+	}
 
 	api, err := api.NewServer(api.Deps{
 		Config:   cfg,
@@ -188,15 +194,20 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	}
 
 	errCh := make(chan error, 1)
-	workerCtx, stopWorker := context.WithCancel(ctx)
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		ingester.Run(workerCtx)
-	}()
+	backgroundCtx, stopBackground := context.WithCancel(ctx)
+	var background sync.WaitGroup
+	startBackground := func(run func(context.Context)) {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			run(backgroundCtx)
+		}()
+	}
+	startBackground(ingester.Run)
+	startBackground(cleaner.Run)
 	defer func() {
-		stopWorker()
-		<-workerDone
+		stopBackground()
+		background.Wait()
 	}()
 
 	go func() {

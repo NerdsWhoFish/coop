@@ -540,6 +540,7 @@ YouTube client with caching, budgets, quota accounting, and scheduled ingest of 
 New approvals are discovered by a cheap database poll without shortening the six-hour YouTube refresh interval.
 Policy engine with exhaustive table-driven tests.
 Auth, pairing, multi-parent scoping, full REST surface, and thumbnail proxy.
+Expired operational rows are purged on startup and daily thereafter.
 Ends with a backend that is complete and exercisable via curl.
 
 **Phase 2, parent app.**
