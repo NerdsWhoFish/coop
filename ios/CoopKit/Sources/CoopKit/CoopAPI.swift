@@ -63,6 +63,24 @@ public actor CoopAPI {
     }
   }
 
+  public func acceptInvitation(code: String, password: String) async throws
+    -> Components.Schemas.Session
+  {
+    let payload = Operations.AcceptParentInvitation.Input.Body.JsonPayload(
+      code: code,
+      password: password
+    )
+    let output = try await client.acceptParentInvitation(body: .json(payload))
+    switch output {
+    case .created(let response):
+      return try response.body.json
+    case .unauthorized:
+      throw CoopAPIError.invalidInvitation
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func currentParent() async throws -> Components.Schemas.Parent {
     let output = try await client.getCurrentParent()
     switch output {
@@ -71,6 +89,61 @@ public actor CoopAPI {
     case .unauthorized:
       throw CoopAPIError.invalidSession
     default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func family() async throws -> Components.Schemas.Family {
+    let output = try await client.getFamily()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func familyQuota() async throws -> [Components.Schemas.QuotaStatus] {
+    let output = try await client.getFamilyQuota()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setFamilyAPIKey(_ apiKey: String) async throws {
+    let payload = Operations.SetFamilyAPIKey.Input.Body.JsonPayload(apiKey: apiKey)
+    guard case .noContent = try await client.setFamilyAPIKey(body: .json(payload)) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func parents() async throws -> [Components.Schemas.Parent] {
+    let output = try await client.listParents()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func inviteParent(
+    email: String,
+    admin: Bool,
+    childIDs: [String]
+  ) async throws -> Components.Schemas.Invitation {
+    let payload = Operations.InviteParent.Input.Body.JsonPayload(
+      email: email,
+      role: admin ? .admin : .parent,
+      childIds: admin ? [] : childIDs
+    )
+    let output = try await client.inviteParent(body: .json(payload))
+    guard case .created(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setParentScope(parentID: String, childIDs: [String]) async throws {
+    let path = Operations.SetParentScope.Input.Path(parentId: parentID)
+    let payload = Operations.SetParentScope.Input.Body.JsonPayload(childIds: childIDs)
+    guard case .noContent = try await client.setParentScope(path: path, body: .json(payload)) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func deleteParent(id: String) async throws {
+    let path = Operations.DeleteParent.Input.Path(parentId: id)
+    guard case .noContent = try await client.deleteParent(path: path) else {
       throw CoopAPIError.unexpectedResponse
     }
   }
@@ -304,6 +377,7 @@ public actor CoopAPI {
 
 public enum CoopAPIError: LocalizedError {
   case invalidCredentials
+  case invalidInvitation
   case invalidSession
   case searchBudgetExhausted
   case unexpectedResponse
@@ -312,6 +386,8 @@ public enum CoopAPIError: LocalizedError {
     switch self {
     case .invalidCredentials:
       "That email and password did not match."
+    case .invalidInvitation:
+      "That invitation is invalid, expired, or has already been used."
     case .invalidSession:
       "Your parent session has expired. Sign in again."
     case .searchBudgetExhausted:

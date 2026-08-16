@@ -13,15 +13,20 @@
 		2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A939CC28E13F6BBA929C4C08 /* RulesView.swift */; };
 		377E96EEC17FA29AAB0ED8EF /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1B606E767366D7D2994319 /* RootView.swift */; };
 		3F4679FF82914E69C6399374 /* CooperTheCopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */; };
+		56F0F75BDF68AB827E800F34 /* APIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */; };
 		80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */; };
 		88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */; };
+		99DA1582C61291F831F623E8 /* InviteParentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF554B0761682DCEF6B9E2F /* InviteParentView.swift */; };
 		A1835FA76BA829A2E2C22A50 /* ChildrenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC129F7D8EDB00629539AD99 /* ChildrenView.swift */; };
 		AE8E292695210EA347BEE41B /* CoopTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90017104578429EF692D6F7E /* CoopTheme.swift */; };
+		B61AE6E72D59A00A03B133F4 /* FamilyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8504EC06DE6280F85032A2D6 /* FamilyView.swift */; };
 		C7ACE781E3581E40D70A3F84 /* ParentDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED2CC0E3A16B3D5A083C0CF /* ParentDashboard.swift */; };
 		C8E5CEBE6FAB5818049F96E1 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09443C460292AC0B137AAE9F /* ConnectView.swift */; };
 		C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EEC45B1391EF07F6893444 /* AppModel.swift */; };
 		CE4AD722BCEB888EA31691E4 /* SuppressionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D86FF0D6AD4B7AA35B7BB3 /* SuppressionsView.swift */; };
 		D671422F0390536A04E279D0 /* CoopKit in Frameworks */ = {isa = PBXBuildFile; productRef = 95F7E2D164CF9D386EB89BA0 /* CoopKit */; };
+		DAB2A4763780BECE05B8D901 /* AcceptInvitationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B588FF25D747955382416B /* AcceptInvitationView.swift */; };
+		DBD4B6C1A4BF3B6E6F20B432 /* ParentScopeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A171C50E0E32474630B0101 /* ParentScopeView.swift */; };
 		DC59C32474E6CA1C7DB64B10 /* AddKeywordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFC7D5338D31D3BC114F4EF /* AddKeywordView.swift */; };
 		FC3963E291052C6AC56FC448 /* ChildSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */; };
 /* End PBXBuildFile section */
@@ -40,7 +45,11 @@
 		013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperTheCopTests.swift; sourceTree = "<group>"; };
 		08EEC45B1391EF07F6893444 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		09443C460292AC0B137AAE9F /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		1A171C50E0E32474630B0101 /* ParentScopeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentScopeView.swift; sourceTree = "<group>"; };
+		46B588FF25D747955382416B /* AcceptInvitationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcceptInvitationView.swift; sourceTree = "<group>"; };
+		4AF554B0761682DCEF6B9E2F /* InviteParentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteParentView.swift; sourceTree = "<group>"; };
 		4ED2CC0E3A16B3D5A083C0CF /* ParentDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentDashboard.swift; sourceTree = "<group>"; };
+		8504EC06DE6280F85032A2D6 /* FamilyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyView.swift; sourceTree = "<group>"; };
 		8BEA8B702792774ED649859F /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		8D1B606E767366D7D2994319 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		90017104578429EF692D6F7E /* CoopTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoopTheme.swift; sourceTree = "<group>"; };
@@ -49,6 +58,7 @@
 		A939CC28E13F6BBA929C4C08 /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesView.swift; sourceTree = "<group>"; };
 		B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
 		BBFC7D5338D31D3BC114F4EF /* AddKeywordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddKeywordView.swift; sourceTree = "<group>"; };
+		CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyView.swift; sourceTree = "<group>"; };
 		CEAF337A28072BFA4058D401 /* RequestQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestQueueView.swift; sourceTree = "<group>"; };
 		DADDB6272E3B22D78B81F996 /* CooperTheCopTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperTheCopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC129F7D8EDB00629539AD99 /* ChildrenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildrenView.swift; sourceTree = "<group>"; };
@@ -81,10 +91,22 @@
 		2D90C84C8ACF0BF1BBD51963 /* Authentication */ = {
 			isa = PBXGroup;
 			children = (
+				46B588FF25D747955382416B /* AcceptInvitationView.swift */,
 				B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */,
 				09443C460292AC0B137AAE9F /* ConnectView.swift */,
 			);
 			path = Authentication;
+			sourceTree = "<group>";
+		};
+		332A3723D9D3321D6772A971 /* Family */ = {
+			isa = PBXGroup;
+			children = (
+				CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */,
+				8504EC06DE6280F85032A2D6 /* FamilyView.swift */,
+				4AF554B0761682DCEF6B9E2F /* InviteParentView.swift */,
+				1A171C50E0E32474630B0101 /* ParentScopeView.swift */,
+			);
+			path = Family;
 			sourceTree = "<group>";
 		};
 		43266378E2D2506906D49262 /* Features */ = {
@@ -92,6 +114,7 @@
 			children = (
 				2D90C84C8ACF0BF1BBD51963 /* Authentication */,
 				62DCA39940CBBE1B2D5223A2 /* Children */,
+				332A3723D9D3321D6772A971 /* Family */,
 				9A86BCD28DA239B1AD368646 /* Requests */,
 				4DACE4818F83B3E521760038 /* Rules */,
 				0598343279F17F5968FE6386 /* Suppressions */,
@@ -263,6 +286,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				56F0F75BDF68AB827E800F34 /* APIKeyView.swift in Sources */,
+				DAB2A4763780BECE05B8D901 /* AcceptInvitationView.swift in Sources */,
 				DC59C32474E6CA1C7DB64B10 /* AddKeywordView.swift in Sources */,
 				C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */,
 				88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */,
@@ -273,7 +298,10 @@
 				AE8E292695210EA347BEE41B /* CoopTheme.swift in Sources */,
 				80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */,
 				0F4A61E3FC1FB03DCAC9B32E /* CredentialStore.swift in Sources */,
+				B61AE6E72D59A00A03B133F4 /* FamilyView.swift in Sources */,
+				99DA1582C61291F831F623E8 /* InviteParentView.swift in Sources */,
 				C7ACE781E3581E40D70A3F84 /* ParentDashboard.swift in Sources */,
+				DBD4B6C1A4BF3B6E6F20B432 /* ParentScopeView.swift in Sources */,
 				14BC785746067A4818F975D9 /* RequestQueueView.swift in Sources */,
 				377E96EEC17FA29AAB0ED8EF /* RootView.swift in Sources */,
 				2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */,

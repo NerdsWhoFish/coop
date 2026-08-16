@@ -69,6 +69,13 @@ final class AppModel {
     }
   }
 
+  func acceptInvitation(code: String, password: String) async throws {
+    guard let api else { return }
+    let session = try await api.acceptInvitation(code: code, password: password)
+    try activate(session)
+    await loadDashboard()
+  }
+
   func setUp(familyName: String, email: String, password: String) async {
     await perform {
       guard let api else { return }
@@ -207,6 +214,43 @@ final class AppModel {
   func overrideSuppression(id: String, familyWide: Bool) async throws {
     guard let api else { return }
     try await api.overrideSuppression(id: id, familyWide: familyWide)
+  }
+
+  func family() async throws -> Components.Schemas.Family? {
+    guard let api else { return nil }
+    return try await api.family()
+  }
+
+  func familyQuota() async throws -> [Components.Schemas.QuotaStatus] {
+    guard let api else { return [] }
+    return try await api.familyQuota()
+  }
+
+  func setFamilyAPIKey(_ apiKey: String) async throws {
+    guard let api else { return }
+    try await api.setFamilyAPIKey(apiKey)
+  }
+
+  func parents() async throws -> [Components.Schemas.Parent] {
+    guard let api else { return [] }
+    return try await api.parents()
+  }
+
+  func inviteParent(email: String, admin: Bool, childIDs: [String]) async throws
+    -> Components.Schemas.Invitation?
+  {
+    guard let api else { return nil }
+    return try await api.inviteParent(email: email, admin: admin, childIDs: childIDs)
+  }
+
+  func setParentScope(parentID: String, childIDs: [String]) async throws {
+    guard let api else { return }
+    try await api.setParentScope(parentID: parentID, childIDs: childIDs)
+  }
+
+  func deleteParent(id: String) async throws {
+    guard let api else { return }
+    try await api.deleteParent(id: id)
   }
 
   func approve(requestID: String, globally: Bool) async throws {

@@ -14,28 +14,9 @@ struct ParentDashboard: View {
       RulesView(model: model)
         .tabItem { Label("Rules", systemImage: "slider.horizontal.3") }
 
-      PlaceholderSection(
-        title: "Family",
-        detail: "Parents, invitations, server settings, and sign out land here.",
-        symbol: "house.fill"
-      )
-      .safeAreaInset(edge: .bottom) {
-        Button("Sign out", role: .destructive) { model.logOut() }
-          .padding()
-      }
-      .tabItem { Label("Family", systemImage: "house.fill") }
+      FamilyView(model: model)
+        .tabItem { Label("Family", systemImage: "house.fill") }
     }
     .tint(CoopTheme.cyan)
-  }
-}
-
-private struct PlaceholderSection: View {
-  let title: String
-  let detail: String
-  let symbol: String
-
-  var body: some View {
-    ContentUnavailableView(title, systemImage: symbol, description: Text(detail))
-      .coopBackground()
   }
 }

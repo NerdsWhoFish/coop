@@ -7,6 +7,7 @@ struct AuthenticationView: View {
   @State private var familyName = ""
   @State private var email = ""
   @State private var password = ""
+  @State private var showingInvitation = false
 
   var body: some View {
     NavigationStack {
@@ -48,6 +49,9 @@ struct AuthenticationView: View {
           .disabled(
             model.isWorking || email.isEmpty || password.isEmpty
               || (needsSetup && familyName.isEmpty))
+          if !needsSetup {
+            Button("Use an invitation") { showingInvitation = true }
+          }
         }
       }
       .scrollContentBackground(.hidden)
@@ -62,6 +66,9 @@ struct AuthenticationView: View {
         }
       }
       .coopBackground()
+      .sheet(isPresented: $showingInvitation) {
+        AcceptInvitationView(model: model)
+      }
     }
   }
 }
