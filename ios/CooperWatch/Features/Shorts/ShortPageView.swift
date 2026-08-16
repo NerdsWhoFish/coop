@@ -158,6 +158,7 @@ struct ShortPageView: View {
             .font(.caption2.weight(.black))
             .tracking(1.2)
             .foregroundStyle(WatchTheme.green)
+            .accessibilityIdentifier("active-short-status")
         }
       }
 

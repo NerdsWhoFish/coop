@@ -16,7 +16,10 @@ final class CooperWatchUITests: XCTestCase {
     )
     XCTAssertEqual(activePlayers(in: app), 1)
 
-    app.tabBars.buttons["Home"].tap()
+    let homeTab = element(labeled: "Home", in: app)
+    XCTAssertTrue(homeTab.waitForExistence(timeout: 5))
+    homeTab.tap()
+    XCTAssertTrue(app.staticTexts["Why Do Volcanoes Erupt?"].waitForExistence(timeout: 5))
     XCTAssertEqual(activePlayers(in: app), 0)
   }
 
@@ -26,8 +29,8 @@ final class CooperWatchUITests: XCTestCase {
     app.launchEnvironment["COOP_UI_SHORTS_DISABLED"] = "1"
     app.launch()
 
-    XCTAssertTrue(app.tabBars.buttons["Home"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.tabBars.buttons["Shorts"].exists)
+    XCTAssertTrue(app.staticTexts["Why Do Volcanoes Erupt?"].waitForExistence(timeout: 5))
+    XCTAssertFalse(element(labeled: "Shorts", in: app).exists)
   }
 
   @MainActor
@@ -42,6 +45,13 @@ final class CooperWatchUITests: XCTestCase {
 
   @MainActor
   private func activePlayers(in app: XCUIApplication) -> Int {
-    app.descendants(matching: .any).matching(identifier: "active-short-player").count
+    app.staticTexts.matching(identifier: "active-short-status").count
+  }
+
+  @MainActor
+  private func element(labeled label: String, in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label == %@", label))
+      .firstMatch
   }
 }
