@@ -1,11 +1,16 @@
 import Foundation
 import Security
 
-struct CredentialStore {
-  private let service = "fish.nerdswhofish.coop.parent"
-  private let account = "parent-session"
+public struct SecureTokenStore: Sendable {
+  private let service: String
+  private let account: String
 
-  func loadToken() -> String? {
+  public init(service: String, account: String) {
+    self.service = service
+    self.account = account
+  }
+
+  public func load() -> String? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -22,10 +27,8 @@ struct CredentialStore {
     return String(data: data, encoding: .utf8)
   }
 
-  func saveToken(_ token: String) throws {
-    guard let data = token.data(using: .utf8) else {
-      throw CredentialError.encoding
-    }
+  public func save(_ token: String) throws {
+    guard let data = token.data(using: .utf8) else { throw SecureTokenStoreError.encoding }
     let identity: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -40,15 +43,13 @@ struct CredentialStore {
       var item = identity
       item.merge(attributes) { _, new in new }
       let addStatus = SecItemAdd(item as CFDictionary, nil)
-      guard addStatus == errSecSuccess else {
-        throw CredentialError.keychain(addStatus)
-      }
+      guard addStatus == errSecSuccess else { throw SecureTokenStoreError.keychain(addStatus) }
     } else if status != errSecSuccess {
-      throw CredentialError.keychain(status)
+      throw SecureTokenStoreError.keychain(status)
     }
   }
 
-  func deleteToken() {
+  public func delete() {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -56,9 +57,9 @@ struct CredentialStore {
     ]
     SecItemDelete(query as CFDictionary)
   }
+}
 
-  enum CredentialError: Error {
-    case encoding
-    case keychain(OSStatus)
-  }
+public enum SecureTokenStoreError: Error {
+  case encoding
+  case keychain(OSStatus)
 }

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0F4A61E3FC1FB03DCAC9B32E /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEA8B702792774ED649859F /* CredentialStore.swift */; };
 		1220B137724741C9867CB826 /* ChannelSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC8E2450BD9CD97B605B272D /* ChannelSearchView.swift */; };
 		14BC785746067A4818F975D9 /* RequestQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAF337A28072BFA4058D401 /* RequestQueueView.swift */; };
 		2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A939CC28E13F6BBA929C4C08 /* RulesView.swift */; };
@@ -52,7 +51,6 @@
 		4AF554B0761682DCEF6B9E2F /* InviteParentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteParentView.swift; sourceTree = "<group>"; };
 		4ED2CC0E3A16B3D5A083C0CF /* ParentDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentDashboard.swift; sourceTree = "<group>"; };
 		8504EC06DE6280F85032A2D6 /* FamilyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyView.swift; sourceTree = "<group>"; };
-		8BEA8B702792774ED649859F /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		8D1B606E767366D7D2994319 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		90017104578429EF692D6F7E /* CoopTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoopTheme.swift; sourceTree = "<group>"; };
 		9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperTheCopApp.swift; sourceTree = "<group>"; };
@@ -184,7 +182,6 @@
 			children = (
 				08EEC45B1391EF07F6893444 /* AppModel.swift */,
 				9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */,
-				8BEA8B702792774ED649859F /* CredentialStore.swift */,
 				8D1B606E767366D7D2994319 /* RootView.swift */,
 			);
 			path = App;
@@ -301,7 +298,6 @@
 				C8E5CEBE6FAB5818049F96E1 /* ConnectView.swift in Sources */,
 				AE8E292695210EA347BEE41B /* CoopTheme.swift in Sources */,
 				80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */,
-				0F4A61E3FC1FB03DCAC9B32E /* CredentialStore.swift in Sources */,
 				B61AE6E72D59A00A03B133F4 /* FamilyView.swift in Sources */,
 				99DA1582C61291F831F623E8 /* InviteParentView.swift in Sources */,
 				C7ACE781E3581E40D70A3F84 /* ParentDashboard.swift in Sources */,

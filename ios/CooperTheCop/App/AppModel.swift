@@ -20,7 +20,10 @@ final class AppModel {
   var errorMessage: String?
 
   private var api: CoopAPI?
-  private let credentials = CredentialStore()
+  private let credentials = SecureTokenStore(
+    service: "fish.nerdswhofish.coop.parent",
+    account: "parent-session"
+  )
   private let defaults = UserDefaults.standard
   private static let serverKey = "coop.server.address"
 
@@ -42,7 +45,7 @@ final class AppModel {
 
       let publicAPI = CoopAPI(serverURL: serverURL)
       let needsSetup = try await publicAPI.setupStatus()
-      if usingStoredSession, let token = credentials.loadToken() {
+      if usingStoredSession, let token = credentials.load() {
         let authenticatedAPI = CoopAPI(serverURL: serverURL, token: token)
         do {
           parent = try await authenticatedAPI.currentParent()
@@ -51,7 +54,7 @@ final class AppModel {
           await loadDashboard()
           return
         } catch CoopAPIError.invalidSession {
-          credentials.deleteToken()
+          credentials.delete()
         }
       }
 
@@ -284,7 +287,7 @@ final class AppModel {
   }
 
   func logOut() {
-    credentials.deleteToken()
+    credentials.delete()
     api = nil
     parent = nil
     requests = []
@@ -293,7 +296,7 @@ final class AppModel {
   }
 
   private func activate(_ session: Components.Schemas.Session) throws {
-    try credentials.saveToken(session.token)
+    try credentials.save(session.token)
     let serverURL = try ServerURL.normalize(serverAddress)
     api = CoopAPI(serverURL: serverURL, token: session.token)
     parent = session.parent

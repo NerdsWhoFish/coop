@@ -360,6 +360,134 @@ public actor CoopAPI {
     else { throw CoopAPIError.unexpectedResponse }
   }
 
+  public func pairChildDevice(code: String, deviceName: String) async throws -> ChildPairing {
+    let payload = Operations.PairChildDevice.Input.Body.JsonPayload(
+      code: code,
+      deviceName: deviceName
+    )
+    let output = try await client.pairChildDevice(body: .json(payload))
+    switch output {
+    case .ok(let response):
+      let body = try response.body.json
+      return ChildPairing(token: body.token, profile: body.child)
+    case .badRequest:
+      throw CoopAPIError.invalidPairingCode
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func childProfile() async throws -> Components.Schemas.ChildProfile {
+    let output = try await client.getChildProfile()
+    switch output {
+    case .ok(let response):
+      return try response.body.json
+    case .unauthorized:
+      throw CoopAPIError.invalidSession
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func childFeed() async throws -> [Components.Schemas.Video] {
+    let output = try await client.getChildFeed()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json.items
+  }
+
+  public func childSubscriptions() async throws -> [Components.Schemas.Channel] {
+    let output = try await client.listChildSubscriptions()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setSubscribed(_ subscribed: Bool, channelID: String) async throws {
+    if subscribed {
+      let path = Operations.SubscribeToChannel.Input.Path(channelId: channelID)
+      guard case .noContent = try await client.subscribeToChannel(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    } else {
+      let path = Operations.UnsubscribeFromChannel.Input.Path(channelId: channelID)
+      guard case .noContent = try await client.unsubscribeFromChannel(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  public func childChannel(id: String) async throws -> Components.Schemas.ChannelPage {
+    let path = Operations.GetChildChannel.Input.Path(channelId: id)
+    let output = try await client.getChildChannel(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func searchForChild(query: String) async throws -> Components.Schemas.SearchResults {
+    let query = Operations.SearchForChild.Input.Query(q: query)
+    let output = try await client.searchForChild(query: query)
+    switch output {
+    case .ok(let response):
+      return try response.body.json
+    case .tooManyRequests:
+      throw CoopAPIError.searchBudgetExhausted
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func childVideo(id: String) async throws -> Components.Schemas.WatchPage {
+    let path = Operations.GetChildVideo.Input.Path(videoId: id)
+    let output = try await client.getChildVideo(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setVideoReaction(_ reaction: ChildReaction?, videoID: String) async throws {
+    if let reaction {
+      let path = Operations.SetVideoReaction.Input.Path(videoId: videoID)
+      let payload = Operations.SetVideoReaction.Input.Body.JsonPayload(
+        kind: reaction == .like ? .like : .dislike
+      )
+      guard case .noContent = try await client.setVideoReaction(path: path, body: .json(payload))
+      else { throw CoopAPIError.unexpectedResponse }
+    } else {
+      let path = Operations.ClearVideoReaction.Input.Path(videoId: videoID)
+      guard case .noContent = try await client.clearVideoReaction(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
+  public func recordVideoWatch(videoID: String, startedAt: Date, secondsWatched: Int) async throws {
+    let path = Operations.RecordVideoWatch.Input.Path(videoId: videoID)
+    let payload = Operations.RecordVideoWatch.Input.Body.JsonPayload(
+      startedAt: startedAt,
+      secondsWatched: secondsWatched
+    )
+    guard case .noContent = try await client.recordVideoWatch(path: path, body: .json(payload))
+    else { throw CoopAPIError.unexpectedResponse }
+  }
+
+  public func childRequests() async throws -> [Components.Schemas.Request] {
+    let output = try await client.listChildRequests()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  @discardableResult
+  public func requestChannel(
+    channelID: String,
+    promptedByVideoID: String? = nil
+  ) async throws -> Components.Schemas.Request {
+    let payload = Operations.CreateChildRequest.Input.Body.JsonPayload(
+      channelId: channelID,
+      promptedByVideoId: promptedByVideoID
+    )
+    let output = try await client.createChildRequest(body: .json(payload))
+    guard case .created(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
   public func pendingRequests() async throws -> [Components.Schemas.Request] {
     let query = Operations.ListParentRequests.Input.Query(status: .pending)
     let output = try await client.listParentRequests(query: query)
@@ -399,6 +527,7 @@ public actor CoopAPI {
 public enum CoopAPIError: LocalizedError {
   case invalidCredentials
   case invalidInvitation
+  case invalidPairingCode
   case invalidSession
   case searchBudgetExhausted
   case unexpectedResponse
@@ -409,6 +538,8 @@ public enum CoopAPIError: LocalizedError {
       "That email and password did not match."
     case .invalidInvitation:
       "That invitation is invalid, expired, or has already been used."
+    case .invalidPairingCode:
+      "That pairing code is invalid, expired, or has already been used."
     case .invalidSession:
       "Your parent session has expired. Sign in again."
     case .searchBudgetExhausted:
@@ -417,6 +548,16 @@ public enum CoopAPIError: LocalizedError {
       "The Coop server returned an unexpected response."
     }
   }
+}
+
+public struct ChildPairing: Sendable {
+  public let token: String
+  public let profile: Components.Schemas.ChildProfile
+}
+
+public enum ChildReaction: Sendable, Equatable {
+  case like
+  case dislike
 }
 
 private struct BearerAuthorizationMiddleware: ClientMiddleware {
