@@ -555,6 +555,7 @@ Complete.
 
 **Phase 4, Shorts.**
 Vertical scroll-snap feed with RSS-based classification, non-overlay chrome, single-player mounting, shuffle and loop, allowed channels only.
+Complete.
 
 **Phase 5, ship.**
 Network and device setup docs, Google Cloud project walkthrough, demo family, container, Helm, compose, TestFlight, submission.

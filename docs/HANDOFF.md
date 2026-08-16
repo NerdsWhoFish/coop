@@ -3,10 +3,10 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status: **Phases 0 through 3 are complete.**
+Status: **Phases 0 through 4 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
 The native parent app covers the complete Phase 2 surface: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, and scoped parent invitations.
-The native child app covers the complete Phase 3 surface: secure pairing, home and subscription feeds, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, and sharing.
+The native child app covers the complete Phase 3 and 4 surface: secure pairing, home and subscription feeds, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, sharing, and a shuffled vertical Shorts feed.
 
 ---
 
@@ -41,12 +41,12 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - Daily cleanup of expired cache entries, sessions, pairing codes, parent invitations, and prior-day ledgers.
 - Mixed channel-and-video child search with locked requestable results and full policy filtering.
 - Thumbnail proxy.
+- Native parent and child apps, including a single-player Shorts feed with snap paging, looping, reactions, watch reporting, and parent-controlled visibility.
 
 ### Not built yet
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Backfill.** The budget reserve exists; nothing spends it.
-- **The Shorts feed.** Phase 4.
 - **The ranker** (`internal/rank`). Phase 6, deliberately last.
 
 ---
@@ -132,6 +132,14 @@ Blocked channels are likewise invisible rather than shown-and-locked. adr/0003.
 **Embeds must use `youtube-nocookie.com`.**
 That is the whole reason a network filter can block `youtube.com` on a child's device without breaking playback in the app. PLAN.md §3.
 
+**Shorts paginate by stable session and numeric offset, not cursor.**
+The feed wraps after the finite shuffled pool, so a database cursor has no useful meaning after the first lap.
+Keep the same session seed while paging or scrolling backward will reorder the feed under the child.
+
+**Only the active Short mounts a `WKWebView`.**
+Adjacent pages render artwork until they become active, and leaving the tab or backgrounding the app tears the player down.
+Mounting a player per lazy page allows concurrent audio and turns normal prefetching into a memory leak.
+
 **Migrations run on a dedicated connection.**
 `migrate.Close()` closes the database driver it was handed.
 Sharing the GORM pool means every query after startup migration fails with "database is closed".
@@ -140,7 +148,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Build Phase 4**, the vertical Shorts feed with single-player mounting, shuffle and loop, allowed channels only, and accessible non-overlay controls.
+**1. Build Phase 5**, the deployment and release surface: network and device setup documentation, Google Cloud walkthrough, demo family, container images, Helm, Compose, TestFlight, and App Store submission.
 
 ---
 

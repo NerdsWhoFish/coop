@@ -8,10 +8,10 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
-> **Status: pre-alpha.** Phases 0 through 3 are complete.
+> **Status: pre-alpha.** Phases 0 through 4 are complete.
 > The backend builds, migrates, serves, and keeps approved channels ingested.
 > The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, and scoped parent invitations.
-> The child app handles pairing, approved feeds and channels, subscriptions, mixed search and approval requests, embedded playback, local reactions, and sharing.
+> The child app handles pairing, approved feeds and channels, subscriptions, mixed search and approval requests, embedded playback, local reactions, sharing, and a policy-filtered Shorts feed.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md) for where things stand, the invariants worth not breaking, and what to build next.
 > The full design is in [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls is in [adr/](adr/).
@@ -42,6 +42,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Local subscriptions, likes, and dislikes** that never touch YouTube.
 - **No livestreams**, including finished livestream VODs.
 - **Child search across channels and videos**, with blocked results hidden and requestable videos locked behind approval.
+- **A shuffled, looping Shorts feed** that mounts only the visible player and never includes locked channels.
 - **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data.
 
 ## Components
@@ -65,8 +66,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `docs/PLAN.md` | Full design document |
 
 The parent app (`Cooper The Cop`) is complete through Phase 2.
-The child app (`Cooper Watch`) is complete through Phase 3.
-Its vertical Shorts experience lands in Phase 4.
+The child app (`Cooper Watch`) is complete through Phase 4.
 
 ## Requirements
 
