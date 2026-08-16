@@ -9,6 +9,7 @@ struct ChannelSearchView: View {
   @State private var query = ""
   @State private var results: [Components.Schemas.Channel] = []
   @State private var cleared: Set<String> = []
+  @State private var blocked: Set<String> = []
   @State private var isSearching = false
 
   var body: some View {
@@ -27,13 +28,20 @@ struct ChannelSearchView: View {
                 }
               }
               Spacer()
-              Button(cleared.contains(channel.id) ? "Cleared" : "Clear") {
-                clear(channel.id)
+              Menu {
+                Button("Clear for this scope") { clear(channel.id) }
+                Button("Block family-wide", role: .destructive) { block(channel.id) }
+              } label: {
+                Label(resultLabel(channel.id), systemImage: resultSymbol(channel.id))
               }
               .buttonStyle(.borderedProminent)
-              .tint(cleared.contains(channel.id) ? CoopTheme.green : CoopTheme.cyan)
+              .tint(
+                blocked.contains(channel.id)
+                  ? CoopTheme.red
+                  : (cleared.contains(channel.id) ? CoopTheme.green : CoopTheme.cyan)
+              )
               .foregroundStyle(CoopTheme.background)
-              .disabled(cleared.contains(channel.id))
+              .disabled(cleared.contains(channel.id) || blocked.contains(channel.id))
             }
           }
           .scrollContentBackground(.hidden)
@@ -75,5 +83,29 @@ struct ChannelSearchView: View {
         model.errorMessage = error.localizedDescription
       }
     }
+  }
+
+  private func block(_ channelID: String) {
+    Task {
+      do {
+        try await model.setChannelBlocked(true, channelID: channelID)
+        blocked.insert(channelID)
+        await didChange()
+      } catch {
+        model.errorMessage = error.localizedDescription
+      }
+    }
+  }
+
+  private func resultLabel(_ channelID: String) -> String {
+    if blocked.contains(channelID) { return "Blocked" }
+    if cleared.contains(channelID) { return "Cleared" }
+    return "Decide"
+  }
+
+  private func resultSymbol(_ channelID: String) -> String {
+    if blocked.contains(channelID) { return "nosign" }
+    if cleared.contains(channelID) { return "checkmark" }
+    return "ellipsis"
   }
 }

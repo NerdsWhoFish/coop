@@ -132,9 +132,25 @@ final class AppModel {
     }
   }
 
+  func deleteChild(id: String) async throws {
+    guard let api else { return }
+    try await api.deleteChild(id: id)
+    children.removeAll { $0.value1.id == id }
+  }
+
   func createPairingCode(childID: String) async throws -> Components.Schemas.PairingCode? {
     guard let api else { return nil }
     return try await api.createPairingCode(childID: childID)
+  }
+
+  func childDevices(childID: String) async throws -> [Components.Schemas.Device] {
+    guard let api else { return [] }
+    return try await api.childDevices(childID: childID)
+  }
+
+  func revokeChildDevice(id: String) async throws {
+    guard let api else { return }
+    try await api.revokeChildDevice(id: id)
   }
 
   func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {
@@ -258,9 +274,9 @@ final class AppModel {
     try await api.approveRequest(id: requestID, globally: globally)
   }
 
-  func deny(requestID: String) async throws {
+  func deny(requestID: String, blockChannel: Bool) async throws {
     guard let api else { return }
-    try await api.denyRequest(id: requestID, blockChannel: false)
+    try await api.denyRequest(id: requestID, blockChannel: blockChannel)
   }
 
   func dismiss(requestID: String) {

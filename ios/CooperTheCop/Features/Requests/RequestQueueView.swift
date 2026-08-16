@@ -82,8 +82,11 @@ private struct RequestCard: View {
       }
 
       HStack(spacing: 10) {
-        Button {
-          decide(.denied, globally: false)
+        Menu {
+          Button("Deny request") { decide(.denied, globally: false, blockChannel: false) }
+          Button("Deny and block channel", role: .destructive) {
+            decide(.denied, globally: false, blockChannel: true)
+          }
         } label: {
           Label("Deny", systemImage: "xmark")
             .frame(maxWidth: .infinity)
@@ -93,10 +96,10 @@ private struct RequestCard: View {
 
         Menu {
           Button("Clear for \(request.childName ?? "this child")") {
-            decide(.approved, globally: false)
+            decide(.approved, globally: false, blockChannel: false)
           }
           Button("Clear for every child") {
-            decide(.approved, globally: true)
+            decide(.approved, globally: true, blockChannel: false)
           }
         } label: {
           Label("Clear", systemImage: "checkmark")
@@ -120,7 +123,7 @@ private struct RequestCard: View {
     .accessibilityElement(children: .contain)
   }
 
-  private func decide(_ resolution: Resolution, globally: Bool) {
+  private func decide(_ resolution: Resolution, globally: Bool, blockChannel: Bool) {
     isWorking = true
     Task {
       do {
@@ -128,7 +131,7 @@ private struct RequestCard: View {
         case .approved:
           try await model.approve(requestID: request.id, globally: globally)
         case .denied:
-          try await model.deny(requestID: request.id)
+          try await model.deny(requestID: request.id, blockChannel: blockChannel)
         }
         withAnimation(reduceMotion ? nil : .spring(duration: 0.28, bounce: 0.35)) {
           self.resolution = resolution

@@ -179,6 +179,13 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func deleteChild(id: String) async throws {
+    let path = Operations.DeleteChild.Input.Path(childId: id)
+    guard case .noContent = try await client.deleteChild(path: path) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func createPairingCode(childID: String) async throws -> Components.Schemas.PairingCode {
     let path = Operations.CreatePairingCode.Input.Path(childId: childID)
     let output = try await client.createPairingCode(path: path)
@@ -186,6 +193,20 @@ public actor CoopAPI {
       throw CoopAPIError.unexpectedResponse
     }
     return try response.body.json
+  }
+
+  public func childDevices(childID: String) async throws -> [Components.Schemas.Device] {
+    let path = Operations.ListChildDevices.Input.Path(childId: childID)
+    let output = try await client.listChildDevices(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func revokeChildDevice(id: String) async throws {
+    let path = Operations.RevokeChildDevice.Input.Path(deviceId: id)
+    guard case .noContent = try await client.revokeChildDevice(path: path) else {
+      throw CoopAPIError.unexpectedResponse
+    }
   }
 
   public func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {

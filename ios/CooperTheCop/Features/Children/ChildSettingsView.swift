@@ -12,6 +12,8 @@ struct ChildSettingsView: View {
   @State private var dailySearchLimit: Int
   @State private var pairingCode: Components.Schemas.PairingCode?
   @State private var isWorking = false
+  @State private var confirmingDeletion = false
+  @Environment(\.dismiss) private var dismiss
 
   init(child: Components.Schemas.Child, model: AppModel) {
     self.child = child
@@ -65,11 +67,20 @@ struct ChildSettingsView: View {
             .font(.caption)
             .foregroundStyle(CoopTheme.foreground.opacity(0.65))
         }
+        NavigationLink("Paired devices") {
+          ChildDevicesView(child: child, model: model)
+        }
       }
 
       Section("Audit") {
         NavigationLink("Hidden videos") {
           SuppressionsView(child: child, model: model)
+        }
+      }
+
+      if model.parent?.role == .admin {
+        Section {
+          Button("Delete child profile", role: .destructive) { confirmingDeletion = true }
         }
       }
     }
@@ -83,6 +94,15 @@ struct ChildSettingsView: View {
           .fontWeight(.bold)
           .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking)
       }
+    }
+    .confirmationDialog(
+      "Delete \(child.value1.name)?",
+      isPresented: $confirmingDeletion,
+      titleVisibility: .visible
+    ) {
+      Button("Delete child and all data", role: .destructive) { deleteChild() }
+    } message: {
+      Text("This permanently removes their devices, rules, requests, and activity.")
     }
     .coopBackground()
   }
@@ -117,6 +137,19 @@ struct ChildSettingsView: View {
       do {
         pairingCode = try await model.createPairingCode(childID: child.value1.id)
         isWorking = false
+      } catch {
+        model.errorMessage = error.localizedDescription
+        isWorking = false
+      }
+    }
+  }
+
+  private func deleteChild() {
+    isWorking = true
+    Task {
+      do {
+        try await model.deleteChild(id: child.value1.id)
+        dismiss()
       } catch {
         model.errorMessage = error.localizedDescription
         isWorking = false
