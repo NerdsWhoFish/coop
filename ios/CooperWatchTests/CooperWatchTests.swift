@@ -38,11 +38,13 @@ func shortPlaybackRejectsUnexpectedHost() {
   #expect(url == nil)
 }
 
-@Test("YouTube embeds identify the app and request inline playback")
+@Test("YouTube embeds identify the app and always autoplay inline")
 func youtubeEmbedRequest() throws {
   let request = try #require(
     YouTubeEmbedRequest.make(
-      url: URL(string: "https://www.youtube-nocookie.com/embed/abc123?rel=0&playsinline=0")!,
+      url: URL(
+        string: "https://www.youtube-nocookie.com/embed/abc123?rel=0&autoplay=0&playsinline=0"
+      )!,
       bundleIdentifier: "fish.NerdsWhoFish.Coop.Child"
     )
   )
@@ -54,6 +56,7 @@ func youtubeEmbedRequest() throws {
 
   #expect(request.value(forHTTPHeaderField: "Referer") == "https://fish.nerdswhofish.coop.child")
   #expect(query["rel"] == "0")
+  #expect(query["autoplay"] == "1")
   #expect(query["playsinline"] == "1")
 }
 

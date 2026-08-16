@@ -442,9 +442,9 @@ Two different things get conflated here, and separating them is what lets Shorts
 - **Auto-load** is the iframe mounting and contacting Google at all.
 - **Autoplay** is the video starting once it has loaded.
 
-**Watch page.** Default is a local thumbnail with a play button, and nothing contacts Google until the child taps.
-A per-child parent setting flips this to load-and-play on open.
-The setting exists because children dislike the extra tap, and that trade is the parent's call rather than a decision baked into the app.
+**Watch page.** Opening a video immediately mounts and autoplays the privacy-enhanced embed.
+The player instance persists across portrait and landscape layouts so rotation does not reset playback.
+This supersedes the original per-child setting because its local thumbnail created a redundant second play gesture; [ADR 0011](../adr/0011-autoplay-watch-pages-with-a-persistent-player.md) records the trade-off.
 
 **Shorts feed.** Autoplay is the format. A Shorts feed that requires a tap per video is not a Shorts feed, so the active card always loads and plays.
 This is not exposed as a setting, because turning it off would break the tab.

@@ -11,9 +11,14 @@ enum YouTubeEmbedRequest {
       !bundleIdentifier.isEmpty
     else { return nil }
 
+    let playbackItems = [
+      URLQueryItem(name: "autoplay", value: "1"),
+      URLQueryItem(name: "playsinline", value: "1"),
+    ]
+    let playbackNames = Set(playbackItems.map(\.name))
     components.queryItems =
-      (components.queryItems ?? []).filter { $0.name != "playsinline" }
-      + [URLQueryItem(name: "playsinline", value: "1")]
+      (components.queryItems ?? []).filter { !playbackNames.contains($0.name) }
+      + playbackItems
     guard let playbackURL = components.url else { return nil }
 
     var request = URLRequest(url: playbackURL)
@@ -22,14 +27,42 @@ enum YouTubeEmbedRequest {
   }
 }
 
+@MainActor
+final class YouTubeEmbeddedPlayerSession {
+  let webView: WKWebView
+  fileprivate var loadedURL: URL?
+
+  init() {
+    webView = YouTubeEmbeddedPlayer.makeWebView()
+  }
+
+  func stop() {
+    webView.stopLoading()
+    webView.loadHTMLString("", baseURL: nil)
+    loadedURL = nil
+  }
+}
+
 struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   let url: URL
+  var session: YouTubeEmbeddedPlayerSession?
+
+  init(url: URL, session: YouTubeEmbeddedPlayerSession? = nil) {
+    self.url = url
+    self.session = session
+  }
 
   func makeCoordinator() -> Coordinator {
-    Coordinator()
+    Coordinator(preservesPlayback: session != nil)
   }
 
   func makeUIView(context: Context) -> WKWebView {
+    let view = session?.webView ?? Self.makeWebView()
+    load(url, in: view, coordinator: context.coordinator)
+    return view
+  }
+
+  fileprivate static func makeWebView() -> WKWebView {
     let configuration = WKWebViewConfiguration()
     configuration.allowsInlineMediaPlayback = true
     configuration.mediaTypesRequiringUserActionForPlayback = []
@@ -37,7 +70,6 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     view.isOpaque = false
     view.backgroundColor = .black
     view.scrollView.isScrollEnabled = false
-    load(url, in: view, coordinator: context.coordinator)
     return view
   }
 
@@ -46,24 +78,35 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   }
 
   static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+    guard !coordinator.preservesPlayback else { return }
     view.stopLoading()
     view.loadHTMLString("", baseURL: nil)
     coordinator.loadedURL = nil
   }
 
   private func load(_ url: URL, in view: WKWebView, coordinator: Coordinator) {
+    let loadedURL = session?.loadedURL ?? coordinator.loadedURL
     guard
-      coordinator.loadedURL != url,
+      loadedURL != url,
       let request = YouTubeEmbedRequest.make(
         url: url,
         bundleIdentifier: Bundle.main.bundleIdentifier
       )
     else { return }
-    coordinator.loadedURL = url
+    if let session {
+      session.loadedURL = url
+    } else {
+      coordinator.loadedURL = url
+    }
     view.load(request)
   }
 
   final class Coordinator {
+    let preservesPlayback: Bool
     var loadedURL: URL?
+
+    init(preservesPlayback: Bool) {
+      self.preservesPlayback = preservesPlayback
+    }
   }
 }

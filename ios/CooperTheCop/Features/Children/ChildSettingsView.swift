@@ -7,7 +7,6 @@ struct ChildSettingsView: View {
 
   @State private var name: String
   @State private var shortsEnabled: Bool
-  @State private var watchPageAutoplay: Bool
   @State private var videoSearchTiles: Bool
   @State private var dailySearchLimit: Int
   @State private var pairingCode: Components.Schemas.PairingCode?
@@ -20,7 +19,6 @@ struct ChildSettingsView: View {
     self.model = model
     _name = State(initialValue: child.value1.name)
     _shortsEnabled = State(initialValue: child.value2.shortsEnabled ?? false)
-    _watchPageAutoplay = State(initialValue: child.value2.watchPageAutoplay ?? false)
     _videoSearchTiles = State(initialValue: child.value2.videoSearchTiles ?? false)
     _dailySearchLimit = State(initialValue: child.value2.dailySearchLimit ?? 0)
   }
@@ -41,16 +39,6 @@ struct ChildSettingsView: View {
         Text("Discovery")
       } footer: {
         Text("A zero search limit uses the family-wide budget without adding a child-specific cap.")
-      }
-
-      Section {
-        Toggle("Autoplay watch pages", isOn: $watchPageAutoplay)
-      } header: {
-        Text("Playback")
-      } footer: {
-        Text(
-          "When off, the child sees a local thumbnail until they tap play, so opening a video does not contact Google."
-        )
       }
 
       Section("Device pairing") {
@@ -119,7 +107,7 @@ struct ChildSettingsView: View {
     let settings = Components.Schemas.ChildSettings(
       name: name.trimmingCharacters(in: .whitespacesAndNewlines),
       shortsEnabled: shortsEnabled,
-      watchPageAutoplay: watchPageAutoplay,
+      watchPageAutoplay: nil,
       videoSearchTiles: videoSearchTiles,
       dailySearchLimit: dailySearchLimit
     )

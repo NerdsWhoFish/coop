@@ -332,11 +332,6 @@ func (s *Server) handleWatch(w http.ResponseWriter, r *http.Request, c auth.Chil
 		return err
 	}
 
-	child, err := s.deps.Accounts.Child(r.Context(), c.FamilyID, c.ID)
-	if err != nil {
-		return err
-	}
-
 	channel, err := s.deps.Catalog.Channel(r.Context(), video.ChannelID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
@@ -349,8 +344,8 @@ func (s *Server) handleWatch(w http.ResponseWriter, r *http.Request, c auth.Chil
 
 	writeJSON(w, s.deps.Logger, http.StatusOK, watchPageDTO{
 		Video:    newVideoDTO(video, channel.Title, s.deps.Config.Server.PublicURL),
-		EmbedURL: youtube.EmbedURL(video.ID, child.WatchPageAutoplay),
-		Autoplay: child.WatchPageAutoplay,
+		EmbedURL: youtube.EmbedURL(video.ID, true),
+		Autoplay: true,
 		Reaction: string(reaction),
 		ShareURL: youtube.WatchURL(video.ID),
 	})

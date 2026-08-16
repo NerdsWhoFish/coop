@@ -1397,8 +1397,7 @@ components:
         watchPageAutoplay:
           type: boolean
           description: |
-            Off by default, so nothing contacts Google until the child taps.
-            Does not apply to the Shorts feed, where autoplay is the format.
+            Deprecated compatibility field. Watch pages now always autoplay.
         videoSearchTiles:
           type: boolean
           description: Whether search returns videos as well as channels.
@@ -1578,7 +1577,7 @@ components:
             YouTube designates Made For Kids.
         autoplay:
           type: boolean
-          description: Reflects the child's watchPageAutoplay setting.
+          description: Always true; retained explicitly as part of the playback contract.
         reaction:
           type: string
           enum: [like, dislike]

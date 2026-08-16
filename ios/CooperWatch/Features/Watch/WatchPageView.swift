@@ -5,7 +5,7 @@ struct WatchPageView: View {
   let videoID: String
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
-  @State private var playerLoaded = false
+  @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
 
@@ -31,6 +31,7 @@ struct WatchPageView: View {
     .onAppear { CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(true) }
     .onDisappear {
       CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(false)
+      playerSession.stop()
       recordWatch()
     }
     .watchBackground()
@@ -96,24 +97,8 @@ struct WatchPageView: View {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Playing \(page.video.title)")
       .accessibilityIdentifier("regular-video-player")
-    } else if playerLoaded, let url = URL(string: page.embedUrl) {
-      YouTubeEmbeddedPlayer(url: url)
-    } else {
-      Button {
-        loadPlayer()
-      } label: {
-        ZStack {
-          AsyncImage(url: page.video.thumbnailUrl.flatMap(URL.init(string:))) { image in
-            image.resizable().scaledToFill()
-          } placeholder: {
-            Rectangle().fill(WatchTheme.surface)
-          }
-          Image(systemName: "play.circle.fill")
-            .font(.system(size: 70)).foregroundStyle(WatchTheme.foreground, WatchTheme.pink)
-            .shadow(radius: 12)
-        }
-      }
-      .buttonStyle(.plain)
+    } else if let url = URL(string: page.embedUrl) {
+      YouTubeEmbeddedPlayer(url: url, session: playerSession)
     }
   }
 
@@ -122,14 +107,9 @@ struct WatchPageView: View {
       page = try await model.video(id: videoID)
       if let page {
         reaction = page.reaction == .like ? .like : (page.reaction == .dislike ? .dislike : nil)
-        if page.autoplay { loadPlayer() }
+        startedAt = .now
       }
     } catch { model.errorMessage = error.localizedDescription }
-  }
-
-  private func loadPlayer() {
-    startedAt = .now
-    playerLoaded = true
   }
 
   private func reactionButton(_ value: ChildReaction, label: String, symbol: String) -> some View {
