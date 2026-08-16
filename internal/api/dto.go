@@ -164,6 +164,23 @@ type videoPageDTO struct {
 	NextCursor string     `json:"nextCursor,omitempty"`
 }
 
+type recommendationDTO struct {
+	Video      videoDTO `json:"video"`
+	Score      float64  `json:"score"`
+	Reason     string   `json:"reason"`
+	ReasonKind string   `json:"reasonKind"`
+}
+
+type recommendationPageDTO struct {
+	Items      []recommendationDTO `json:"items"`
+	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+type channelWeightDTO struct {
+	ChannelID string `json:"channelId"`
+	Weight    int    `json:"weight"`
+}
+
 type watchPageDTO struct {
 	Video    videoDTO `json:"video"`
 	EmbedURL string   `json:"embedUrl"`

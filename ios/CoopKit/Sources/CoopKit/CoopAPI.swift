@@ -223,6 +223,40 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func childRecommendations(
+    childID: String,
+    limit: Int = 30,
+    cursor: String? = nil
+  ) async throws -> Components.Schemas.RecommendationPage {
+    let path = Operations.GetChildRecommendations.Input.Path(childId: childID)
+    let query = Operations.GetChildRecommendations.Input.Query(limit: limit, cursor: cursor)
+    let output = try await client.getChildRecommendations(path: path, query: query)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func childChannelWeights(childID: String) async throws
+    -> [Components.Schemas.ChannelWeight]
+  {
+    let path = Operations.GetChildChannelWeights.Input.Path(childId: childID)
+    let output = try await client.getChildChannelWeights(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setChildChannelWeight(_ weight: Int, channelID: String, childID: String)
+    async throws
+  {
+    let path = Operations.SetChildChannelWeight.Input.Path(
+      childId: childID,
+      channelId: channelID
+    )
+    let payload = Operations.SetChildChannelWeight.Input.Body.JsonPayload(weight: weight)
+    guard
+      case .noContent = try await client.setChildChannelWeight(path: path, body: .json(payload))
+    else { throw CoopAPIError.unexpectedResponse }
+  }
+
   public func blocklist() async throws -> [Components.Schemas.BlockedChannel] {
     let output = try await client.getChannelBlocklist()
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }

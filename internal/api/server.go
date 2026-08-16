@@ -105,6 +105,9 @@ func (s *Server) routes() {
 	parent("GET /api/v1/parent/children/{childId}", s.handleGetChild)
 	parent("PATCH /api/v1/parent/children/{childId}", s.handleUpdateChild)
 	parent("DELETE /api/v1/parent/children/{childId}", s.handleDeleteChild)
+	parent("GET /api/v1/parent/children/{childId}/recommendations", s.handleChildRecommendations)
+	parent("GET /api/v1/parent/children/{childId}/channel-weights", s.handleChildChannelWeights)
+	parent("PUT /api/v1/parent/children/{childId}/channel-weights/{channelId}", s.handleSetChildChannelWeight)
 
 	parent("POST /api/v1/parent/children/{childId}/pairing-code", s.handleCreatePairingCode)
 	parent("GET /api/v1/parent/children/{childId}/devices", s.handleListDevices)

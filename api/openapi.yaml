@@ -391,6 +391,65 @@ paths:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /parent/children/{childId}/recommendations:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      operationId: getChildRecommendations
+      tags: [children]
+      summary: Preview the child's explainable local recommendations
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecommendationPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parent/children/{childId}/channel-weights:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      operationId: getChildChannelWeights
+      tags: [children]
+      summary: Read non-neutral channel preferences for a child's feed
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelWeight" }
+
+  /parent/children/{childId}/channel-weights/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      operationId: setChildChannelWeight
+      tags: [children]
+      summary: Set a soft channel preference without blocking the channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weight]
+              properties:
+                weight: { type: integer, minimum: -2, maximum: 2 }
+      responses:
+        "204": { description: Updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # Pairing ------------------------------------------------------------------
 
   /parent/children/{childId}/pairing-code:
@@ -1377,6 +1436,45 @@ components:
           description: |
             The video belongs to a requestable channel. Present on search
             results, never on the Shorts feed.
+
+    RecommendationReasonKind:
+      type: string
+      enum:
+        - liked
+        - disliked
+        - parent_more
+        - parent_less
+        - rewatched
+        - completed
+        - channel_satisfaction
+        - new_subscription
+        - unwatched
+        - recent
+
+    Recommendation:
+      type: object
+      required: [video, score, reason, reasonKind]
+      properties:
+        video: { $ref: "#/components/schemas/Video" }
+        score: { type: number, format: double }
+        reason: { type: string }
+        reasonKind: { $ref: "#/components/schemas/RecommendationReasonKind" }
+
+    RecommendationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Recommendation" }
+        nextCursor: { type: string }
+
+    ChannelWeight:
+      type: object
+      required: [channelId, weight]
+      properties:
+        channelId: { $ref: "#/components/schemas/ChannelId" }
+        weight: { type: integer, minimum: -2, maximum: 2 }
 
     ChannelPage:
       type: object
