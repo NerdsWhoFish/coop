@@ -354,7 +354,7 @@ func (s *Server) handleUpdateFamily(w http.ResponseWriter, r *http.Request, p au
 	if err := decodeJSON(r, &body); err != nil {
 		return err
 	}
-	if err := s.deps.Accounts.UpdateFamily(r.Context(), p.FamilyID, body.Name, body.Timezone); err != nil {
+	if err := s.deps.Accounts.UpdateFamily(r.Context(), p.FamilyID, body.Name, body.Timezone, p.ID); err != nil {
 		return err
 	}
 
@@ -363,6 +363,17 @@ func (s *Server) handleUpdateFamily(w http.ResponseWriter, r *http.Request, p au
 		return err
 	}
 	writeJSON(w, s.deps.Logger, http.StatusOK, newFamilyDTO(family))
+	return nil
+}
+
+func (s *Server) handleDeleteFamily(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
+	if err := p.RequireAdmin(); err != nil {
+		return err
+	}
+	if err := s.deps.Accounts.DeleteFamily(r.Context(), p.FamilyID); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
@@ -398,7 +409,7 @@ func (s *Server) handleSetAPIKey(w http.ResponseWriter, r *http.Request, p auth.
 	if err != nil {
 		return internal(err)
 	}
-	if err := s.deps.Accounts.SetAPIKey(r.Context(), p.FamilyID, sealed); err != nil {
+	if err := s.deps.Accounts.SetAPIKey(r.Context(), p.FamilyID, sealed, p.ID); err != nil {
 		return err
 	}
 
@@ -541,7 +552,7 @@ func (s *Server) handleDeleteParent(w http.ResponseWriter, r *http.Request, p au
 	if err != nil {
 		return err
 	}
-	if err := s.deps.Accounts.DeleteParent(r.Context(), p.FamilyID, parentID); err != nil {
+	if err := s.deps.Accounts.DeleteParent(r.Context(), p.FamilyID, parentID, p.ID); err != nil {
 		return err
 	}
 
@@ -575,7 +586,7 @@ func (s *Server) handleSetScope(w http.ResponseWriter, r *http.Request, p auth.P
 		}
 	}
 
-	if err := s.deps.Accounts.SetScope(r.Context(), parentID, body.ChildIDs); err != nil {
+	if err := s.deps.Accounts.SetScope(r.Context(), parentID, body.ChildIDs, p.ID); err != nil {
 		return err
 	}
 
@@ -632,7 +643,7 @@ func (s *Server) handleCreateChild(w http.ResponseWriter, r *http.Request, p aut
 		return badRequest("name is required")
 	}
 
-	child, err := s.deps.Accounts.CreateChild(r.Context(), p.FamilyID, body.Name, body.AvatarID)
+	child, err := s.deps.Accounts.CreateChild(r.Context(), p.FamilyID, body.Name, body.AvatarID, p.ID)
 	if err != nil {
 		return err
 	}
@@ -685,7 +696,7 @@ func (s *Server) handleUpdateChild(w http.ResponseWriter, r *http.Request, p aut
 		WatchPageAutoplay: body.WatchPageAutoplay,
 		VideoSearchTiles:  body.VideoSearchTiles,
 		DailySearchLimit:  body.DailySearchLimit,
-	})
+	}, p.ID)
 	if err != nil {
 		return err
 	}
@@ -715,7 +726,7 @@ func (s *Server) handleDeleteChild(w http.ResponseWriter, r *http.Request, p aut
 	if err != nil {
 		return err
 	}
-	if err := s.deps.Accounts.DeleteChild(r.Context(), p.FamilyID, childID); err != nil {
+	if err := s.deps.Accounts.DeleteChild(r.Context(), p.FamilyID, childID, p.ID); err != nil {
 		return err
 	}
 
@@ -735,7 +746,7 @@ func (s *Server) handleCreatePairingCode(w http.ResponseWriter, r *http.Request,
 	}
 
 	expiresAt := s.deps.Now().Add(s.deps.Config.Auth.PairingCodeTTL)
-	if err := s.deps.Accounts.CreatePairingCode(r.Context(), child.ID, code, expiresAt); err != nil {
+	if err := s.deps.Accounts.CreatePairingCode(r.Context(), child.ID, code, expiresAt, p.ID); err != nil {
 		return err
 	}
 
@@ -792,7 +803,7 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request, p au
 		}
 		for _, device := range devices {
 			if device.ID == deviceID {
-				if err := s.deps.Accounts.RevokeDevice(r.Context(), deviceID); err != nil {
+				if err := s.deps.Accounts.RevokeDevice(r.Context(), deviceID, p.ID); err != nil {
 					return err
 				}
 				w.WriteHeader(http.StatusNoContent)

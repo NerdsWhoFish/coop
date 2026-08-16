@@ -5,11 +5,13 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
@@ -135,6 +137,172 @@ func TestAuthThrottlePersistsLockout(t *testing.T) {
 	reopened := NewAccounts(db, fixedClock(now.Add(time.Minute)))
 	if _, locked, err := reopened.AuthLocked(ctx, "test", []string{key}); err != nil || !locked {
 		t.Fatalf("AuthLocked() after repository recreation = (%v, %v), want persisted lock", locked, err)
+	}
+}
+
+func TestAuditEventsRespectParentScopeAndExcludeSecrets(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Audit Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	channel := youtube.Channel{ID: "UCabcdefghijklmnopqrstuv", Title: "Audit channel"}
+	if err := NewCatalog(db, fixedClock(now)).UpsertChannels(ctx, []youtube.Channel{channel}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Channel{}, "id = ?", channel.ID) })
+	rules := NewRules(db, fixedClock(now))
+	if err := rules.AllowGlobally(ctx, family.ID, channel.ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.AllowForChild(ctx, child.ID, channel.ID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SetAPIKey(ctx, family.ID, []byte("sealed-secret-value"), parent.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	audit := NewAudit(db)
+	adminEvents, err := audit.Events(ctx, AuditQuery{FamilyID: family.ID, IncludeGlobal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adminEvents) < 4 {
+		t.Fatalf("admin audit events = %d, want at least 4", len(adminEvents))
+	}
+	for _, event := range adminEvents {
+		if strings.Contains(string(event.Before), "sealed-secret-value") ||
+			strings.Contains(string(event.After), "sealed-secret-value") {
+			t.Fatalf("audit event %s contains secret material", event.Action)
+		}
+	}
+
+	scopedEvents, err := audit.Events(ctx, AuditQuery{
+		FamilyID: family.ID, ChildIDs: []uuid.UUID{child.ID}, IncludeGlobal: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range scopedEvents {
+		if event.ChildID == nil || *event.ChildID != child.ID {
+			t.Fatalf("scoped audit returned global or another-child event: %+v", event)
+		}
+	}
+}
+
+func TestResetParentTOTPRevokesAuthenticationState(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Recovery Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+	if err := db.Model(&parent).Updates(map[string]any{
+		"encrypted_totp_secret": []byte("sealed"), "totp_last_used_step": int64(42),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.CreateSession(ctx, parent.ID, uuid.NewString(), now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.CreateAuthChallenge(ctx, ParentAuthChallenge{
+		ParentID: parent.ID, TokenHash: uuid.NewString(), Purpose: AuthPurposeLogin,
+		ExpiresAt: now.Add(time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := accounts.ResetParentTOTP(ctx, parent.Email); err != nil {
+		t.Fatal(err)
+	}
+	got, err := accounts.Parent(ctx, parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.EncryptedTOTPSecret) != 0 || got.TOTPLastUsedStep != nil {
+		t.Fatalf("parent TOTP state survived reset: %+v", got)
+	}
+	var sessions, challenges int64
+	if err := db.Model(&ParentSession{}).Where("parent_id = ?", parent.ID).Count(&sessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&ParentAuthChallenge{}).Where("parent_id = ?", parent.ID).Count(&challenges).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 || challenges != 0 {
+		t.Fatalf("authentication state after reset = %d sessions and %d challenges, want zero", sessions, challenges)
+	}
+}
+
+func TestUnlockParentLoginOnlyClearsEmailBucket(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Unlock Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+	emailKey := auth.HashToken("parent-email:" + parent.Email)
+	addressKey := auth.HashToken("client-address:192.0.2.1")
+	if err := accounts.RecordAuthFailure(ctx, "parent-login", []string{emailKey, addressKey},
+		1, time.Minute, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UnlockParentLogin(ctx, parent.Email, emailKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, locked, err := accounts.AuthLocked(ctx, "parent-login", []string{emailKey}); err != nil || locked {
+		t.Fatalf("email throttle after unlock = (%v, %v), want unlocked", locked, err)
+	}
+	if _, locked, err := accounts.AuthLocked(ctx, "parent-login", []string{addressKey}); err != nil || !locked {
+		t.Fatalf("address throttle after unlock = (%v, %v), want retained", locked, err)
+	}
+}
+
+func TestDeleteFamilyCascadesTenantData(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	accounts := NewAccounts(db, nil)
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Delete Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.CreateChild(ctx, family.ID, "Cooper", "", parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.DeleteFamily(ctx, family.ID); err != nil {
+		t.Fatal(err)
+	}
+	var families, parents, children int64
+	if err := db.Model(&Family{}).Where("id = ?", family.ID).Count(&families).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&Parent{}).Where("family_id = ?", family.ID).Count(&parents).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&Child{}).Where("family_id = ?", family.ID).Count(&children).Error; err != nil {
+		t.Fatal(err)
+	}
+	if families != 0 || parents != 0 || children != 0 {
+		t.Fatalf("tenant rows after deletion = %d families, %d parents, %d children", families, parents, children)
 	}
 }
 
@@ -376,7 +544,8 @@ func TestFamiliesWithAPIKeysExcludesUnconfiguredFamilies(t *testing.T) {
 	configured := newFamily(t, db)
 	_ = newFamily(t, db)
 
-	if err := NewAccounts(db, nil).SetAPIKey(ctx, configured, []byte("sealed")); err != nil {
+	if err := db.Model(&Family{}).Where("id = ?", configured).
+		Update("encrypted_api_key", []byte("sealed")).Error; err != nil {
 		t.Fatal(err)
 	}
 	families, err := NewAccounts(db, nil).FamiliesWithAPIKeys(ctx)
@@ -403,7 +572,7 @@ func TestParentInvitationIsScopedAndSingleUse(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
 
-	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "")
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "", admin.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +621,7 @@ func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "")
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "", parent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +671,7 @@ func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
 	if err := rules.AllowGlobally(ctx, family.ID, channels[3].ID, parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := rules.DenyForChild(ctx, child.ID, channels[3].ID); err != nil {
+	if err := rules.DenyForChild(ctx, child.ID, channels[3].ID, parent.ID); err != nil {
 		t.Fatal(err)
 	}
 

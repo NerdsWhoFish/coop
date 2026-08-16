@@ -88,7 +88,7 @@ func (s *Server) handleAllowGlobally(w http.ResponseWriter, r *http.Request, p a
 }
 
 func (s *Server) handleDisallowGlobally(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
-	if err := s.deps.Rules.DisallowGlobally(r.Context(), p.FamilyID, r.PathValue("channelId")); err != nil {
+	if err := s.deps.Rules.DisallowGlobally(r.Context(), p.FamilyID, r.PathValue("channelId"), p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -182,7 +182,7 @@ func (s *Server) handleDisallowForChild(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	if err := s.deps.Rules.DisallowForChild(r.Context(), child.ID, r.PathValue("channelId")); err != nil {
+	if err := s.deps.Rules.DisallowForChild(r.Context(), child.ID, r.PathValue("channelId"), p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -198,7 +198,7 @@ func (s *Server) handleDenyForChild(w http.ResponseWriter, r *http.Request, p au
 	if err := s.ensureChannel(r.Context(), p.FamilyID, channelID); err != nil {
 		return err
 	}
-	if err := s.deps.Rules.DenyForChild(r.Context(), child.ID, channelID); err != nil {
+	if err := s.deps.Rules.DenyForChild(r.Context(), child.ID, channelID, p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -210,7 +210,7 @@ func (s *Server) handleUndenyForChild(w http.ResponseWriter, r *http.Request, p 
 	if err != nil {
 		return err
 	}
-	if err := s.deps.Rules.UndenyForChild(r.Context(), child.ID, r.PathValue("channelId")); err != nil {
+	if err := s.deps.Rules.UndenyForChild(r.Context(), child.ID, r.PathValue("channelId"), p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -260,7 +260,7 @@ func (s *Server) handleBlockChannel(w http.ResponseWriter, r *http.Request, p au
 	if err := s.ensureChannel(r.Context(), p.FamilyID, body.ChannelID); err != nil {
 		return err
 	}
-	if err := s.deps.Rules.BlockChannelForFamily(r.Context(), p.FamilyID, body.ChannelID, body.Reason); err != nil {
+	if err := s.deps.Rules.BlockChannelForFamily(r.Context(), p.FamilyID, body.ChannelID, body.Reason, p.ID); err != nil {
 		return err
 	}
 
@@ -272,7 +272,7 @@ func (s *Server) handleUnblockChannel(w http.ResponseWriter, r *http.Request, p 
 	if err := p.RequireAdmin(); err != nil {
 		return err
 	}
-	if err := s.deps.Rules.UnblockChannel(r.Context(), p.FamilyID, r.PathValue("channelId")); err != nil {
+	if err := s.deps.Rules.UnblockChannel(r.Context(), p.FamilyID, r.PathValue("channelId"), p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -341,7 +341,7 @@ func (s *Server) handleCreateKeyword(w http.ResponseWriter, r *http.Request, p a
 		WholeWord:        boolOr(body.WholeWord, true),
 	}
 
-	created, err := s.deps.Rules.CreateKeyword(r.Context(), row)
+	created, err := s.deps.Rules.CreateKeyword(r.Context(), row, p.ID)
 	if err != nil {
 		return err
 	}
@@ -387,7 +387,7 @@ func (s *Server) handleUpdateKeyword(w http.ResponseWriter, r *http.Request, p a
 		return badRequest("no fields to update")
 	}
 
-	if err := s.deps.Rules.UpdateKeyword(r.Context(), p.FamilyID, keywordID, updates); err != nil {
+	if err := s.deps.Rules.UpdateKeyword(r.Context(), p.FamilyID, keywordID, updates, p.ID); err != nil {
 		return err
 	}
 
@@ -400,7 +400,7 @@ func (s *Server) handleDeleteKeyword(w http.ResponseWriter, r *http.Request, p a
 	if err != nil {
 		return err
 	}
-	if err := s.deps.Rules.DeleteKeyword(r.Context(), p.FamilyID, keywordID); err != nil {
+	if err := s.deps.Rules.DeleteKeyword(r.Context(), p.FamilyID, keywordID, p.ID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -533,7 +533,7 @@ func (s *Server) handleDenyRequest(w http.ResponseWriter, r *http.Request, p aut
 			return err
 		}
 		if err := s.deps.Rules.BlockChannelForFamily(r.Context(), p.FamilyID,
-			request.ChannelID, body.Note); err != nil {
+			request.ChannelID, body.Note, p.ID); err != nil {
 			return err
 		}
 	}

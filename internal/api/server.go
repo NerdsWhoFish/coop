@@ -30,6 +30,7 @@ type Deps struct {
 	Rules    *store.Rules
 	Catalog  *store.Catalog
 	Activity *store.Activity
+	Audit    *store.Audit
 	Feed     *feed.Service
 	Quota    *store.QuotaStore
 	Sealer   *crypto.Sealer
@@ -103,9 +104,11 @@ func (s *Server) routes() {
 	}
 
 	parent("GET /api/v1/parent/me", s.handleParentMe)
+	parent("GET /api/v1/parent/audit", s.handleAuditEvents)
 
 	parent("GET /api/v1/parent/family", s.handleGetFamily)
 	parent("PATCH /api/v1/parent/family", s.handleUpdateFamily)
+	parent("DELETE /api/v1/parent/family", s.handleDeleteFamily)
 	parent("PUT /api/v1/parent/family/api-key", s.handleSetAPIKey)
 	parent("GET /api/v1/parent/family/quota", s.handleQuota)
 

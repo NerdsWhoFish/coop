@@ -108,6 +108,14 @@ func (a *Accounts) CompleteAuthChallenge(ctx context.Context, challengeID uuid.U
 		parent.TOTPLastUsedStep = &step
 		if challenge.Purpose == AuthPurposeEnroll {
 			parent.EncryptedTOTPSecret = challenge.EncryptedTOTPSecret
+			if err := appendAudit(tx, auditChange{
+				FamilyID: parent.FamilyID, ActorParentID: &parent.ID,
+				Action: "auth.totp_enroll", TargetType: "parent", TargetID: parent.ID.String(),
+				Before: map[string]any{"enrolled": false}, After: map[string]any{"enrolled": true},
+				CreatedAt: a.now(),
+			}); err != nil {
+				return err
+			}
 		}
 
 		session.ParentID = parent.ID

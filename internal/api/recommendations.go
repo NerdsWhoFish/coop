@@ -96,7 +96,7 @@ func (s *Server) handleSetChildChannelWeight(w http.ResponseWriter, r *http.Requ
 		return badRequest("weight must be between -2 and 2")
 	}
 	if err := s.deps.Feed.SetChannelWeight(
-		r.Context(), p.FamilyID, child.ID, r.PathValue("channelId"), *body.Weight,
+		r.Context(), p.FamilyID, child.ID, r.PathValue("channelId"), *body.Weight, p.ID,
 	); err != nil {
 		return err
 	}

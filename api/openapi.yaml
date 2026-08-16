@@ -183,6 +183,25 @@ paths:
               schema: { $ref: "#/components/schemas/Parent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /parent/audit:
+    get:
+      operationId: listAuditEvents
+      tags: [family]
+      summary: List retained policy changes visible to this parent
+      parameters:
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Newest events first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEvent" }
+
   # Family -------------------------------------------------------------------
 
   /parent/family:
@@ -215,6 +234,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Family" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      operationId: deleteFamily
+      tags: [family]
+      summary: Permanently delete the family and every account and child record
+      description: Admin only. This operation cannot be undone.
+      responses:
+        "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /parent/family/api-key:
@@ -1311,6 +1338,20 @@ components:
       properties:
         secret: { type: string }
         provisioningUrl: { type: string, format: uri }
+
+    AuditEvent:
+      type: object
+      required: [id, action, targetType, targetId, before, after, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorParentId: { type: string, format: uuid }
+        childId: { type: string, format: uuid }
+        action: { type: string }
+        targetType: { type: string }
+        targetId: { type: string }
+        before: { type: object, additionalProperties: true }
+        after: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
 
     Parent:
       type: object

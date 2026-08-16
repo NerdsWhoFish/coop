@@ -9,6 +9,7 @@ struct FamilyView: View {
   @State private var invitation: Components.Schemas.Invitation?
   @State private var showingInvite = false
   @State private var showingAPIKey = false
+  @State private var confirmingDeletion = false
 
   var body: some View {
     NavigationStack {
@@ -68,8 +69,17 @@ struct FamilyView: View {
           }
         }
 
+        Section("History") {
+          NavigationLink("Policy and security activity", destination: AuditView(model: model))
+        }
+
         Section {
           Button("Sign out", role: .destructive) { model.logOut() }
+          if model.parent?.role == .admin {
+            Button("Delete family and all data", role: .destructive) {
+              confirmingDeletion = true
+            }
+          }
         }
       }
       .scrollContentBackground(.hidden)
@@ -88,6 +98,20 @@ struct FamilyView: View {
       }
       .sheet(isPresented: $showingAPIKey) {
         APIKeyView(model: model) { await load() }
+      }
+      .alert("Delete this family?", isPresented: $confirmingDeletion) {
+        Button("Delete permanently", role: .destructive) {
+          Task {
+            do {
+              try await model.deleteFamily()
+            } catch {
+              model.errorMessage = error.localizedDescription
+            }
+          }
+        }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("This permanently deletes every parent account, child profile, rule, activity record, and audit event. This cannot be undone.")
       }
       .coopBackground()
     }
@@ -109,5 +133,43 @@ struct FamilyView: View {
       get: { invitation != nil },
       set: { if !$0 { invitation = nil } }
     )
+  }
+}
+
+private struct AuditView: View {
+  let model: AppModel
+  @State private var events: [Components.Schemas.AuditEvent] = []
+
+  var body: some View {
+    List(events, id: \.id) { event in
+      VStack(alignment: .leading, spacing: 5) {
+        Text(title(for: event.action))
+          .font(.headline)
+        Text("\(event.targetType) · \(event.targetId)")
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+        Text(event.createdAt.formatted(date: .abbreviated, time: .shortened))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .padding(.vertical, 3)
+    }
+    .navigationTitle("Activity history")
+    .overlay {
+      if events.isEmpty {
+        ContentUnavailableView("No changes yet", systemImage: "clock.arrow.circlepath")
+      }
+    }
+    .task {
+      do {
+        events = try await model.auditEvents()
+      } catch {
+        model.errorMessage = error.localizedDescription
+      }
+    }
+  }
+
+  private func title(for action: String) -> String {
+    action.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ").capitalized
   }
 }

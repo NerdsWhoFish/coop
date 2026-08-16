@@ -119,6 +119,19 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func deleteFamily() async throws {
+    guard case .noContent = try await client.deleteFamily() else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func auditEvents(limit: Int = 50) async throws -> [Components.Schemas.AuditEvent] {
+    let query = Operations.ListAuditEvents.Input.Query(before: nil, limit: limit)
+    let output = try await client.listAuditEvents(query: query)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
   public func familyQuota() async throws -> [Components.Schemas.QuotaStatus] {
     let output = try await client.getFamilyQuota()
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }

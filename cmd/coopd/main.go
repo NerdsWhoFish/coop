@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nerdswhofish/coop/internal/api"
+	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/cleanup"
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
@@ -46,6 +48,10 @@ Commands:
   migrate        Apply pending database migrations
   migrate-down   Roll back the most recent migration
   healthcheck    Check the local server readiness endpoint
+  auth-reset-totp --email ADDRESS
+                 Clear TOTP enrollment and revoke every parent session
+  auth-unlock --email ADDRESS
+                 Clear the email-specific parent login throttle
   version        Print build information
 
 Flags:
@@ -104,6 +110,29 @@ func run() error {
 		}
 		return logVersion(db, logger, "migration rolled back")
 
+	case "auth-reset-totp":
+		email, err := recoveryEmail(command, flag.Args()[1:])
+		if err != nil {
+			return err
+		}
+		if err := store.NewAccounts(db, time.Now).ResetParentTOTP(ctx, email); err != nil {
+			return err
+		}
+		logger.Info("parent TOTP reset and sessions revoked", "email", email)
+		return nil
+
+	case "auth-unlock":
+		email, err := recoveryEmail(command, flag.Args()[1:])
+		if err != nil {
+			return err
+		}
+		emailKey := auth.HashToken("parent-email:" + email)
+		if err := store.NewAccounts(db, time.Now).UnlockParentLogin(ctx, email, emailKey); err != nil {
+			return err
+		}
+		logger.Info("parent login unlocked", "email", email)
+		return nil
+
 	case "serve":
 		return serve(ctx, cfg, db, logger)
 
@@ -111,6 +140,20 @@ func run() error {
 		usage()
 		return fmt.Errorf("unknown command %q", command)
 	}
+}
+
+func recoveryEmail(command string, args []string) (string, error) {
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	email := flags.String("email", "", "parent email address")
+	if err := flags.Parse(args); err != nil {
+		return "", fmt.Errorf("%s: %w", command, err)
+	}
+	normalized := strings.ToLower(strings.TrimSpace(*email))
+	if normalized == "" || flags.NArg() != 0 {
+		return "", fmt.Errorf("usage: coopd [global flags] %s --email ADDRESS", command)
+	}
+	return normalized, nil
 }
 
 func runHealthcheck() error {
@@ -172,6 +215,7 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	rules := store.NewRules(db, time.Now)
 	catalog := store.NewCatalog(db, time.Now)
 	activity := store.NewActivity(db, time.Now)
+	audit := store.NewAudit(db)
 	cache := store.NewAPICacheStore(db, time.Now)
 	quota := store.NewQuotaStore(db, time.Now)
 	youtubeClients, err := youtubeclient.NewFactory(cfg.YouTube, accounts, cache, quota, sealer, time.Now)
@@ -198,6 +242,7 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		Rules:    rules,
 		Catalog:  catalog,
 		Activity: activity,
+		Audit:    audit,
 		Feed:     feed.New(catalog, rules, activity),
 		Quota:    quota,
 		Sealer:   sealer,

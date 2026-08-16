@@ -217,7 +217,7 @@ func (s *Service) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[st
 
 // SetChannelWeight changes a soft preference only for an approved channel.
 func (s *Service) SetChannelWeight(ctx context.Context, familyID, childID uuid.UUID,
-	channelID string, weight int) error {
+	channelID string, weight int, actorID uuid.UUID) error {
 
 	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
 	if err != nil {
@@ -226,7 +226,7 @@ func (s *Service) SetChannelWeight(ctx context.Context, familyID, childID uuid.U
 	if evaluator.Channel(channelID) != domain.StateAllowed {
 		return store.ErrNotFound
 	}
-	return s.activity.SetChannelWeight(ctx, childID, channelID, weight)
+	return s.activity.SetChannelWeight(ctx, childID, channelID, weight, actorID)
 }
 
 func rankCandidates(videos []store.Video) []rank.Candidate {

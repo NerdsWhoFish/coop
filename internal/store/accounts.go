@@ -138,6 +138,20 @@ func (a *Accounts) Family(ctx context.Context, id uuid.UUID) (Family, error) {
 	return family, wrap(err, "reading family")
 }
 
+// DeleteFamily permanently removes a family and all tenant-owned data through
+// the database's cascading foreign keys. It intentionally does not retain an
+// audit event because the deletion request includes the audit history itself.
+func (a *Accounts) DeleteFamily(ctx context.Context, id uuid.UUID) error {
+	result := a.db.WithContext(ctx).Delete(&Family{}, "id = ?", id)
+	if result.Error != nil {
+		return fmt.Errorf("deleting family: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // FamiliesWithAPIKeys lists the tenants that can perform YouTube work.
 // Instances normally contain one family, but keeping the worker tenant-aware
 // costs nothing and preserves the isolation already enforced by the ledger.
@@ -151,7 +165,8 @@ func (a *Accounts) FamiliesWithAPIKeys(ctx context.Context) ([]Family, error) {
 }
 
 // UpdateFamily changes a family's display settings.
-func (a *Accounts) UpdateFamily(ctx context.Context, id uuid.UUID, name, timezone string) error {
+func (a *Accounts) UpdateFamily(ctx context.Context, id uuid.UUID, name, timezone string,
+	actorID uuid.UUID) error {
 	updates := map[string]any{"updated_at": a.now()}
 	if name != "" {
 		updates["name"] = name
@@ -159,16 +174,49 @@ func (a *Accounts) UpdateFamily(ctx context.Context, id uuid.UUID, name, timezon
 	if timezone != "" {
 		updates["timezone"] = timezone
 	}
-	return wrap(a.db.WithContext(ctx).Model(&Family{}).
-		Where("id = ?", id).Updates(updates).Error, "updating family")
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var before Family
+		if err := tx.First(&before, "id = ?", id).Error; err != nil {
+			return wrap(err, "reading family before update")
+		}
+		if err := tx.Model(&Family{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			return fmt.Errorf("updating family: %w", err)
+		}
+		var after Family
+		if err := tx.First(&after, "id = ?", id).Error; err != nil {
+			return fmt.Errorf("reading family after update: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: id, ActorParentID: &actorID, Action: "family.update",
+			TargetType: "family", TargetID: id.String(), Before: familyAuditState(before),
+			After: familyAuditState(after), CreatedAt: a.now(),
+		})
+	})
 }
 
 // SetAPIKey stores an already-encrypted YouTube API key.
-func (a *Accounts) SetAPIKey(ctx context.Context, familyID uuid.UUID, sealed []byte) error {
-	return wrap(a.db.WithContext(ctx).Model(&Family{}).
-		Where("id = ?", familyID).
-		Updates(map[string]any{"encrypted_api_key": sealed, "updated_at": a.now()}).Error,
-		"storing api key")
+func (a *Accounts) SetAPIKey(ctx context.Context, familyID uuid.UUID, sealed []byte,
+	actorID uuid.UUID) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var family Family
+		if err := tx.First(&family, "id = ?", familyID).Error; err != nil {
+			return wrap(err, "reading family before API key update")
+		}
+		before := map[string]any{"configured": len(family.EncryptedAPIKey) > 0}
+		if err := tx.Model(&Family{}).Where("id = ?", familyID).
+			Updates(map[string]any{"encrypted_api_key": sealed, "updated_at": a.now()}).Error; err != nil {
+			return fmt.Errorf("storing api key: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, Action: "family.api_key_replace",
+			TargetType: "family", TargetID: familyID.String(), Before: before,
+			After: map[string]any{"configured": true}, CreatedAt: a.now(),
+		})
+	})
+}
+
+func familyAuditState(family Family) map[string]any {
+	return map[string]any{"name": family.Name, "timezone": family.Timezone}
 }
 
 // ParentByEmail looks up a parent for sign-in.
@@ -176,6 +224,58 @@ func (a *Accounts) ParentByEmail(ctx context.Context, email string) (Parent, err
 	var parent Parent
 	err := a.db.WithContext(ctx).First(&parent, "email = ?", normalizeEmail(email)).Error
 	return parent, wrap(err, "reading parent by email")
+}
+
+// ResetParentTOTP clears a parent's authenticator enrollment and revokes every
+// session and in-flight challenge. This is deliberately exposed only through
+// the host CLI, never the HTTP API.
+func (a *Accounts) ResetParentTOTP(ctx context.Context, email string) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var parent Parent
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&parent, "email = ?", normalizeEmail(email)).Error; err != nil {
+			return wrap(err, "reading parent for TOTP reset")
+		}
+		if err := tx.Model(&parent).Updates(map[string]any{
+			"encrypted_totp_secret": nil,
+			"totp_last_used_step":   nil,
+			"updated_at":            a.now(),
+		}).Error; err != nil {
+			return fmt.Errorf("resetting parent TOTP: %w", err)
+		}
+		if err := tx.Where("parent_id = ?", parent.ID).Delete(&ParentSession{}).Error; err != nil {
+			return fmt.Errorf("revoking parent sessions after TOTP reset: %w", err)
+		}
+		if err := tx.Where("parent_id = ?", parent.ID).Delete(&ParentAuthChallenge{}).Error; err != nil {
+			return fmt.Errorf("invalidating parent challenges after TOTP reset: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: parent.FamilyID, Action: "parent.totp_reset", TargetType: "parent",
+			TargetID: parent.ID.String(), Before: map[string]any{"enrolled": len(parent.EncryptedTOTPSecret) > 0},
+			After: map[string]any{"enrolled": false}, CreatedAt: a.now(),
+		})
+	})
+}
+
+// UnlockParentLogin removes the email-specific login throttle while leaving
+// address-wide throttles intact, so recovering one account does not unblock a
+// hostile source address for every account.
+func (a *Accounts) UnlockParentLogin(ctx context.Context, email, emailKeyHash string) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var parent Parent
+		if err := tx.First(&parent, "email = ?", normalizeEmail(email)).Error; err != nil {
+			return wrap(err, "reading parent for login unlock")
+		}
+		result := tx.Delete(&AuthThrottle{}, "action = ? AND key_hash = ?", "parent-login", emailKeyHash)
+		if result.Error != nil {
+			return fmt.Errorf("unlocking parent login: %w", result.Error)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: parent.FamilyID, Action: "parent.login_unlock", TargetType: "parent",
+			TargetID: parent.ID.String(), Before: map[string]any{"locked": result.RowsAffected > 0},
+			After: map[string]any{"locked": false}, CreatedAt: a.now(),
+		})
+	})
 }
 
 // Parent reads one parent.
@@ -229,7 +329,13 @@ func (a *Accounts) CreateParentInvitation(ctx context.Context, invitation Parent
 			return fmt.Errorf("creating parent invitation: %w", err)
 		}
 		if len(childIDs) == 0 {
-			return nil
+			return appendAudit(tx, auditChange{
+				FamilyID: invitation.FamilyID, ActorParentID: &invitation.CreatedBy,
+				Action: "parent.invitation_create", TargetType: "invitation",
+				TargetID: invitation.ID.String(), Before: map[string]any{},
+				After:     map[string]any{"email": invitation.Email, "role": invitation.Role, "childIds": childIDs},
+				CreatedAt: a.now(),
+			})
 		}
 
 		scopes := make([]ParentInvitationScope, len(childIDs))
@@ -239,7 +345,13 @@ func (a *Accounts) CreateParentInvitation(ctx context.Context, invitation Parent
 		if err := tx.Create(&scopes).Error; err != nil {
 			return fmt.Errorf("writing parent invitation scope: %w", err)
 		}
-		return nil
+		return appendAudit(tx, auditChange{
+			FamilyID: invitation.FamilyID, ActorParentID: &invitation.CreatedBy,
+			Action: "parent.invitation_create", TargetType: "invitation",
+			TargetID: invitation.ID.String(), Before: map[string]any{},
+			After:     map[string]any{"email": invitation.Email, "role": invitation.Role, "childIds": childIDs},
+			CreatedAt: a.now(),
+		})
 	})
 	if err != nil {
 		return ParentInvitation{}, err
@@ -290,7 +402,12 @@ func (a *Accounts) RedeemParentInvitation(ctx context.Context, tokenHash,
 		if err := tx.Model(&invitation).Update("used_at", usedAt).Error; err != nil {
 			return fmt.Errorf("consuming parent invitation: %w", err)
 		}
-		return nil
+		return appendAudit(tx, auditChange{
+			FamilyID: parent.FamilyID, ActorParentID: &parent.ID,
+			Action: "parent.invitation_redeem", TargetType: "parent", TargetID: parent.ID.String(),
+			Before: map[string]any{}, After: map[string]any{"email": parent.Email, "role": parent.Role},
+			CreatedAt: usedAt,
+		})
 	})
 	if err != nil {
 		return Parent{}, err
@@ -299,7 +416,7 @@ func (a *Accounts) RedeemParentInvitation(ctx context.Context, tokenHash,
 }
 
 // DeleteParent removes a parent, refusing to strand a family without an admin.
-func (a *Accounts) DeleteParent(ctx context.Context, familyID, parentID uuid.UUID) error {
+func (a *Accounts) DeleteParent(ctx context.Context, familyID, parentID, actorID uuid.UUID) error {
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var parent Parent
 		if err := tx.First(&parent, "id = ? AND family_id = ?", parentID, familyID).Error; err != nil {
@@ -316,6 +433,14 @@ func (a *Accounts) DeleteParent(ctx context.Context, familyID, parentID uuid.UUI
 			if admins <= 1 {
 				return ErrLastAdmin
 			}
+		}
+		if err := appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID,
+			Action: "parent.delete", TargetType: "parent", TargetID: parentID.String(),
+			Before: map[string]any{"email": parent.Email, "role": parent.Role},
+			After:  map[string]any{}, CreatedAt: a.now(),
+		}); err != nil {
+			return err
 		}
 		return wrap(tx.Delete(&Parent{}, "id = ?", parentID).Error, "deleting parent")
 	})
@@ -338,9 +463,27 @@ func (a *Accounts) ScopedChildIDs(ctx context.Context, parentID uuid.UUID) ([]uu
 }
 
 // SetScope replaces which children a parent may act on.
-func (a *Accounts) SetScope(ctx context.Context, parentID uuid.UUID, childIDs []uuid.UUID) error {
+func (a *Accounts) SetScope(ctx context.Context, parentID uuid.UUID, childIDs []uuid.UUID,
+	actorID uuid.UUID) error {
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return setScopeTx(tx, parentID, childIDs)
+		var parent Parent
+		if err := tx.First(&parent, "id = ?", parentID).Error; err != nil {
+			return wrap(err, "reading scoped parent")
+		}
+		var before []uuid.UUID
+		if err := tx.Model(&ParentScope{}).Where("parent_id = ?", parentID).
+			Pluck("child_id", &before).Error; err != nil {
+			return fmt.Errorf("reading parent scope: %w", err)
+		}
+		if err := setScopeTx(tx, parentID, childIDs); err != nil {
+			return err
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: parent.FamilyID, ActorParentID: &actorID,
+			Action: "parent.scope_update", TargetType: "parent", TargetID: parentID.String(),
+			Before: map[string]any{"childIds": before}, After: map[string]any{"childIds": childIDs},
+			CreatedAt: a.now(),
+		})
 	})
 }
 
@@ -422,7 +565,8 @@ func (a *Accounts) PurgeParentInvitations(ctx context.Context) (int64, error) {
 }
 
 // CreateChild adds a viewing profile.
-func (a *Accounts) CreateChild(ctx context.Context, familyID uuid.UUID, name, avatarID string) (Child, error) {
+func (a *Accounts) CreateChild(ctx context.Context, familyID uuid.UUID, name, avatarID string,
+	actorID uuid.UUID) (Child, error) {
 	child := Child{
 		FamilyID:          familyID,
 		Name:              name,
@@ -431,8 +575,17 @@ func (a *Accounts) CreateChild(ctx context.Context, familyID uuid.UUID, name, av
 		WatchPageAutoplay: false,
 		VideoSearchTiles:  true,
 	}
-	err := a.db.WithContext(ctx).Create(&child).Error
-	return child, wrap(err, "creating child")
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&child).Error; err != nil {
+			return fmt.Errorf("creating child: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &child.ID,
+			Action: "child.create", TargetType: "child", TargetID: child.ID.String(),
+			Before: map[string]any{}, After: childAuditState(child), CreatedAt: a.now(),
+		})
+	})
+	return child, err
 }
 
 // Child reads one child within a family.
@@ -466,7 +619,7 @@ type ChildSettings struct {
 
 // UpdateChild applies the settings that were supplied.
 func (a *Accounts) UpdateChild(ctx context.Context, familyID, childID uuid.UUID,
-	settings ChildSettings) error {
+	settings ChildSettings, actorID uuid.UUID) error {
 
 	updates := map[string]any{"updated_at": a.now()}
 	if settings.Name != nil {
@@ -488,37 +641,83 @@ func (a *Accounts) UpdateChild(ctx context.Context, familyID, childID uuid.UUID,
 		updates["daily_search_limit"] = *settings.DailySearchLimit
 	}
 
-	result := a.db.WithContext(ctx).Model(&Child{}).
-		Where("id = ? AND family_id = ?", childID, familyID).
-		Updates(updates)
-	if result.Error != nil {
-		return fmt.Errorf("updating child: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var before Child
+		if err := tx.First(&before, "id = ? AND family_id = ?", childID, familyID).Error; err != nil {
+			return wrap(err, "reading child before update")
+		}
+		result := tx.Model(&Child{}).Where("id = ? AND family_id = ?", childID, familyID).Updates(updates)
+		if result.Error != nil {
+			return fmt.Errorf("updating child: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		var after Child
+		if err := tx.First(&after, "id = ?", childID).Error; err != nil {
+			return fmt.Errorf("reading child after update: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &childID,
+			Action: "child.update", TargetType: "child", TargetID: childID.String(),
+			Before: childAuditState(before), After: childAuditState(after), CreatedAt: a.now(),
+		})
+	})
 }
 
 // DeleteChild removes a child and everything belonging to them.
-func (a *Accounts) DeleteChild(ctx context.Context, familyID, childID uuid.UUID) error {
-	result := a.db.WithContext(ctx).
-		Delete(&Child{}, "id = ? AND family_id = ?", childID, familyID)
-	if result.Error != nil {
-		return fmt.Errorf("deleting child: %w", result.Error)
+func (a *Accounts) DeleteChild(ctx context.Context, familyID, childID, actorID uuid.UUID) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var before Child
+		if err := tx.First(&before, "id = ? AND family_id = ?", childID, familyID).Error; err != nil {
+			return wrap(err, "reading child before delete")
+		}
+		if err := appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &childID,
+			Action: "child.delete", TargetType: "child", TargetID: childID.String(),
+			Before: childAuditState(before), After: map[string]any{}, CreatedAt: a.now(),
+		}); err != nil {
+			return err
+		}
+		result := tx.Delete(&Child{}, "id = ? AND family_id = ?", childID, familyID)
+		if result.Error != nil {
+			return fmt.Errorf("deleting child: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+func childAuditState(child Child) map[string]any {
+	return map[string]any{
+		"name": child.Name, "avatarId": child.AvatarID,
+		"shortsEnabled": child.ShortsEnabled, "watchPageAutoplay": child.WatchPageAutoplay,
+		"videoSearchTiles": child.VideoSearchTiles, "dailySearchLimit": child.DailySearchLimit,
 	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 // CreatePairingCode mints a single-use code bound to a child.
 func (a *Accounts) CreatePairingCode(ctx context.Context, childID uuid.UUID,
-	code string, expiresAt time.Time) error {
+	code string, expiresAt time.Time, actorID uuid.UUID) error {
 
 	row := PairingCode{Code: code, ChildID: childID, ExpiresAt: expiresAt}
-	return wrap(a.db.WithContext(ctx).Create(&row).Error, "creating pairing code")
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		familyID, err := familyIDForChild(tx, childID)
+		if err != nil {
+			return err
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return fmt.Errorf("creating pairing code: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &childID,
+			Action: "device.pairing_code_create", TargetType: "child", TargetID: childID.String(),
+			Before: map[string]any{}, After: map[string]any{"expiresAt": expiresAt},
+			CreatedAt: a.now(),
+		})
+	})
 }
 
 // RedeemPairingCode consumes a code and registers a device in one transaction.
@@ -552,7 +751,15 @@ func (a *Accounts) RedeemPairingCode(ctx context.Context, code, deviceName,
 		}
 
 		device = ChildDevice{ChildID: child.ID, Name: deviceName, TokenHash: tokenHash}
-		return wrap(tx.Create(&device).Error, "registering device")
+		if err := tx.Create(&device).Error; err != nil {
+			return fmt.Errorf("registering device: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: child.FamilyID, ChildID: &child.ID,
+			Action: "device.pair", TargetType: "device", TargetID: device.ID.String(),
+			Before: map[string]any{}, After: map[string]any{"name": device.Name},
+			CreatedAt: now,
+		})
 	})
 	if err != nil {
 		return Child{}, ChildDevice{}, err
@@ -597,18 +804,27 @@ func (a *Accounts) Devices(ctx context.Context, childID uuid.UUID) ([]ChildDevic
 
 // RevokeDevice marks a device's token dead. The row is kept so the parent app
 // can still show that the device once existed.
-func (a *Accounts) RevokeDevice(ctx context.Context, deviceID uuid.UUID) error {
-	now := a.now()
-	result := a.db.WithContext(ctx).Model(&ChildDevice{}).
-		Where("id = ? AND revoked_at IS NULL", deviceID).
-		Update("revoked_at", now)
-	if result.Error != nil {
-		return fmt.Errorf("revoking device: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+func (a *Accounts) RevokeDevice(ctx context.Context, deviceID, actorID uuid.UUID) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var device ChildDevice
+		if err := tx.First(&device, "id = ? AND revoked_at IS NULL", deviceID).Error; err != nil {
+			return wrap(err, "reading device before revocation")
+		}
+		familyID, err := familyIDForChild(tx, device.ChildID)
+		if err != nil {
+			return err
+		}
+		now := a.now()
+		if err := tx.Model(&device).Update("revoked_at", now).Error; err != nil {
+			return fmt.Errorf("revoking device: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &device.ChildID,
+			Action: "device.revoke", TargetType: "device", TargetID: device.ID.String(),
+			Before: map[string]any{"active": true, "name": device.Name},
+			After:  map[string]any{"active": false, "name": device.Name}, CreatedAt: now,
+		})
+	})
 }
 
 // PurgeExpiredPairingCodes drops codes that were never redeemed.

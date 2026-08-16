@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -270,6 +271,26 @@ type authChallengeDTO struct {
 	ExpiresAt time.Time          `json:"expiresAt"`
 	Method    string             `json:"method"`
 	Enroll    *authEnrollmentDTO `json:"enrollment,omitempty"`
+}
+
+type auditEventDTO struct {
+	ID            uuid.UUID       `json:"id"`
+	ActorParentID *uuid.UUID      `json:"actorParentId,omitempty"`
+	ChildID       *uuid.UUID      `json:"childId,omitempty"`
+	Action        string          `json:"action"`
+	TargetType    string          `json:"targetType"`
+	TargetID      string          `json:"targetId"`
+	Before        json.RawMessage `json:"before"`
+	After         json.RawMessage `json:"after"`
+	CreatedAt     time.Time       `json:"createdAt"`
+}
+
+func newAuditEventDTO(event store.AuditEvent) auditEventDTO {
+	return auditEventDTO{
+		ID: event.ID, ActorParentID: event.ActorParentID, ChildID: event.ChildID,
+		Action: event.Action, TargetType: event.TargetType, TargetID: event.TargetID,
+		Before: event.Before, After: event.After, CreatedAt: event.CreatedAt,
+	}
 }
 
 type pairingCodeDTO struct {

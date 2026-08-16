@@ -65,7 +65,7 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "")
+	child, err := accounts.CreateChild(ctx, family.ID, "Cooper", "", parent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 	if err := rules.AllowGlobally(ctx, family.ID, allowedChannel, parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := rules.BlockChannelForFamily(ctx, family.ID, blockedChannel, "test"); err != nil {
+	if err := rules.BlockChannelForFamily(ctx, family.ID, blockedChannel, "test", parent.ID); err != nil {
 		t.Fatal(err)
 	}
 	keyword, err := rules.CreateKeyword(ctx, store.Keyword{
@@ -106,7 +106,7 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 		MatchTitle: true,
 		MatchTags:  true,
 		WholeWord:  true,
-	})
+	}, parent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := accounts.SetAPIKey(ctx, family.ID, sealedKey); err != nil {
+	if err := accounts.SetAPIKey(ctx, family.ID, sealedKey, parent.ID); err != nil {
 		t.Fatal(err)
 	}
 

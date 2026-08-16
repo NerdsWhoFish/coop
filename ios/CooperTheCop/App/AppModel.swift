@@ -332,6 +332,17 @@ final class AppModel {
     return try await api.family()
   }
 
+  func auditEvents() async throws -> [Components.Schemas.AuditEvent] {
+    guard let api else { return [] }
+    return try await api.auditEvents()
+  }
+
+  func deleteFamily() async throws {
+    guard let api else { return }
+    try await api.deleteFamily()
+    logOut()
+  }
+
   func familyQuota() async throws -> [Components.Schemas.QuotaStatus] {
     guard let api else { return [] }
     return try await api.familyQuota()

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -165,23 +166,49 @@ func (a *Activity) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[s
 
 // SetChannelWeight stores a soft parent preference. Neutral removes the row.
 func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
-	channelID string, weight int) error {
+	channelID string, weight int, actorID uuid.UUID) error {
 
 	if weight < -2 || weight > 2 {
 		return fmt.Errorf("setting channel weight: weight must be between -2 and 2")
 	}
-	if weight == 0 {
-		return wrap(a.db.WithContext(ctx).
-			Delete(&ChannelWeight{}, "child_id = ? AND channel_id = ?", childID, channelID).Error,
-			"clearing channel weight")
-	}
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		familyID, err := familyIDForChild(tx, childID)
+		if err != nil {
+			return err
+		}
+		before := 0
+		var existing ChannelWeight
+		result := tx.First(&existing, "child_id = ? AND channel_id = ?", childID, channelID)
+		if result.Error == nil {
+			before = existing.Weight
+		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("reading channel weight: %w", result.Error)
+		}
+		if before == weight {
+			return nil
+		}
 
-	row := ChannelWeight{ChildID: childID, ChannelID: channelID, Weight: weight, UpdatedAt: a.now()}
-	err := a.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "child_id"}, {Name: "channel_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"weight", "updated_at"}),
-	}).Create(&row).Error
-	return wrap(err, "setting channel weight")
+		if weight == 0 {
+			if err := tx.Delete(&ChannelWeight{},
+				"child_id = ? AND channel_id = ?", childID, channelID).Error; err != nil {
+				return fmt.Errorf("clearing channel weight: %w", err)
+			}
+		} else {
+			row := ChannelWeight{ChildID: childID, ChannelID: channelID, Weight: weight, UpdatedAt: a.now()}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "child_id"}, {Name: "channel_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"weight", "updated_at"}),
+			}).Create(&row).Error; err != nil {
+				return fmt.Errorf("setting channel weight: %w", err)
+			}
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &childID,
+			Action: "recommendation.channel_weight", TargetType: "channel", TargetID: channelID,
+			Before: map[string]any{"weight": before}, After: map[string]any{"weight": weight},
+			CreatedAt: a.now(),
+		})
+	})
 }
 
 // RaiseRequest records a child asking for a channel. A pending ask is updated
@@ -261,23 +288,30 @@ func (a *Activity) ChildRequests(ctx context.Context, childID uuid.UUID, limit i
 func (a *Activity) DecideRequest(ctx context.Context, requestID, parentID uuid.UUID,
 	status domain.RequestStatus, note string) error {
 
-	now := a.now()
-	result := a.db.WithContext(ctx).Model(&Request{}).
-		Where("id = ? AND status = ?", requestID, domain.RequestPending).
-		Updates(map[string]any{
-			"status":        status,
-			"decided_by":    parentID,
-			"decided_at":    now,
-			"decision_note": note,
-			"updated_at":    now,
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var request Request
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&request, "id = ? AND status = ?", requestID, domain.RequestPending).Error; err != nil {
+			return wrap(err, "reading pending request")
+		}
+		familyID, err := familyIDForChild(tx, request.ChildID)
+		if err != nil {
+			return err
+		}
+		now := a.now()
+		if err := tx.Model(&request).Updates(map[string]any{
+			"status": status, "decided_by": parentID, "decided_at": now,
+			"decision_note": note, "updated_at": now,
+		}).Error; err != nil {
+			return fmt.Errorf("deciding request: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &parentID, ChildID: &request.ChildID,
+			Action: "request.decide", TargetType: "request", TargetID: request.ID.String(),
+			Before: map[string]any{"status": domain.RequestPending},
+			After:  map[string]any{"status": status, "note": note}, CreatedAt: now,
 		})
-	if result.Error != nil {
-		return fmt.Errorf("deciding request: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	})
 }
 
 // PendingRequestCounts reports how many asks each child has waiting.
