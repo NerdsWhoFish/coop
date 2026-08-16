@@ -15,3 +15,5 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0003](0003-allowlist-resolution-semantics.md) | Resolve channel access as three states: blocked, requestable, allowed | accepted | 2026-08-15 |
 | [0004](0004-multi-parent-permission-model.md) | One admin parent plus scoped parents, rather than a single account or equal co-admins | accepted | 2026-08-15 |
 | [0005](0005-mixed-child-search-with-detail-hydration.md) | Use one mixed child search call and hydrate results before policy evaluation | accepted | 2026-08-15 |
+| [0006](0006-native-client-project-generation.md) | Generate the Xcode project and Swift API client from text sources | accepted | 2026-08-16 |
+| [0007](0007-explainable-local-recommendation-ranking.md) | Rank the approved pool with local explainable signals and hard diversity constraints | accepted | 2026-08-16 |
