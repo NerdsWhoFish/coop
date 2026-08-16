@@ -53,6 +53,7 @@ final class AppModel {
   static var showsRecommendationPreview: Bool { uiPreviewScreen == "recommendations" }
   static var showsFamilyPreview: Bool { uiPreviewScreen == "family" }
   static var showsRequestsPreview: Bool { uiPreviewScreen == "requests" }
+  static var showsChildSettingsPreview: Bool { uiPreviewScreen == "child-settings" }
 
   static let recommendationPreviewChild = Components.Schemas.Child(
     value1: .init(id: "preview-child", name: "River", deviceCount: 2, pendingRequestCount: 1),
@@ -60,6 +61,7 @@ final class AppModel {
       shortsEnabled: true,
       watchPageAutoplay: false,
       videoSearchTiles: true,
+      channelDiscoveryEnabled: true,
       dailySearchLimit: 12
     )
   )

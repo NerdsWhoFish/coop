@@ -493,6 +493,13 @@ public actor CoopAPI {
     return try response.body.json.items
   }
 
+  public func childDiscovery(limit: Int = 4) async throws -> [Components.Schemas.Discovery] {
+    let query = Operations.GetChildDiscovery.Input.Query(limit: limit)
+    let output = try await client.getChildDiscovery(query: query)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json.items
+  }
+
   public func childShorts(
     session: String,
     offset: Int,

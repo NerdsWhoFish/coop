@@ -215,10 +215,11 @@ func TestEvaluatorVideo(t *testing.T) {
 func TestEvaluatorSearchVideo(t *testing.T) {
 	keyword := Keyword{ID: "kw", Term: "scary", MatchTitle: true, WholeWord: true}
 	tests := []struct {
-		name  string
-		rules ChannelRules
-		video Video
-		want  Verdict
+		name    string
+		rules   ChannelRules
+		video   Video
+		blocked bool
+		want    Verdict
 	}{
 		{
 			name:  "allowed video is playable",
@@ -246,21 +247,36 @@ func TestEvaluatorSearchVideo(t *testing.T) {
 			want:  VerdictLive,
 		},
 		{
+			name:  "live video from requestable channel is hidden",
+			video: Video{ID: "live-requestable", ChannelID: chOther, LiveState: domain.LiveLive},
+			want:  VerdictLive,
+		},
+		{
+			name:    "individual block hides a requestable video",
+			video:   Video{ID: "blocked-requestable", ChannelID: chOther},
+			blocked: true,
+			want:    VerdictHidden,
+		},
+		{
 			name:  "keyword applies to allowed video",
 			rules: allowedRules(),
 			video: Video{ID: "keyword", ChannelID: chAllowed, Title: "a scary story"},
 			want:  VerdictSuppressed,
 		},
 		{
-			name:  "keyword does not hide a locked tile",
+			name:  "keyword hides a locked tile",
 			video: Video{ID: "locked-keyword", ChannelID: chOther, Title: "a scary story"},
-			want:  VerdictLocked,
+			want:  VerdictSuppressed,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil, nil)
+			blocks := []string(nil)
+			if tt.blocked {
+				blocks = []string{tt.video.ID}
+			}
+			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil, blocks)
 			if got := evaluator.SearchVideo(tt.video).Verdict; got != tt.want {
 				t.Errorf("Verdict = %q, want %q", got, tt.want)
 			}

@@ -175,6 +175,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/child/pair", s.handle(s.handlePair))
 	child("GET /api/v1/child/me", s.handleChildMe)
 	child("GET /api/v1/child/feed", s.handleChildFeed)
+	child("GET /api/v1/child/discovery", s.handleChildDiscovery)
 	child("GET /api/v1/child/shorts", s.handleChildShorts)
 	child("GET /api/v1/child/subscriptions", s.handleChildSubscriptions)
 	child("PUT /api/v1/child/subscriptions/{channelId}", s.handleSubscribe)

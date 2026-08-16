@@ -678,24 +678,26 @@ func (s *Server) handleUpdateChild(w http.ResponseWriter, r *http.Request, p aut
 	}
 
 	var body struct {
-		Name              *string `json:"name"`
-		AvatarID          *string `json:"avatarId"`
-		ShortsEnabled     *bool   `json:"shortsEnabled"`
-		WatchPageAutoplay *bool   `json:"watchPageAutoplay"`
-		VideoSearchTiles  *bool   `json:"videoSearchTiles"`
-		DailySearchLimit  *int    `json:"dailySearchLimit"`
+		Name                    *string `json:"name"`
+		AvatarID                *string `json:"avatarId"`
+		ShortsEnabled           *bool   `json:"shortsEnabled"`
+		WatchPageAutoplay       *bool   `json:"watchPageAutoplay"`
+		VideoSearchTiles        *bool   `json:"videoSearchTiles"`
+		ChannelDiscoveryEnabled *bool   `json:"channelDiscoveryEnabled"`
+		DailySearchLimit        *int    `json:"dailySearchLimit"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		return err
 	}
 
 	err = s.deps.Accounts.UpdateChild(r.Context(), p.FamilyID, child.ID, store.ChildSettings{
-		Name:              body.Name,
-		AvatarID:          body.AvatarID,
-		ShortsEnabled:     body.ShortsEnabled,
-		WatchPageAutoplay: body.WatchPageAutoplay,
-		VideoSearchTiles:  body.VideoSearchTiles,
-		DailySearchLimit:  body.DailySearchLimit,
+		Name:                    body.Name,
+		AvatarID:                body.AvatarID,
+		ShortsEnabled:           body.ShortsEnabled,
+		WatchPageAutoplay:       body.WatchPageAutoplay,
+		VideoSearchTiles:        body.VideoSearchTiles,
+		ChannelDiscoveryEnabled: body.ChannelDiscoveryEnabled,
+		DailySearchLimit:        body.DailySearchLimit,
 	}, p.ID)
 	if err != nil {
 		return err

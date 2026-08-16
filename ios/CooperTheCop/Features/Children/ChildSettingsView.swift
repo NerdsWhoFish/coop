@@ -8,6 +8,7 @@ struct ChildSettingsView: View {
   @State private var name: String
   @State private var shortsEnabled: Bool
   @State private var videoSearchTiles: Bool
+  @State private var channelDiscoveryEnabled: Bool
   @State private var dailySearchLimit: Int
   @State private var pairingCode: Components.Schemas.PairingCode?
   @State private var isWorking = false
@@ -20,6 +21,7 @@ struct ChildSettingsView: View {
     _name = State(initialValue: child.value1.name)
     _shortsEnabled = State(initialValue: child.value2.shortsEnabled ?? false)
     _videoSearchTiles = State(initialValue: child.value2.videoSearchTiles ?? false)
+    _channelDiscoveryEnabled = State(initialValue: child.value2.channelDiscoveryEnabled ?? false)
     _dailySearchLimit = State(initialValue: child.value2.dailySearchLimit ?? 0)
   }
 
@@ -32,13 +34,16 @@ struct ChildSettingsView: View {
       Section {
         Toggle("Show Shorts", isOn: $shortsEnabled)
         Toggle("Show videos in search", isOn: $videoSearchTiles)
+        Toggle("Suggest new channels", isOn: $channelDiscoveryEnabled)
         Stepper(value: $dailySearchLimit, in: 0...100) {
           LabeledContent("Daily searches", value: searchLimitLabel)
         }
       } header: {
         Text("Discovery")
       } footer: {
-        Text("A zero search limit uses the family-wide budget without adding a child-specific cap.")
+        Text(
+          "New-channel suggestions are locked until approved. A zero search limit uses the family-wide budget without adding a child-specific cap."
+        )
       }
 
       Section("Device pairing") {
@@ -109,6 +114,7 @@ struct ChildSettingsView: View {
       shortsEnabled: shortsEnabled,
       watchPageAutoplay: nil,
       videoSearchTiles: videoSearchTiles,
+      channelDiscoveryEnabled: channelDiscoveryEnabled,
       dailySearchLimit: dailySearchLimit
     )
     Task {

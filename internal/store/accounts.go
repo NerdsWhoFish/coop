@@ -568,12 +568,13 @@ func (a *Accounts) PurgeParentInvitations(ctx context.Context) (int64, error) {
 func (a *Accounts) CreateChild(ctx context.Context, familyID uuid.UUID, name, avatarID string,
 	actorID uuid.UUID) (Child, error) {
 	child := Child{
-		FamilyID:          familyID,
-		Name:              name,
-		AvatarID:          avatarID,
-		ShortsEnabled:     true,
-		WatchPageAutoplay: false,
-		VideoSearchTiles:  true,
+		FamilyID:                familyID,
+		Name:                    name,
+		AvatarID:                avatarID,
+		ShortsEnabled:           true,
+		WatchPageAutoplay:       false,
+		VideoSearchTiles:        true,
+		ChannelDiscoveryEnabled: false,
 	}
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&child).Error; err != nil {
@@ -609,12 +610,13 @@ func (a *Accounts) Children(ctx context.Context, familyID uuid.UUID) ([]Child, e
 // ChildSettings is the mutable part of a child profile. Nil fields are left
 // unchanged, which is what lets the parent app PATCH one toggle at a time.
 type ChildSettings struct {
-	Name              *string
-	AvatarID          *string
-	ShortsEnabled     *bool
-	WatchPageAutoplay *bool
-	VideoSearchTiles  *bool
-	DailySearchLimit  *int
+	Name                    *string
+	AvatarID                *string
+	ShortsEnabled           *bool
+	WatchPageAutoplay       *bool
+	VideoSearchTiles        *bool
+	ChannelDiscoveryEnabled *bool
+	DailySearchLimit        *int
 }
 
 // UpdateChild applies the settings that were supplied.
@@ -636,6 +638,9 @@ func (a *Accounts) UpdateChild(ctx context.Context, familyID, childID uuid.UUID,
 	}
 	if settings.VideoSearchTiles != nil {
 		updates["video_search_tiles"] = *settings.VideoSearchTiles
+	}
+	if settings.ChannelDiscoveryEnabled != nil {
+		updates["channel_discovery_enabled"] = *settings.ChannelDiscoveryEnabled
 	}
 	if settings.DailySearchLimit != nil {
 		updates["daily_search_limit"] = *settings.DailySearchLimit
@@ -694,7 +699,9 @@ func childAuditState(child Child) map[string]any {
 	return map[string]any{
 		"name": child.Name, "avatarId": child.AvatarID,
 		"shortsEnabled": child.ShortsEnabled, "watchPageAutoplay": child.WatchPageAutoplay,
-		"videoSearchTiles": child.VideoSearchTiles, "dailySearchLimit": child.DailySearchLimit,
+		"videoSearchTiles":        child.VideoSearchTiles,
+		"channelDiscoveryEnabled": child.ChannelDiscoveryEnabled,
+		"dailySearchLimit":        child.DailySearchLimit,
 	}
 }
 

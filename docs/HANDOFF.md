@@ -5,8 +5,8 @@ Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the b
 
 Status: **Phases 0 through 4 and Phase 6 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
-The native parent app covers the complete Phase 2 and 6 surfaces: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, scoped parent invitations, explainable feed previews, and per-channel recommendation tuning.
-The native child app covers the complete Phase 3 and 4 surface: secure pairing, home and subscription feeds, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, sharing, and a shuffled vertical Shorts feed.
+The native parent app covers the complete Phase 2 and 6 surfaces: setup, Keychain sessions, children and devices, requests, policy, suppressions, per-child discovery controls, channel review links, API-key and quota status, scoped parent invitations, explainable feed previews, and per-channel recommendation tuning.
+The native child app covers the complete Phase 3 and 4 surface: secure pairing, home and subscription feeds, opt-in locked channel discovery, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, sharing, and a shuffled vertical Shorts feed.
 
 ---
 
@@ -40,6 +40,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - One-minute approval polling separated from the six-hour quota-bearing uploads refresh.
 - Daily cleanup of expired cache entries, sessions, pairing codes, parent invitations, and prior-day ledgers.
 - Mixed channel-and-video child search with locked requestable results and full policy filtering.
+- Opt-in, preference-derived new-channel discovery with locked Home and Watch Next cards, explanations, and the existing approval workflow.
 - Thumbnail proxy.
 - Native parent and child apps, including a single-player Shorts feed with snap paging, looping, reactions, watch reporting, and parent-controlled visibility.
 - A pure local ranker that prioritizes explicit preferences and completion while reserving feed space for variety, forgotten channels, and unwatched videos.

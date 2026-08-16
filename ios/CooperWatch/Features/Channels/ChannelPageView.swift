@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChannelPageView: View {
   let channelID: String
+  var promptedByVideoID: String?
   @Bindable var model: ChildAppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var page: Components.Schemas.ChannelPage?
@@ -103,7 +104,7 @@ struct ChannelPageView: View {
     isWorking = true
     Task {
       do {
-        try await model.requestChannel(channelID: channelID)
+        try await model.requestChannel(channelID: channelID, videoID: promptedByVideoID)
         withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) { asked = true }
       } catch { model.errorMessage = error.localizedDescription }
       isWorking = false

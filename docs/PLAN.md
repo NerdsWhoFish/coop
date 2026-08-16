@@ -492,8 +492,9 @@ A fully-offline demo mode is the fallback if a live dependency is ever objected 
 Not ads, and not link-outs: **intellectual property, 5.2.1 and 5.2.2.**
 A kid-oriented app curating YouTube videos through the official embed was rejected for including copyrighted material it had no rights to.
 
-The mitigation is architectural and already how Coop works: **the parent supplies every channel.**
+The mitigation is architectural and already how Coop works: **the parent approves every watchable channel.**
 Coop ships no curated library and no starter pack of recommended channels. It is a tool, not a catalog.
+Optional discovery may show policy-filtered metadata from a requestable channel, but the child cannot play anything from it until a parent approves the channel.
 
 ---
 

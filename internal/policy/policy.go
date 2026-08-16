@@ -236,21 +236,29 @@ func (e *Evaluator) Video(v Video) Decision {
 }
 
 // SearchVideo preserves the distinction browsing needs between a blocked
-// channel, which is invisible, and a requestable channel, whose videos appear
-// locked with an ask affordance. Allowed videos still pass through the normal
-// live and keyword rules.
+// channel, which is invisible, and a requestable channel, whose safe metadata
+// appears locked with an ask affordance. Playback approval does not make an
+// unreviewed title or thumbnail exempt from live, video-block, or keyword rules.
 func (e *Evaluator) SearchVideo(v Video) Decision {
 	if e.blocks.Has(v.ID) {
 		return Decision{Verdict: VerdictHidden}
 	}
-	switch e.rules.State(v.ChannelID) {
-	case domain.StateBlocked:
+	state := e.rules.State(v.ChannelID)
+	if state == domain.StateBlocked {
 		return Decision{Verdict: VerdictHidden}
-	case domain.StateRequestable:
-		return Decision{Verdict: VerdictLocked}
-	default:
-		return e.Video(v)
 	}
+	if v.LiveState.IsLive() {
+		return Decision{Verdict: VerdictLive}
+	}
+	if !e.overrides.Has(v.ID) {
+		if match := e.matcher.Match(v); match != nil {
+			return Decision{Verdict: VerdictSuppressed, Match: match}
+		}
+	}
+	if state == domain.StateRequestable {
+		return Decision{Verdict: VerdictLocked}
+	}
+	return Decision{Verdict: VerdictServe}
 }
 
 // Suppression is a keyword hit worth recording for the parent's review.

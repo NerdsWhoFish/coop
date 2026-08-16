@@ -10,8 +10,8 @@ No Google account on the child's device. No comments, in either direction. No li
 
 > **Status: pre-release.** Phases 0 through 6 are implemented.
 > The backend builds, migrates, serves, and keeps approved channels ingested.
-> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, scoped parent invitations, and explainable recommendation tuning.
-> The child app handles pairing, approved feeds and channels, subscriptions, mixed search and approval requests, embedded playback, local reactions, sharing, and a policy-filtered Shorts feed.
+> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, per-child discovery controls, family settings, scoped parent invitations, and explainable recommendation tuning.
+> The child app handles pairing, approved feeds and channels, opt-in locked channel discovery, subscriptions, mixed search and approval requests, embedded playback, local reactions, sharing, and a policy-filtered Shorts feed.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md) for where things stand, the invariants worth not breaking, and what to build next.
 > The full design is in [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls is in [adr/](adr/).
@@ -42,6 +42,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Local subscriptions, likes, and dislikes** that never touch YouTube.
 - **No livestreams**, including finished livestream VODs.
 - **Child search across channels and videos**, with blocked results hidden and requestable videos locked behind approval.
+- **Opt-in new-channel discovery**, mixed conservatively into Home and Watch Next with explanations and the same approval boundary as search.
 - **A shuffled, looping Shorts feed** that mounts only the visible player and never includes locked channels.
 - **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data.
 

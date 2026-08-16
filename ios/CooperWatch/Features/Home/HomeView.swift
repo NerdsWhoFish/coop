@@ -6,7 +6,7 @@ struct HomeView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        if model.feed.isEmpty {
+        if model.feed.isEmpty && model.discoveries.isEmpty {
           ContentUnavailableView(
             "Your shelf is ready",
             systemImage: "sparkles.tv",
@@ -14,8 +14,16 @@ struct HomeView: View {
           )
           .containerRelativeFrame(.vertical, alignment: .center)
         } else {
-          VideoGrid(videos: model.feed, model: model)
-            .padding()
+          VStack(alignment: .leading, spacing: 30) {
+            VideoGrid(videos: Array(model.feed.prefix(9)), model: model)
+            DiscoveryShelf(
+              title: "Discover something new",
+              discoveries: Array(model.discoveries.prefix(3)),
+              model: model
+            )
+            VideoGrid(videos: Array(model.feed.dropFirst(9)), model: model)
+          }
+          .padding()
         }
       }
       .refreshable { await model.loadLibrary() }

@@ -1015,6 +1015,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/VideoPage" }
 
+  /child/discovery:
+    get:
+      operationId: getChildDiscovery
+      tags: [child-browse]
+      summary: Locked videos from requestable channels that match this child
+      description: |
+        Returns nothing unless a parent enables channel discovery for this
+        child. Results are cached, exclude approved and blocked channels,
+        pass live, video-block, and keyword policy, and can never be played
+        before their channel is approved.
+      security:
+        - childToken: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 12, default: 4 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoveryPage" }
+
   /child/shorts:
     get:
       operationId: getChildShorts
@@ -1479,6 +1502,11 @@ components:
         videoSearchTiles:
           type: boolean
           description: Whether search returns videos as well as channels.
+        channelDiscoveryEnabled:
+          type: boolean
+          description: |
+            Whether policy-filtered videos from requestable channels may
+            appear as locked discovery suggestions.
         dailySearchLimit:
           type: integer
           description: Zero means no per-child limit beyond the family budget.
@@ -1497,7 +1525,7 @@ components:
 
     ChildProfile:
       type: object
-      required: [id, name, shortsEnabled, watchPageAutoplay]
+      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1505,6 +1533,7 @@ components:
         shortsEnabled: { type: boolean }
         watchPageAutoplay: { type: boolean }
         videoSearchTiles: { type: boolean }
+        channelDiscoveryEnabled: { type: boolean }
 
     PairingCode:
       type: object
@@ -1591,8 +1620,8 @@ components:
         locked:
           type: boolean
           description: |
-            The video belongs to a requestable channel. Present on search
-            results, never on the Shorts feed.
+            The video belongs to a requestable channel. Present on search and
+            discovery results, never on the approved feed or Shorts feed.
 
     RecommendationReasonKind:
       type: string
@@ -1625,6 +1654,26 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Recommendation" }
         nextCursor: { type: string }
+
+    Discovery:
+      type: object
+      required: [video, reason, pendingRequest]
+      properties:
+        video: { $ref: "#/components/schemas/Video" }
+        reason:
+          type: string
+          description: Child-facing explanation of the preference signal.
+        pendingRequest:
+          type: boolean
+          description: Whether this channel is already waiting for a parent.
+
+    DiscoveryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Discovery" }
 
     ChannelWeight:
       type: object

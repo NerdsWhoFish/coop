@@ -15,6 +15,7 @@ final class ChildAppModel {
   var serverAddress: String
   var profile: Components.Schemas.ChildProfile?
   var feed: [Components.Schemas.Video] = []
+  var discoveries: [Components.Schemas.Discovery] = []
   var subscriptions: [Components.Schemas.Channel] = []
   var isWorking = false
   var errorMessage: String?
@@ -38,9 +39,11 @@ final class ChildAppModel {
           name: "Cooper",
           shortsEnabled: ProcessInfo.processInfo.environment["COOP_UI_SHORTS_DISABLED"] != "1",
           watchPageAutoplay: false,
-          videoSearchTiles: true
+          videoSearchTiles: true,
+          channelDiscoveryEnabled: true
         )
         feed = Self.previewVideos
+        discoveries = Self.previewDiscoveries
         subscriptions = Self.previewChannels
         destination = .watch
         return
@@ -88,14 +91,32 @@ final class ChildAppModel {
     do {
       async let feedLoad = api.childFeed()
       async let subscriptionLoad = api.childSubscriptions()
+      async let discoveryLoad = api.childDiscovery()
       (feed, subscriptions) = try await (feedLoad, subscriptionLoad)
+      discoveries = (try? await discoveryLoad) ?? []
     } catch {
       errorMessage = error.localizedDescription
     }
   }
 
   func channel(id: String) async throws -> Components.Schemas.ChannelPage? {
-    try await api?.childChannel(id: id)
+    #if DEBUG
+      if isPreviewMode,
+        let discovery = Self.previewDiscoveries.first(where: { $0.video.channelId == id })
+      {
+        return Components.Schemas.ChannelPage(
+          channel: Components.Schemas.Channel(
+            id: id,
+            title: discovery.video.channelTitle ?? "New channel"
+          ),
+          state: .requestable,
+          subscribed: false,
+          pendingRequest: discovery.pendingRequest,
+          videos: []
+        )
+      }
+    #endif
+    return try await api?.childChannel(id: id)
   }
 
   func search(query: String) async throws -> Components.Schemas.SearchResults? {
@@ -120,6 +141,10 @@ final class ChildAppModel {
 
   func watchNext(excluding videoID: String, limit: Int = 12) -> [Components.Schemas.Video] {
     Array(feed.lazy.filter { $0.id != videoID && !$0.isShort }.prefix(limit))
+  }
+
+  func discoverNext(excluding videoID: String, limit: Int = 4) -> [Components.Schemas.Discovery] {
+    Array(discoveries.lazy.filter { $0.video.id != videoID }.prefix(limit))
   }
 
   func shorts(session: String, offset: Int, limit: Int = 8) async throws
@@ -177,6 +202,7 @@ final class ChildAppModel {
     api = nil
     profile = nil
     feed = []
+    discoveries = []
     subscriptions = []
     destination = .pairing
   }
@@ -229,6 +255,37 @@ final class ChildAppModel {
         durationSeconds: 665,
         publishedAt: Date(timeIntervalSinceNow: -86_400 * 20),
         isShort: false
+      ),
+    ]
+
+    private static let previewDiscoveries = [
+      Components.Schemas.Discovery(
+        video: Components.Schemas.Video(
+          id: "reef-builders",
+          channelId: "new-ocean-channel",
+          channelTitle: "Ocean Lab",
+          title: "How Tiny Animals Build a Coral Reef",
+          durationSeconds: 618,
+          publishedAt: Date(timeIntervalSinceNow: -86_400 * 3),
+          isShort: false,
+          locked: true
+        ),
+        reason: "Because you liked Meeting the Cleverest Octopus in the Ocean",
+        pendingRequest: false
+      ),
+      Components.Schemas.Discovery(
+        video: Components.Schemas.Video(
+          id: "lava-lab",
+          channelId: "new-earth-channel",
+          channelTitle: "Earthworks",
+          title: "Build a Safe Mini Lava Flow",
+          durationSeconds: 492,
+          publishedAt: Date(timeIntervalSinceNow: -86_400 * 8),
+          isShort: false,
+          locked: true
+        ),
+        reason: "Because you finished Why Do Volcanoes Erupt?",
+        pendingRequest: true
       ),
     ]
 

@@ -58,28 +58,30 @@ func newFamilyDTO(f store.Family) familyDTO {
 }
 
 type childDTO struct {
-	ID                uuid.UUID `json:"id"`
-	Name              string    `json:"name"`
-	AvatarID          string    `json:"avatarId"`
-	ShortsEnabled     bool      `json:"shortsEnabled"`
-	WatchPageAutoplay bool      `json:"watchPageAutoplay"`
-	VideoSearchTiles  bool      `json:"videoSearchTiles"`
-	DailySearchLimit  int       `json:"dailySearchLimit"`
-	DeviceCount       int       `json:"deviceCount"`
-	PendingRequests   int       `json:"pendingRequestCount"`
+	ID                      uuid.UUID `json:"id"`
+	Name                    string    `json:"name"`
+	AvatarID                string    `json:"avatarId"`
+	ShortsEnabled           bool      `json:"shortsEnabled"`
+	WatchPageAutoplay       bool      `json:"watchPageAutoplay"`
+	VideoSearchTiles        bool      `json:"videoSearchTiles"`
+	ChannelDiscoveryEnabled bool      `json:"channelDiscoveryEnabled"`
+	DailySearchLimit        int       `json:"dailySearchLimit"`
+	DeviceCount             int       `json:"deviceCount"`
+	PendingRequests         int       `json:"pendingRequestCount"`
 }
 
 func newChildDTO(c store.Child, devices, pending int) childDTO {
 	return childDTO{
-		ID:                c.ID,
-		Name:              c.Name,
-		AvatarID:          c.AvatarID,
-		ShortsEnabled:     c.ShortsEnabled,
-		WatchPageAutoplay: c.WatchPageAutoplay,
-		VideoSearchTiles:  c.VideoSearchTiles,
-		DailySearchLimit:  c.DailySearchLimit,
-		DeviceCount:       devices,
-		PendingRequests:   pending,
+		ID:                      c.ID,
+		Name:                    c.Name,
+		AvatarID:                c.AvatarID,
+		ShortsEnabled:           c.ShortsEnabled,
+		WatchPageAutoplay:       c.WatchPageAutoplay,
+		VideoSearchTiles:        c.VideoSearchTiles,
+		ChannelDiscoveryEnabled: c.ChannelDiscoveryEnabled,
+		DailySearchLimit:        c.DailySearchLimit,
+		DeviceCount:             devices,
+		PendingRequests:         pending,
 	}
 }
 
@@ -87,22 +89,24 @@ func newChildDTO(c store.Child, devices, pending int) childDTO {
 // narrower than childDTO: a child has no business knowing their request count
 // or how many devices a parent has paired.
 type childProfileDTO struct {
-	ID                uuid.UUID `json:"id"`
-	Name              string    `json:"name"`
-	AvatarID          string    `json:"avatarId"`
-	ShortsEnabled     bool      `json:"shortsEnabled"`
-	WatchPageAutoplay bool      `json:"watchPageAutoplay"`
-	VideoSearchTiles  bool      `json:"videoSearchTiles"`
+	ID                      uuid.UUID `json:"id"`
+	Name                    string    `json:"name"`
+	AvatarID                string    `json:"avatarId"`
+	ShortsEnabled           bool      `json:"shortsEnabled"`
+	WatchPageAutoplay       bool      `json:"watchPageAutoplay"`
+	VideoSearchTiles        bool      `json:"videoSearchTiles"`
+	ChannelDiscoveryEnabled bool      `json:"channelDiscoveryEnabled"`
 }
 
 func newChildProfileDTO(c store.Child) childProfileDTO {
 	return childProfileDTO{
-		ID:                c.ID,
-		Name:              c.Name,
-		AvatarID:          c.AvatarID,
-		ShortsEnabled:     c.ShortsEnabled,
-		WatchPageAutoplay: c.WatchPageAutoplay,
-		VideoSearchTiles:  c.VideoSearchTiles,
+		ID:                      c.ID,
+		Name:                    c.Name,
+		AvatarID:                c.AvatarID,
+		ShortsEnabled:           c.ShortsEnabled,
+		WatchPageAutoplay:       c.WatchPageAutoplay,
+		VideoSearchTiles:        c.VideoSearchTiles,
+		ChannelDiscoveryEnabled: c.ChannelDiscoveryEnabled,
 	}
 }
 
@@ -175,6 +179,16 @@ type recommendationDTO struct {
 type recommendationPageDTO struct {
 	Items      []recommendationDTO `json:"items"`
 	NextCursor string              `json:"nextCursor,omitempty"`
+}
+
+type discoveryDTO struct {
+	Video          videoDTO `json:"video"`
+	Reason         string   `json:"reason"`
+	PendingRequest bool     `json:"pendingRequest"`
+}
+
+type discoveryPageDTO struct {
+	Items []discoveryDTO `json:"items"`
 }
 
 type channelWeightDTO struct {

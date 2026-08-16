@@ -391,6 +391,25 @@ func (a *Activity) PendingRequestCounts(ctx context.Context, childIDs []uuid.UUI
 	return out, nil
 }
 
+// PendingRequestChannelIDs returns the requestable channels already waiting
+// for a decision, so discovery cards remain idempotent across app launches.
+func (a *Activity) PendingRequestChannelIDs(ctx context.Context,
+	childID uuid.UUID) (map[string]bool, error) {
+
+	var ids []string
+	err := a.db.WithContext(ctx).Model(&Request{}).
+		Where("child_id = ? AND status = ?", childID, domain.RequestPending).
+		Pluck("channel_id", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("listing pending request channels: %w", err)
+	}
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
 // LogSuppressions records what a keyword hid, for the parent's review.
 // Duplicates are ignored: a feed rebuild re-evaluates the same videos, and
 // re-logging each time would grow the table without bound.

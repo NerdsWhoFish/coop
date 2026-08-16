@@ -19,6 +19,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
+	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/feed"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/youtube"
@@ -123,7 +124,7 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	videoIDs := []string{"allowed-good", "allowed-scary", "requestable-scary", "blocked", "archived", "not-embeddable"}
+	videoIDs := []string{"allowed-good", "allowed-scary", "requestable-good", "requestable-scary", "blocked", "archived", "not-embeddable"}
 	putSearchCache(t, cache, channelIDs, videoIDs, allowedChannel, requestableChannel, blockedChannel)
 
 	cfg := config.Defaults()
@@ -172,8 +173,8 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 	if body.Videos[0].ID != "allowed-good" || body.Videos[0].Locked {
 		t.Errorf("first video = %+v, want unlocked allowed-good", body.Videos[0])
 	}
-	if body.Videos[1].ID != "requestable-scary" || !body.Videos[1].Locked {
-		t.Errorf("second video = %+v, want locked requestable-scary", body.Videos[1])
+	if body.Videos[1].ID != "requestable-good" || !body.Videos[1].Locked {
+		t.Errorf("second video = %+v, want locked requestable-good", body.Videos[1])
 	}
 
 	count, err := activity.SearchCount(ctx, child.ID, youtube.QuotaDay(now))
@@ -184,11 +185,54 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(suppressions) != 1 || suppressions[0].VideoID != "allowed-scary" || suppressions[0].KeywordID != keyword.ID {
-		t.Errorf("suppressions = %+v, want only allowed-scary", suppressions)
+	if len(suppressions) != 2 {
+		t.Fatalf("suppressions = %+v, want both scary videos", suppressions)
+	}
+	suppressed := map[string]uuid.UUID{
+		suppressions[0].VideoID: suppressions[0].KeywordID,
+		suppressions[1].VideoID: suppressions[1].KeywordID,
+	}
+	for _, videoID := range []string{"allowed-scary", "requestable-scary"} {
+		if suppressed[videoID] != keyword.ID {
+			t.Errorf("suppression for %q = %q, want keyword %q", videoID, suppressed[videoID], keyword.ID)
+		}
 	}
 	if _, err := catalog.Video(ctx, "not-embeddable"); err != store.ErrNotFound {
 		t.Errorf("non-embeddable video lookup error = %v, want ErrNotFound", err)
+	}
+
+	discoveryRequest := func() discoveryPageDTO {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/api/v1/child/discovery", nil)
+		recorder := httptest.NewRecorder()
+		if err := server.handleChildDiscovery(recorder, req, auth.Child{ID: child.ID, FamilyID: family.ID}); err != nil {
+			t.Fatal(err)
+		}
+		var page discoveryPageDTO
+		if err := json.NewDecoder(recorder.Body).Decode(&page); err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+	if items := discoveryRequest().Items; len(items) != 0 {
+		t.Fatalf("disabled discovery returned %+v, want no items", items)
+	}
+	if err := activity.SetReaction(ctx, child.ID, "allowed-good", domain.ReactionLike); err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	if err := accounts.UpdateChild(ctx, family.ID, child.ID, store.ChildSettings{
+		ChannelDiscoveryEnabled: &enabled,
+	}, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	discoveries := discoveryRequest().Items
+	if len(discoveries) != 1 {
+		t.Fatalf("discoveries = %+v, want one requestable channel", discoveries)
+	}
+	if got := discoveries[0]; got.Video.ID != "requestable-good" || !got.Video.Locked ||
+		got.Reason != "Because you liked Birds" || got.PendingRequest {
+		t.Errorf("discovery = %+v, want a locked, explainable requestable-good", got)
 	}
 }
 
@@ -210,18 +254,22 @@ func putSearchCache(t *testing.T, cache *store.APICacheStore, channelIDs, videoI
 		"q":          {"birds here"},
 		"maxResults": {"25"},
 	}
-	put("search.list", searchParams, fmt.Sprintf(`{"items":[
+	searchBody := fmt.Sprintf(`{"items":[
         {"id":{"channelId":%q},"snippet":{}},
         {"id":{"channelId":%q},"snippet":{}},
         {"id":{"channelId":%q},"snippet":{}},
         {"id":{"videoId":"allowed-good"},"snippet":{"channelId":%q}},
         {"id":{"videoId":"allowed-scary"},"snippet":{"channelId":%q}},
+        {"id":{"videoId":"requestable-good"},"snippet":{"channelId":%q}},
         {"id":{"videoId":"requestable-scary"},"snippet":{"channelId":%q}},
         {"id":{"videoId":"blocked"},"snippet":{"channelId":%q}},
         {"id":{"videoId":"archived"},"snippet":{"channelId":%q}},
         {"id":{"videoId":"not-embeddable"},"snippet":{"channelId":%q}}
     ]}`, allowedChannel, requestableChannel, blockedChannel, allowedChannel, allowedChannel,
-		requestableChannel, blockedChannel, allowedChannel, allowedChannel))
+		requestableChannel, requestableChannel, blockedChannel, allowedChannel, allowedChannel)
+	put("search.list", searchParams, searchBody)
+	searchParams.Set("q", "birds")
+	put("search.list", searchParams, searchBody)
 
 	channelParams := url.Values{
 		"part":       {"snippet,statistics,brandingSettings"},
@@ -236,7 +284,7 @@ func putSearchCache(t *testing.T, cache *store.APICacheStore, channelIDs, videoI
 
 	videoParams := url.Values{
 		"part":       {"snippet,contentDetails,status,liveStreamingDetails"},
-		"id":         {videoIDs[0] + "," + videoIDs[1] + "," + videoIDs[2] + "," + videoIDs[3] + "," + videoIDs[4] + "," + videoIDs[5]},
+		"id":         {videoIDs[0] + "," + videoIDs[1] + "," + videoIDs[2] + "," + videoIDs[3] + "," + videoIDs[4] + "," + videoIDs[5] + "," + videoIDs[6]},
 		"maxResults": {"50"},
 	}
 	video := func(id, channelID, title, status, liveDetails string) string {
@@ -246,6 +294,7 @@ func putSearchCache(t *testing.T, cache *store.APICacheStore, channelIDs, videoI
 	put("videos.list", videoParams, `{"items":[`+
 		video("allowed-good", allowedChannel, "Birds", `{"embeddable":true}`, "")+","+
 		video("allowed-scary", allowedChannel, "Scary birds", `{"embeddable":true}`, "")+","+
+		video("requestable-good", requestableChannel, "Bird nests", `{"embeddable":true}`, "")+","+
 		video("requestable-scary", requestableChannel, "Scary request", `{"embeddable":true}`, "")+","+
 		video("blocked", blockedChannel, "Blocked", `{"embeddable":true}`, "")+","+
 		video("archived", allowedChannel, "Archived", `{"embeddable":true}`, `,"liveStreamingDetails":{}`)+","+

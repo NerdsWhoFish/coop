@@ -97,6 +97,92 @@ func (s *Server) handleChildFeed(w http.ResponseWriter, r *http.Request, c auth.
 	return nil
 }
 
+func (s *Server) handleChildDiscovery(w http.ResponseWriter, r *http.Request, c auth.Child) error {
+	child, err := s.deps.Accounts.Child(r.Context(), c.FamilyID, c.ID)
+	if err != nil {
+		return err
+	}
+	if !child.ChannelDiscoveryEnabled {
+		writeJSON(w, s.deps.Logger, http.StatusOK, discoveryPageDTO{Items: []discoveryDTO{}})
+		return nil
+	}
+
+	seed, err := s.deps.Feed.DiscoverySeed(r.Context(), c.ID, s.deps.Now())
+	if err != nil {
+		return err
+	}
+	if seed.Query == "" {
+		writeJSON(w, s.deps.Logger, http.StatusOK, discoveryPageDTO{Items: []discoveryDTO{}})
+		return nil
+	}
+
+	client, err := s.youtubeFor(r.Context(), c.FamilyID)
+	if err != nil {
+		return err
+	}
+	results, err := client.Search(r.Context(), seed.Query)
+	if err != nil {
+		return err
+	}
+	if err := s.deps.Catalog.UpsertChannels(r.Context(), results.RelatedChannels); err != nil {
+		return err
+	}
+	if err := s.deps.Catalog.UpsertVideos(r.Context(), results.Videos); err != nil {
+		return err
+	}
+
+	ids := make([]string, len(results.Videos))
+	for i, video := range results.Videos {
+		ids[i] = video.ID
+	}
+	videos, err := s.deps.Catalog.VideosByID(r.Context(), ids)
+	if err != nil {
+		return err
+	}
+	filtered, err := s.deps.Feed.Search(r.Context(), c.FamilyID, c.ID, videos)
+	if err != nil {
+		return err
+	}
+
+	limit := queryInt(r, "limit", 4)
+	if limit <= 0 || limit > 12 {
+		limit = 4
+	}
+	discovered := make([]store.Video, 0, min(limit, len(filtered)))
+	seenChannels := make(map[string]struct{}, len(filtered))
+	for _, candidate := range filtered {
+		if !candidate.Locked || candidate.Video.IsShort {
+			continue
+		}
+		if _, duplicate := seenChannels[candidate.Video.ChannelID]; duplicate {
+			continue
+		}
+		seenChannels[candidate.Video.ChannelID] = struct{}{}
+		discovered = append(discovered, candidate.Video)
+		if len(discovered) == limit {
+			break
+		}
+	}
+
+	videoOut, err := s.videoDTOs(r, discovered)
+	if err != nil {
+		return err
+	}
+	pending, err := s.deps.Activity.PendingRequestChannelIDs(r.Context(), c.ID)
+	if err != nil {
+		return err
+	}
+	out := make([]discoveryDTO, len(videoOut))
+	for i, video := range videoOut {
+		video.Locked = true
+		out[i] = discoveryDTO{
+			Video: video, Reason: seed.Reason, PendingRequest: pending[video.ChannelID],
+		}
+	}
+	writeJSON(w, s.deps.Logger, http.StatusOK, discoveryPageDTO{Items: out})
+	return nil
+}
+
 func (s *Server) handleChildShorts(w http.ResponseWriter, r *http.Request, c auth.Child) error {
 	child, err := s.deps.Accounts.Child(r.Context(), c.FamilyID, c.ID)
 	if err != nil {

@@ -129,10 +129,11 @@ type Child struct {
 	Name     string    `gorm:"not null"`
 	AvatarID string
 
-	ShortsEnabled     bool `gorm:"not null;default:true"`
-	WatchPageAutoplay bool `gorm:"not null;default:false"`
-	VideoSearchTiles  bool `gorm:"not null;default:true"`
-	DailySearchLimit  int  `gorm:"not null;default:0"`
+	ShortsEnabled           bool `gorm:"not null;default:true"`
+	WatchPageAutoplay       bool `gorm:"not null;default:false"`
+	VideoSearchTiles        bool `gorm:"not null;default:true"`
+	ChannelDiscoveryEnabled bool `gorm:"not null;default:false"`
+	DailySearchLimit        int  `gorm:"not null;default:0"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

@@ -79,6 +79,21 @@ final class CooperWatchUITests: XCTestCase {
   }
 
   @MainActor
+  func testDiscoveryShelfRenders() throws {
+    let app = previewApp()
+    app.launch()
+
+    let shelf = app.descendants(matching: .any)["discovery-shelf"]
+    XCTAssertTrue(shelf.waitForExistence(timeout: 5))
+    for _ in 0..<4 { app.swipeUp() }
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Locked channel discovery"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testShortsSwipeMovesTheOnlyActivePlayer() throws {
     let app = previewApp(tab: "shorts")
     app.launch()

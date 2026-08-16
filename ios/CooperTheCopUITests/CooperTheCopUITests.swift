@@ -49,4 +49,25 @@ final class CooperTheCopUITests: XCTestCase {
     XCTAssertTrue(firstRecommendation.waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["MUCH MORE"].exists)
   }
+
+  @MainActor
+  func testChildSettingsExposeOptInChannelDiscovery() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SCREEN"] = "child-settings"
+    app.launch()
+
+    let toggle = app.switches["Suggest new channels"]
+    XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+    XCTAssertEqual(toggle.value as? String, "1")
+    let explanation = app.staticTexts.matching(
+      NSPredicate(
+        format: "label BEGINSWITH %@", "New-channel suggestions are locked until approved.")
+    ).firstMatch
+    XCTAssertTrue(explanation.exists)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Child discovery setting"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
 }

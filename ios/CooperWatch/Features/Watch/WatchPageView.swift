@@ -96,6 +96,13 @@ struct WatchPageView: View {
             }
             .padding(.top, 8)
           }
+
+          DiscoveryShelf(
+            title: "Explore next",
+            discoveries: model.discoverNext(excluding: page.video.id),
+            model: model
+          )
+          .padding(.top, 8)
         }
         .padding()
         .padding(.bottom, 84)
