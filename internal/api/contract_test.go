@@ -58,3 +58,34 @@ func isHTTPMethod(value string) bool {
 		return false
 	}
 }
+
+func TestInstallerRoutesAreOptIn(t *testing.T) {
+	disabled := &Server{mux: http.NewServeMux()}
+	disabled.routes()
+	if got := routeStatus(disabled.mux, "/install/"); got != http.StatusNotFound {
+		t.Fatalf("disabled installer status = %d, want 404", got)
+	}
+
+	enabled := &Server{
+		deps: Deps{Installer: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})},
+		mux: http.NewServeMux(),
+	}
+	enabled.routes()
+	if got := routeStatus(enabled.mux, "/install/"); got != http.StatusNoContent {
+		t.Fatalf("enabled installer status = %d, want 204", got)
+	}
+
+	recorder := httptest.NewRecorder()
+	enabled.mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/install", nil))
+	if recorder.Code != http.StatusPermanentRedirect || recorder.Header().Get("Location") != "/install/" {
+		t.Fatalf("installer redirect = %d %q", recorder.Code, recorder.Header().Get("Location"))
+	}
+}
+
+func routeStatus(handler http.Handler, path string) int {
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+	return recorder.Code
+}

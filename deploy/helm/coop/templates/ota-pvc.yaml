@@ -1,0 +1,17 @@
+{{- if and .Values.ota.enabled (not .Values.ota.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "coop.fullname" . }}-ota
+  labels:
+    {{- include "coop.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.ota.persistence.accessModes | nindent 4 }}
+  {{- with .Values.ota.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.ota.persistence.size | quote }}
+{{- end }}

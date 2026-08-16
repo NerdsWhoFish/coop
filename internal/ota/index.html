@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#282a36">
+    <title>Coop Package Bay</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow"><span class="pulse" aria-hidden="true"></span>Registered-device installs</div>
+        <h1>REPORT TO<br><span>THE COOP.</span></h1>
+        <p class="lede">Install the parent dispatch desk or the kid-safe watch app directly onto a device registered with this build&rsquo;s Apple Developer team.</p>
+      </header>
+      <section class="apps" aria-label="Coop applications">
+        {{range .Applications}}
+        <article class="app">
+          <div>
+            <div class="badge" aria-hidden="true">{{.Badge}}</div>
+            <h2>{{.Title}}</h2>
+            <p>{{.Description}}</p>
+          </div>
+          {{if .Available}}
+          <a class="install" href="{{.InstallURL}}">Install app <span aria-hidden="true">&darr;</span></a>
+          {{else}}
+          <span class="install unavailable">Package unavailable <span aria-hidden="true">&mdash;</span></span>
+          {{end}}
+        </article>
+        {{end}}
+      </section>
+      <aside class="trust">
+        <div aria-hidden="true">&#128274;</div>
+        <div><strong>Signed and scoped.</strong><p>These Ad Hoc builds work only on device UDIDs included when the apps were signed, and iOS requires Developer Mode. Installing an updated package preserves the existing Coop pairing.</p></div>
+      </aside>
+      <footer>The installer is optional and serves only operator-provided packages. Coop never receives Apple account credentials or signing keys.</footer>
+    </main>
+  </body>
+</html>

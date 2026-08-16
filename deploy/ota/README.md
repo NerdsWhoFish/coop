@@ -1,42 +1,46 @@
-# Coop OTA package bay
+# Coop OTA packages
 
-This directory builds both iOS apps for Ad Hoc distribution and serves them from a local nginx container.
+Coop can optionally serve registered-device Ad Hoc iOS builds from `/install/` on the same trusted HTTPS origin as the API.
+The installer is disabled by default.
 It is for a regular Apple Developer Program team, not the Apple Developer Enterprise Program.
 
-Ad Hoc packages install only on device UDIDs registered in the selected Apple Developer team.
-Adding another device requires registering its UDID and rebuilding both packages so the new provisioning profiles include it.
+Ad Hoc packages install only on device UDIDs included in the provisioning profile embedded when the IPA was exported.
+Register every target device before building, then rebuild whenever the device list changes.
 
-## Configure
+## Build
 
-Copy `.env.example` to `.env` and set the Apple team ID plus a LAN-resolvable hostname for the build Mac.
-The `.env` file is ignored because it is machine-local configuration.
-
-The hostname must resolve to the Mac from each target device.
-The default ports are 8081 for the certificate bootstrap page and 8444 for the HTTPS installer.
-
-## Build and serve
-
-```console
-scripts/ota.sh all
-```
-
-The script archives and exports both apps, generates Apple OTA manifests, creates a hostname certificate with `mkcert`, and starts the pinned nginx container.
-Generated archives, IPAs, manifests, certificates, and the private TLS key stay under the ignored `.build/ota` directory.
-
-Open the HTTP URL printed by the script on the target device first.
-Install the local certificate authority, enable full trust under **Settings → General → About → Certificate Trust Settings**, then open the HTTPS package bay and choose an app.
-
-The CA is the same machine-local `mkcert` root used by any other local development certificate generated on this Mac.
-The private CA key is never copied into the site or container.
-
-## Operations
+Copy `.env.example` to `.env` and set the Apple team ID.
+The ignored `.env` file is machine-local configuration.
 
 ```console
 scripts/ota.sh build
-scripts/ota.sh serve
-scripts/ota.sh stop
 ```
 
-Re-run `build` after changing either app or registering another device.
-`serve` validates the generated site before starting nginx.
-`stop` removes the container without deleting build artifacts.
+The script archives and exports both apps into `.build/ota/packages`.
+Each IPA has a matching `.version` sidecar used by Coop to generate Apple's installation manifest at request time.
+
+## Serve from Kubernetes
+
+Enable `ota.enabled` in the Helm values and either let the chart create its PVC or set `ota.persistence.existingClaim`.
+Copy all four generated files into the root of that claim:
+
+```text
+CooperTheCop.ipa
+CooperTheCop.ipa.version
+CooperWatch.ipa
+CooperWatch.ipa.version
+```
+
+The Coop container mounts the claim read-write because Kubernetes may need to set volume ownership for its non-root UID, but the HTTP application exposes no upload, delete, or directory-listing route.
+Use a short-lived operator pod mounting the same claim to publish packages, then remove that pod.
+
+Open `https://your-coop-host.example/install/` on a registered iPhone or iPad.
+The normal TLS certificate already used by Coop secures the manifest and IPA download, so devices do not need a locally installed certificate authority.
+Enable Developer Mode under **Settings → Privacy & Security** before running an installed IPA.
+
+## Serve from Docker Compose
+
+Set `COOP_OTA_ENABLED=true`, mount or populate the `coop-ota` volume at `/var/lib/coop/ota`, and recreate `coopd`.
+Leave the variable unset to keep `/install/` unavailable.
+
+Rebuild and republish the packages before their embedded provisioning profiles expire or after registering another device.

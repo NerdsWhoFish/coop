@@ -56,6 +56,16 @@ config:
   databaseDSNKey: database-dsn
   authEncryptionKeyKey: auth-encryption-key
 
+ota:
+  enabled: false
+  mountPath: /var/lib/coop/ota
+  persistence:
+    existingClaim: ""
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+
 resources:
   requests:
     cpu: 50m

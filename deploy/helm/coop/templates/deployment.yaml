@@ -57,6 +57,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.config.existingSecret }}
                   key: {{ .Values.config.authEncryptionKeyKey }}
+            {{- if .Values.ota.enabled }}
+            - name: COOP_OTA_ENABLED
+              value: "true"
+            - name: COOP_OTA_DIRECTORY
+              value: {{ .Values.ota.mountPath | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -79,6 +85,17 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.ota.enabled }}
+          volumeMounts:
+            - name: ota-packages
+              mountPath: {{ .Values.ota.mountPath | quote }}
+          {{- end }}
+      {{- if .Values.ota.enabled }}
+      volumes:
+        - name: ota-packages
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-ota" (include "coop.fullname" .)) .Values.ota.persistence.existingClaim }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

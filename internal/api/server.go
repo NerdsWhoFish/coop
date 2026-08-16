@@ -24,19 +24,20 @@ import (
 // Deps is everything the HTTP layer needs. Assembled by the composition root
 // so this package constructs nothing it does not own.
 type Deps struct {
-	Config   *config.Config
-	Logger   *slog.Logger
-	Accounts *store.Accounts
-	Rules    *store.Rules
-	Catalog  *store.Catalog
-	Activity *store.Activity
-	Audit    *store.Audit
-	Feed     *feed.Service
-	Quota    *store.QuotaStore
-	Sealer   *crypto.Sealer
-	YouTube  *youtubeclient.Factory
-	DB       *store.DB
-	Now      func() time.Time
+	Config    *config.Config
+	Logger    *slog.Logger
+	Accounts  *store.Accounts
+	Rules     *store.Rules
+	Catalog   *store.Catalog
+	Activity  *store.Activity
+	Audit     *store.Audit
+	Feed      *feed.Service
+	Quota     *store.QuotaStore
+	Sealer    *crypto.Sealer
+	YouTube   *youtubeclient.Factory
+	DB        *store.DB
+	Now       func() time.Time
+	Installer http.Handler
 }
 
 // Server routes and serves the API.
@@ -88,6 +89,12 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /healthz", s.handleReadiness)
 	m.HandleFunc("GET /api/v1/healthz", s.handleReadiness)
 	m.HandleFunc("GET /version", s.handleVersion)
+	if s.deps.Installer != nil {
+		m.Handle("GET /install/", http.StripPrefix("/install", s.deps.Installer))
+		m.HandleFunc("GET /install", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)
+		})
+	}
 
 	// Setup and sign-in are the only unauthenticated write paths.
 	m.HandleFunc("GET /api/v1/setup", s.handle(s.handleSetupStatus))

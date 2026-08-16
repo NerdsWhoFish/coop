@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type Config struct {
 	Database Database `toml:"database"`
 	YouTube  YouTube  `toml:"youtube"`
 	Auth     Auth     `toml:"auth"`
+	OTA      OTA      `toml:"ota"`
 	Log      Log      `toml:"log"`
 }
 
@@ -110,6 +112,12 @@ type Auth struct {
 	LockoutDuration      time.Duration `toml:"lockout_duration"       env:"AUTH_LOCKOUT_DURATION"`
 }
 
+// OTA controls the optional registered-device application installer.
+type OTA struct {
+	Enabled   bool   `toml:"enabled"   env:"OTA_ENABLED"`
+	Directory string `toml:"directory" env:"OTA_DIRECTORY"`
+}
+
 // Log holds logging settings.
 type Log struct {
 	Level  string `toml:"level"  env:"LOG_LEVEL"`
@@ -154,6 +162,7 @@ func Defaults() *Config {
 			MaxFailures:          5,
 			LockoutDuration:      15 * time.Minute,
 		},
+		OTA: OTA{Directory: "/var/lib/coop/ota"},
 		Log: Log{Level: "info", Format: "json"},
 	}
 }
@@ -276,6 +285,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Auth.LockoutDuration <= 0 {
 		errs = append(errs, errors.New("auth.lockout_duration must be positive"))
+	}
+	if c.OTA.Enabled && !filepath.IsAbs(c.OTA.Directory) {
+		errs = append(errs, errors.New("ota.directory (COOP_OTA_DIRECTORY) must be an absolute path when OTA serving is enabled"))
 	}
 
 	switch c.Log.Format {

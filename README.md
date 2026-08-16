@@ -111,7 +111,8 @@ xcodebuild -skipPackagePluginValidation \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-Build and serve both registered-device Ad Hoc packages from the local OTA portal with `scripts/ota.sh all` after configuring `deploy/ota/.env`.
+Build both registered-device Ad Hoc packages with `scripts/ota.sh build` after configuring `deploy/ota/.env`.
+The server's optional `/install/` portal and persistent package storage are documented in [deploy/ota/README.md](deploy/ota/README.md).
 
 ## Contributing
 

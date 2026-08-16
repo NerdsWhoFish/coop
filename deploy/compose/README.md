@@ -44,6 +44,11 @@ curl --fail --silent --show-error https://your-coop-host.example/readyz
 Caddy obtains and renews the certificate automatically.
 The Coop container is read-only, drops Linux capabilities, runs as a non-root user, and becomes healthy only after PostgreSQL answers its readiness check.
 
+## Optional iOS installer
+
+Set `COOP_OTA_ENABLED=true` in `.env` and copy the output of `scripts/ota.sh build` into the `coop-ota` volume to expose the installer at `/install/`.
+The feature defaults to false, and a disabled server registers no installer routes even though Compose retains the package volume across upgrades.
+
 ## Upgrade
 
 Set `COOP_IMAGE` to a specific released version or immutable digest, pull it, and recreate the application:

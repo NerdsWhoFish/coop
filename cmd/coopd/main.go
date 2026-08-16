@@ -25,6 +25,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
 	"github.com/nerdswhofish/coop/internal/ingest"
+	"github.com/nerdswhofish/coop/internal/ota"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
 	"github.com/nerdswhofish/coop/internal/youtubeclient"
@@ -234,21 +235,30 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	if err != nil {
 		return err
 	}
+	var installer http.Handler
+	if cfg.OTA.Enabled {
+		installer, err = ota.New(cfg.Server.PublicURL, cfg.OTA.Directory)
+		if err != nil {
+			return err
+		}
+		logger.Info("OTA installer enabled", "path", "/install/", "directory", cfg.OTA.Directory)
+	}
 
 	api, err := api.NewServer(api.Deps{
-		Config:   cfg,
-		Logger:   logger,
-		Accounts: accounts,
-		Rules:    rules,
-		Catalog:  catalog,
-		Activity: activity,
-		Audit:    audit,
-		Feed:     feed.New(catalog, rules, activity),
-		Quota:    quota,
-		Sealer:   sealer,
-		YouTube:  youtubeClients,
-		DB:       db,
-		Now:      time.Now,
+		Config:    cfg,
+		Logger:    logger,
+		Accounts:  accounts,
+		Rules:     rules,
+		Catalog:   catalog,
+		Activity:  activity,
+		Audit:     audit,
+		Feed:      feed.New(catalog, rules, activity),
+		Quota:     quota,
+		Sealer:    sealer,
+		YouTube:   youtubeClients,
+		DB:        db,
+		Now:       time.Now,
+		Installer: installer,
 	})
 	if err != nil {
 		return err

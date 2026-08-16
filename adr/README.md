@@ -21,3 +21,5 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0009](0009-production-authentication-and-audit-boundary.md) | Require challenge-based TOTP, persistent throttling, and transactional audit events | accepted | 2026-08-16 |
 | [0010](0010-serve-ad-hoc-builds-from-a-local-ota-portal.md) | Serve Ad Hoc builds from a local OTA portal | accepted | 2026-08-16 |
 | [0011](0011-autoplay-watch-pages-with-a-persistent-player.md) | Autoplay watch pages with one persistent player | accepted | 2026-08-16 |
+| [0012](0012-model-current-playback-as-renewable-leases.md) | Model current playback as renewable leases | accepted | 2026-08-16 |
+| [0013](0013-serve-ota-packages-from-coop.md) | Serve OTA packages from Coop | accepted | 2026-08-16 |

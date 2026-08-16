@@ -122,6 +122,14 @@ func TestValidate(t *testing.T) {
 			mutate:  func(c *Config) { c.Log.Level = "trace" },
 			wantErr: "want debug, info, warn or error",
 		},
+		{
+			name: "relative OTA directory",
+			mutate: func(c *Config) {
+				c.OTA.Enabled = true
+				c.OTA.Directory = "packages"
+			},
+			wantErr: "ota.directory",
+		},
 	}
 
 	for _, tt := range tests {
@@ -198,6 +206,12 @@ func TestLoadDefaultsFromEnv(t *testing.T) {
 	}
 	if cfg.Auth.InvitationTTL != 7*24*time.Hour {
 		t.Errorf("InvitationTTL = %v, want 168h", cfg.Auth.InvitationTTL)
+	}
+	if cfg.OTA.Enabled {
+		t.Error("OTA.Enabled = true, want opt-in default false")
+	}
+	if cfg.OTA.Directory != "/var/lib/coop/ota" {
+		t.Errorf("OTA.Directory = %q, want /var/lib/coop/ota", cfg.OTA.Directory)
 	}
 }
 
