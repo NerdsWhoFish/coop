@@ -14,3 +14,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0002](0002-shorts-classification-via-channel-rss.md) | Classify Shorts from the channel RSS feed rather than from video duration | accepted | 2026-08-15 |
 | [0003](0003-allowlist-resolution-semantics.md) | Resolve channel access as three states: blocked, requestable, allowed | accepted | 2026-08-15 |
 | [0004](0004-multi-parent-permission-model.md) | One admin parent plus scoped parents, rather than a single account or equal co-admins | accepted | 2026-08-15 |
+| [0005](0005-mixed-child-search-with-detail-hydration.md) | Use one mixed child search call and hydrate results before policy evaluation | accepted | 2026-08-15 |

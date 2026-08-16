@@ -406,3 +406,36 @@ func TestStaleApprovedChannelIDsUsesUploadsClock(t *testing.T) {
 		t.Fatalf("after MarkChannelRefreshed() = %v, want only %s", ids, channels[1].ID)
 	}
 }
+
+func TestCatalogVideosByIDPreservesCallerOrder(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	catalog := NewCatalog(db, nil)
+	channelID := "UC" + uuid.NewString()
+	firstID := "video-" + uuid.NewString()
+	secondID := "video-" + uuid.NewString()
+
+	if err := catalog.UpsertChannels(ctx, []youtube.Channel{{ID: channelID, Title: "Channel"}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Delete(&Channel{}, "id = ?", channelID).Error; err != nil {
+			t.Errorf("cleaning channel: %v", err)
+		}
+	})
+
+	if err := catalog.UpsertVideos(ctx, []youtube.Video{
+		{ID: firstID, ChannelID: channelID, Title: "First"},
+		{ID: secondID, ChannelID: channelID, Title: "Second"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := catalog.VideosByID(ctx, []string{secondID, "missing", firstID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != secondID || got[1].ID != firstID {
+		t.Fatalf("VideosByID() = %+v, want second then first with missing skipped", got)
+	}
+}

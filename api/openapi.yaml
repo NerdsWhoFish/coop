@@ -867,7 +867,7 @@ paths:
       description: |
         Results from channels that are not yet allowed are marked `locked` so
         the client can render an ask affordance rather than a dead end. Blocked
-        channels never appear.
+        channels never appear. Non-embeddable and live videos are omitted.
       security:
         - childToken: []
       parameters:

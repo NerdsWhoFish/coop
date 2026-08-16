@@ -43,6 +43,49 @@ type Page struct {
 	NextCursor string
 }
 
+// SearchVideo is a search tile plus whether playback must wait for approval.
+type SearchVideo struct {
+	Video  store.Video
+	Locked bool
+}
+
+// Search filters freshly fetched video matches for one child. Blocked
+// channels and live content disappear, requestable channels remain as locked
+// tiles, and keyword hits on allowed channels are logged for parent review.
+func (s *Service) Search(ctx context.Context, familyID, childID uuid.UUID,
+	videos []store.Video) ([]SearchVideo, error) {
+
+	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]SearchVideo, 0, len(videos))
+	suppressed := make([]policy.Suppression, 0)
+	for _, video := range videos {
+		decision := evaluator.SearchVideo(toPolicyVideo(video))
+		switch decision.Verdict {
+		case policy.VerdictServe:
+			out = append(out, SearchVideo{Video: video})
+		case policy.VerdictLocked:
+			out = append(out, SearchVideo{Video: video, Locked: true})
+		case policy.VerdictSuppressed:
+			suppressed = append(suppressed, policy.Suppression{
+				VideoID:   video.ID,
+				KeywordID: decision.Match.KeywordID,
+				Term:      decision.Match.Term,
+				Scope:     decision.Match.Scope,
+				Field:     decision.Match.Field,
+			})
+		}
+	}
+
+	if err := s.logSuppressions(ctx, childID, suppressed); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Home returns recent uploads from channels the child both subscribes to and
 // is allowed to watch.
 func (s *Service) Home(ctx context.Context, familyID, childID uuid.UUID,

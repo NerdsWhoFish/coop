@@ -226,7 +226,7 @@ func TestSearchBudgetIsMeteredInCalls(t *testing.T) {
 	}
 }
 
-func TestSearchIgnoresBlankQueries(t *testing.T) {
+func TestSearchChannelsIgnoresBlankQueries(t *testing.T) {
 	h := newHarness(t, jsonHandler(`{"items":[]}`))
 
 	got, err := h.client.SearchChannels(context.Background(), "   ")
@@ -241,12 +241,84 @@ func TestSearchIgnoresBlankQueries(t *testing.T) {
 	}
 }
 
+func TestSearchHydratesMixedResultsWithOneSearchCall(t *testing.T) {
+	const firstChannel = "UCabcdefghijklmnopqrstuv"
+	const secondChannel = "UCzyxwvutsrqponmlkjihgfe"
+
+	h := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/search":
+			if got := r.URL.Query().Get("type"); got != "channel,video" {
+				t.Errorf("search type = %q, want channel,video", got)
+			}
+			_, _ = w.Write([]byte(`{"items":[
+                {"id":{"channelId":"` + firstChannel + `"},"snippet":{"title":"Channel match"}},
+                {"id":{"videoId":"embeddable"},"snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel"}},
+                {"id":{"videoId":"embeddable-two"},"snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel"}},
+                {"id":{"videoId":"blocked-embed"},"snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel"}}
+            ]}`))
+		case "/channels":
+			_, _ = w.Write([]byte(`{"items":[
+                {"id":"` + firstChannel + `","snippet":{"title":"Channel match","thumbnails":{}},"statistics":{},"brandingSettings":{}},
+                {"id":"` + secondChannel + `","snippet":{"title":"Video channel","thumbnails":{}},"statistics":{},"brandingSettings":{}}
+            ]}`))
+		case "/videos":
+			_, _ = w.Write([]byte(`{"items":[
+                {"id":"embeddable-two","snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel","title":"Playable two","publishedAt":"2026-08-01T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},"contentDetails":{"duration":"PT5M"},"status":{"embeddable":true}},
+                {"id":"blocked-embed","snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel","title":"Not playable","publishedAt":"2026-08-01T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},"contentDetails":{"duration":"PT5M"},"status":{"embeddable":false}},
+                {"id":"embeddable","snippet":{"channelId":"` + secondChannel + `","channelTitle":"Video channel","title":"Playable","publishedAt":"2026-08-01T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},"contentDetails":{"duration":"PT5M"},"status":{"embeddable":true}}
+            ]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	got, err := h.client.Search(context.Background(), "  Example   Search ")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(got.Channels) != 1 || got.Channels[0].ID != firstChannel {
+		t.Errorf("channel matches = %+v", got.Channels)
+	}
+	if len(got.RelatedChannels) != 2 {
+		t.Errorf("related channels = %d, want 2", len(got.RelatedChannels))
+	}
+	if len(got.Videos) != 2 || got.Videos[0].ID != "embeddable" || got.Videos[1].ID != "embeddable-two" {
+		t.Errorf("video matches = %+v, want the embeddable videos in search order", got.Videos)
+	}
+	if *h.calls != 3 {
+		t.Errorf("HTTP calls = %d, want one search and two detail calls", *h.calls)
+	}
+	if got := h.ledger.usage[domain.PurposeSearch]; got != (Spend{Calls: 1}) {
+		t.Errorf("search spend = %+v, want one call", got)
+	}
+	if got := h.ledger.usage[domain.PurposeFeed]; got != (Spend{Units: 2, Calls: 2}) {
+		t.Errorf("detail spend = %+v, want two general units", got)
+	}
+}
+
+func TestMixedSearchIgnoresBlankQueries(t *testing.T) {
+	h := newHarness(t, jsonHandler(`{"items":[]}`))
+
+	got, err := h.client.Search(context.Background(), "   ")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(got.Channels) != 0 || len(got.RelatedChannels) != 0 || len(got.Videos) != 0 {
+		t.Errorf("results = %+v, want empty", got)
+	}
+	if *h.calls != 0 {
+		t.Errorf("http calls = %d, want a blank query to cost nothing", *h.calls)
+	}
+}
+
 const videosBody = `{"items":[
  {"id":"vid1","snippet":{"channelId":"UCabcdefghijklmnopqrstuv","channelTitle":"Example",
    "title":"Regular","description":"d","tags":["a","b"],
    "publishedAt":"2026-08-01T12:00:00Z","liveBroadcastContent":"none",
    "thumbnails":{"maxres":{"url":"https://i.ytimg.com/max.jpg"}}},
-  "contentDetails":{"duration":"PT10M"},"status":{"madeForKids":true}},
+  "contentDetails":{"duration":"PT10M"},"status":{"madeForKids":true,"embeddable":true}},
  {"id":"vid2","snippet":{"channelId":"UCabcdefghijklmnopqrstuv","title":"Finished stream",
    "publishedAt":"2026-08-02T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},
   "contentDetails":{"duration":"PT1H"},"liveStreamingDetails":{}},

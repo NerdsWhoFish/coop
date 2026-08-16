@@ -40,6 +40,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Multiple parents**, scoped to the children they are allowed to manage.
 - **Local subscriptions, likes, and dislikes** that never touch YouTube.
 - **No livestreams**, including finished livestream VODs.
+- **Child search across channels and videos**, with blocked results hidden and requestable videos locked behind approval.
 - **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data.
 
 ## Components

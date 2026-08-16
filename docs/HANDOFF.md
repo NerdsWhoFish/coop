@@ -3,7 +3,7 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status as of the last commit on `main`: **Phase 0 and Phase 1 are complete, including ingest and cleanup scheduling.**
+Status as of the last commit on `main`: **Phase 0 and Phase 1 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
 No iOS code exists yet.
 
@@ -37,12 +37,12 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - Scheduled ingest of recent uploads from approved channels, including authoritative RSS Shorts classification.
 - One-minute approval polling separated from the six-hour quota-bearing uploads refresh.
 - Daily cleanup of expired cache entries, sessions, pairing codes, and prior-day ledgers.
+- Mixed channel-and-video child search with locked requestable results and full policy filtering.
 - Thumbnail proxy.
 
 ### Not built yet
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
-- **Video search for children.** `/child/search` returns channels correctly but always an empty `videos` array, even when `videoSearchTiles` is on.
 - **Backfill.** The budget reserve exists; nothing spends it.
 - **Both iOS apps.** Phases 2 through 4.
 - **The ranker** (`internal/rank`). Phase 6, deliberately last.
@@ -88,6 +88,10 @@ A 403 confirms the resource exists, which is exactly what scoping withholds.
 
 **`domain.LiveState.IsLive()` enumerates live states positively.**
 It used to be `s != LiveNone`, which meant the zero value read as live and silently emptied every feed.
+
+**Child video search uses one mixed `search.list` call.**
+Splitting channels and videos into separate searches doubles consumption of Google's 100-call daily Search Queries bucket.
+ADR 0005 records why the mixed results are hydrated with cheap detail calls before policy runs.
 Leave it enumerating.
 
 **Live filtering needs two checks, not one.**
@@ -131,10 +135,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Video search for children.** `/child/search` currently returns channels only.
-Note that video search costs from the same 100-call bucket, so decide whether it is worth the spend before building it.
-
-**2. Then Phase 2**, the parent iOS app. PLAN.md §13.
+**1. Phase 2**, the parent iOS app. PLAN.md §13.
 
 ---
 

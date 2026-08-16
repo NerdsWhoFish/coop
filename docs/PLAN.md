@@ -533,7 +533,7 @@ Until then the parent app shows a badge on foreground refresh.
 
 **Phase 0, foundations.**
 Repo scaffold, module path, OpenAPI spec, Postgres schema and GORM models, migrations, config, CI.
-ADRs for the four real decisions: embedded player versus proxying the stream, Shorts classification via channel RSS rather than duration, allowlist resolution semantics, multi-parent permission model.
+ADRs for the real decisions: embedded player versus proxying the stream, Shorts classification via channel RSS rather than duration, allowlist resolution semantics, multi-parent permission model, and mixed child search with detail hydration.
 
 **Phase 1, backend core.**
 YouTube client with caching, budgets, quota accounting, and scheduled ingest of approved channels.
@@ -541,6 +541,7 @@ New approvals are discovered by a cheap database poll without shortening the six
 Policy engine with exhaustive table-driven tests.
 Auth, pairing, multi-parent scoping, full REST surface, and thumbnail proxy.
 Expired operational rows are purged on startup and daily thereafter.
+Child searches return channels and policy-filtered videos from one mixed search call, with complete metadata hydrated before evaluation.
 Ends with a backend that is complete and exercisable via curl.
 
 **Phase 2, parent app.**

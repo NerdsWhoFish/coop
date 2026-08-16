@@ -72,18 +72,30 @@ func (c *Catalog) UpsertVideos(ctx context.Context, videos []youtube.Video) erro
 	now := c.now()
 	rows := make([]Video, len(videos))
 	for i, v := range videos {
+		tags := pq.StringArray(v.Tags)
+		if tags == nil {
+			tags = pq.StringArray{}
+		}
+		shortSource := v.ShortSource
+		if shortSource == "" {
+			shortSource = domain.ShortSourceDuration
+		}
+		liveState := v.LiveState
+		if liveState == "" {
+			liveState = domain.LiveNone
+		}
 		rows[i] = Video{
 			ID:              v.ID,
 			ChannelID:       v.ChannelID,
 			Title:           v.Title,
 			Description:     v.Description,
-			Tags:            pq.StringArray(v.Tags),
+			Tags:            tags,
 			DurationSeconds: int(v.Duration.Seconds()),
 			PublishedAt:     v.PublishedAt,
 			ThumbnailURL:    v.ThumbnailURL,
 			IsShort:         v.IsShort,
-			ShortSource:     v.ShortSource,
-			LiveState:       v.LiveState,
+			ShortSource:     shortSource,
+			LiveState:       liveState,
 			MadeForKids:     v.MadeForKids,
 			FetchedAt:       now,
 		}
@@ -169,6 +181,32 @@ func (c *Catalog) Video(ctx context.Context, id string) (Video, error) {
 	var row Video
 	err := c.db.WithContext(ctx).First(&row, "id = ?", id).Error
 	return row, wrap(err, "reading video")
+}
+
+// VideosByID reads cached videos in the caller's order. YouTube detail calls
+// may omit deleted or private results, so missing IDs are skipped.
+func (c *Catalog) VideosByID(ctx context.Context, ids []string) ([]Video, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var rows []Video
+	if err := c.db.WithContext(ctx).Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("reading videos: %w", err)
+	}
+
+	byID := make(map[string]Video, len(rows))
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+
+	out := make([]Video, 0, len(rows))
+	for _, id := range ids {
+		if row, ok := byID[id]; ok {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }
 
 // StaleChannelIDs lists cached channels whose uploads are due a refresh.

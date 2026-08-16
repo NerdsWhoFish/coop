@@ -62,8 +62,19 @@ type Video struct {
 	ThumbnailURL string
 	LiveState    domain.LiveState
 	MadeForKids  bool
+	Embeddable   bool
 	IsShort      bool
 	ShortSource  domain.ShortSource
+}
+
+// SearchResults is one mixed channel-and-video search.
+// RelatedChannels contains metadata for every direct channel match and every
+// channel owning a video match, which lets callers satisfy video foreign keys
+// without exposing unrelated channels as direct search results.
+type SearchResults struct {
+	Channels        []Channel
+	RelatedChannels []Channel
+	Videos          []Video
 }
 
 // Config builds a Client. One Client serves one family, because the API key
@@ -248,6 +259,7 @@ func (c *Client) Videos(ctx context.Context, ids []string, purpose domain.QuotaP
 			Duration:     duration,
 			ThumbnailURL: item.Snippet.Thumbnails.best(),
 			MadeForKids:  item.Status.MadeForKids,
+			Embeddable:   item.Status.Embeddable,
 			LiveState: ClassifyLive(
 				item.Snippet.LiveBroadcastContent,
 				item.LiveStreamingDetails != nil,
@@ -261,6 +273,113 @@ func (c *Client) Videos(ctx context.Context, ids []string, purpose domain.QuotaP
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// Search finds both channels and videos with one search.list call, preserving
+// the scarce search bucket. The cheap detail calls are required before a video
+// can pass live-state and keyword policy or be stored safely.
+func (c *Client) Search(ctx context.Context, query string) (SearchResults, error) {
+	normalized := NormalizeQuery(query)
+	if normalized == "" {
+		return SearchResults{}, nil
+	}
+
+	params := url.Values{}
+	params.Set("part", "snippet")
+	params.Set("type", "channel,video")
+	params.Set("q", normalized)
+	params.Set("maxResults", "25")
+
+	body, err := c.fetch(ctx, endpointSearch, params, domain.PurposeSearch, 1)
+	if err != nil {
+		return SearchResults{}, err
+	}
+
+	var resp searchListResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return SearchResults{}, fmt.Errorf("decoding search.list: %w", err)
+	}
+
+	directChannels := make([]string, 0, len(resp.Items))
+	channelIDs := make([]string, 0, len(resp.Items))
+	videoIDs := make([]string, 0, len(resp.Items))
+	seenChannels := make(map[string]struct{}, len(resp.Items))
+	seenDirectChannels := make(map[string]struct{}, len(resp.Items))
+	seenVideos := make(map[string]struct{}, len(resp.Items))
+
+	addChannel := func(id string) {
+		if !ValidChannelID(id) {
+			return
+		}
+		if _, seen := seenChannels[id]; seen {
+			return
+		}
+		seenChannels[id] = struct{}{}
+		channelIDs = append(channelIDs, id)
+	}
+
+	for _, item := range resp.Items {
+		if id := item.ID.ChannelID; ValidChannelID(id) {
+			if _, seen := seenDirectChannels[id]; !seen {
+				seenDirectChannels[id] = struct{}{}
+				directChannels = append(directChannels, id)
+			}
+			addChannel(id)
+		}
+		if id := item.ID.VideoID; id != "" && ValidChannelID(item.Snippet.ChannelID) {
+			addChannel(item.Snippet.ChannelID)
+			if _, seen := seenVideos[id]; !seen {
+				seenVideos[id] = struct{}{}
+				videoIDs = append(videoIDs, id)
+			}
+		}
+	}
+
+	channels, err := c.Channels(ctx, channelIDs, domain.PurposeFeed)
+	if err != nil {
+		return SearchResults{}, fmt.Errorf("hydrating search channels: %w", err)
+	}
+	videos, err := c.Videos(ctx, videoIDs, domain.PurposeFeed)
+	if err != nil {
+		return SearchResults{}, fmt.Errorf("hydrating search videos: %w", err)
+	}
+
+	byID := make(map[string]Channel, len(channels))
+	for _, channel := range channels {
+		byID[channel.ID] = channel
+	}
+
+	videoByID := make(map[string]Video, len(videos))
+	for _, video := range videos {
+		videoByID[video.ID] = video
+	}
+	orderedVideos := make([]Video, 0, len(videos))
+	// A result the official player cannot embed is a dead tile. A video whose
+	// channel disappeared between calls also cannot satisfy storage's channel
+	// foreign key. Neither reaches storage or policy evaluation.
+	for _, id := range videoIDs {
+		video, ok := videoByID[id]
+		if !ok {
+			continue
+		}
+		_, channelExists := byID[video.ChannelID]
+		if video.Embeddable && channelExists {
+			orderedVideos = append(orderedVideos, video)
+		}
+	}
+
+	matches := make([]Channel, 0, len(directChannels))
+	for _, id := range directChannels {
+		if channel, ok := byID[id]; ok {
+			matches = append(matches, channel)
+		}
+	}
+
+	return SearchResults{
+		Channels:        matches,
+		RelatedChannels: channels,
+		Videos:          orderedVideos,
+	}, nil
 }
 
 // SearchChannels finds channels by name. It spends from the search bucket,
@@ -505,6 +624,7 @@ type videoListResponse struct {
 		} `json:"contentDetails"`
 		Status struct {
 			MadeForKids bool `json:"madeForKids"`
+			Embeddable  bool `json:"embeddable"`
 		} `json:"status"`
 		LiveStreamingDetails *struct{} `json:"liveStreamingDetails"`
 	} `json:"items"`
@@ -514,11 +634,14 @@ type searchListResponse struct {
 	Items []struct {
 		ID struct {
 			ChannelID string `json:"channelId"`
+			VideoID   string `json:"videoId"`
 		} `json:"id"`
 		Snippet struct {
-			Title       string     `json:"title"`
-			Description string     `json:"description"`
-			Thumbnails  thumbnails `json:"thumbnails"`
+			ChannelID    string     `json:"channelId"`
+			ChannelTitle string     `json:"channelTitle"`
+			Title        string     `json:"title"`
+			Description  string     `json:"description"`
+			Thumbnails   thumbnails `json:"thumbnails"`
 		} `json:"snippet"`
 	} `json:"items"`
 }

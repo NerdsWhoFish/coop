@@ -196,7 +196,7 @@ func (s *Server) handleChildChannel(w http.ResponseWriter, r *http.Request, c au
 // allow it, marking anything not yet approved so the client can offer an ask
 // rather than a dead end.
 func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c auth.Child) error {
-	query := r.URL.Query().Get("q")
+	query := youtube.NormalizeQuery(r.URL.Query().Get("q"))
 	if query == "" {
 		return badRequest("q is required")
 	}
@@ -223,12 +223,37 @@ func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c aut
 		return err
 	}
 
-	channels, err := client.SearchChannels(r.Context(), query)
-	if err != nil {
-		return err
-	}
-	if err := s.deps.Catalog.UpsertChannels(r.Context(), channels); err != nil {
-		return err
+	var channels []youtube.Channel
+	var videos []store.Video
+	if child.VideoSearchTiles {
+		results, err := client.Search(r.Context(), query)
+		if err != nil {
+			return err
+		}
+		channels = results.Channels
+		if err := s.deps.Catalog.UpsertChannels(r.Context(), results.RelatedChannels); err != nil {
+			return err
+		}
+		if err := s.deps.Catalog.UpsertVideos(r.Context(), results.Videos); err != nil {
+			return err
+		}
+
+		ids := make([]string, len(results.Videos))
+		for i, video := range results.Videos {
+			ids[i] = video.ID
+		}
+		videos, err = s.deps.Catalog.VideosByID(r.Context(), ids)
+		if err != nil {
+			return err
+		}
+	} else {
+		channels, err = client.SearchChannels(r.Context(), query)
+		if err != nil {
+			return err
+		}
+		if err := s.deps.Catalog.UpsertChannels(r.Context(), channels); err != nil {
+			return err
+		}
 	}
 	if err := s.deps.Activity.RecordSearch(r.Context(), c.ID, day); err != nil {
 		return err
@@ -257,9 +282,28 @@ func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c aut
 		})
 	}
 
+	videoOut := []videoDTO{}
+	if len(videos) > 0 {
+		videoResults, err := s.deps.Feed.Search(r.Context(), c.FamilyID, c.ID, videos)
+		if err != nil {
+			return err
+		}
+		videoRows := make([]store.Video, len(videoResults))
+		for i, result := range videoResults {
+			videoRows[i] = result.Video
+		}
+		videoOut, err = s.videoDTOs(r, videoRows)
+		if err != nil {
+			return err
+		}
+		for i, result := range videoResults {
+			videoOut[i].Locked = result.Locked
+		}
+	}
+
 	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]any{
 		"channels": out,
-		"videos":   []videoDTO{},
+		"videos":   videoOut,
 	})
 	return nil
 }

@@ -106,6 +106,8 @@ type Verdict string
 const (
 	VerdictServe             Verdict = "serve"
 	VerdictChannelNotAllowed Verdict = "channel_not_allowed"
+	VerdictHidden            Verdict = "hidden"
+	VerdictLocked            Verdict = "locked"
 	VerdictLive              Verdict = "live"
 	VerdictSuppressed        Verdict = "suppressed"
 )
@@ -225,6 +227,21 @@ func (e *Evaluator) Video(v Video) Decision {
 		return Decision{Verdict: VerdictSuppressed, Match: m}
 	}
 	return Decision{Verdict: VerdictServe}
+}
+
+// SearchVideo preserves the distinction browsing needs between a blocked
+// channel, which is invisible, and a requestable channel, whose videos appear
+// locked with an ask affordance. Allowed videos still pass through the normal
+// live and keyword rules.
+func (e *Evaluator) SearchVideo(v Video) Decision {
+	switch e.rules.State(v.ChannelID) {
+	case domain.StateBlocked:
+		return Decision{Verdict: VerdictHidden}
+	case domain.StateRequestable:
+		return Decision{Verdict: VerdictLocked}
+	default:
+		return e.Video(v)
+	}
 }
 
 // Suppression is a keyword hit worth recording for the parent's review.

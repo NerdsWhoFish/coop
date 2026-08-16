@@ -203,6 +203,62 @@ func TestEvaluatorVideo(t *testing.T) {
 	}
 }
 
+func TestEvaluatorSearchVideo(t *testing.T) {
+	keyword := Keyword{ID: "kw", Term: "scary", MatchTitle: true, WholeWord: true}
+	tests := []struct {
+		name  string
+		rules ChannelRules
+		video Video
+		want  Verdict
+	}{
+		{
+			name:  "allowed video is playable",
+			rules: allowedRules(),
+			video: Video{ID: "allowed", ChannelID: chAllowed},
+			want:  VerdictServe,
+		},
+		{
+			name:  "requestable video is locked",
+			video: Video{ID: "requestable", ChannelID: chOther},
+			want:  VerdictLocked,
+		},
+		{
+			name: "blocked video is hidden",
+			rules: ChannelRules{
+				Blocked: NewChannelSet(chOther),
+			},
+			video: Video{ID: "blocked", ChannelID: chOther},
+			want:  VerdictHidden,
+		},
+		{
+			name:  "live video from allowed channel is hidden",
+			rules: allowedRules(),
+			video: Video{ID: "live", ChannelID: chAllowed, LiveState: domain.LiveLive},
+			want:  VerdictLive,
+		},
+		{
+			name:  "keyword applies to allowed video",
+			rules: allowedRules(),
+			video: Video{ID: "keyword", ChannelID: chAllowed, Title: "a scary story"},
+			want:  VerdictSuppressed,
+		},
+		{
+			name:  "keyword does not hide a locked tile",
+			video: Video{ID: "locked-keyword", ChannelID: chOther, Title: "a scary story"},
+			want:  VerdictLocked,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil)
+			if got := evaluator.SearchVideo(tt.video).Verdict; got != tt.want {
+				t.Errorf("Verdict = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // A parent reviewing a suppression needs to know which rule fired, so the
 // keyword identity has to survive evaluation intact.
 func TestSuppressionCarriesKeywordIdentity(t *testing.T) {
