@@ -3,9 +3,9 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status: **Phases 0 through 4 are complete.**
+Status: **Phases 0 through 4 and Phase 6 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
-The native parent app covers the complete Phase 2 surface: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, and scoped parent invitations.
+The native parent app covers the complete Phase 2 and 6 surfaces: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, scoped parent invitations, explainable feed previews, and per-channel recommendation tuning.
 The native child app covers the complete Phase 3 and 4 surface: secure pairing, home and subscription feeds, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, sharing, and a shuffled vertical Shorts feed.
 
 ---
@@ -42,12 +42,13 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 - Mixed channel-and-video child search with locked requestable results and full policy filtering.
 - Thumbnail proxy.
 - Native parent and child apps, including a single-player Shorts feed with snap paging, looping, reactions, watch reporting, and parent-controlled visibility.
+- A pure local ranker that prioritizes explicit preferences and completion while reserving feed space for variety, forgotten channels, and unwatched videos.
+- Parent recommendation controls from much less through much more, with plain-language explanations for the resulting feed order.
 
 ### Not built yet
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Backfill.** The budget reserve exists; nothing spends it.
-- **The ranker** (`internal/rank`). Phase 6, deliberately last.
 
 ---
 
@@ -63,6 +64,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 | `internal/ingest` | Refreshes approved channels and stores their recent uploads. |
 | `internal/cleanup` | Purges expired operational rows immediately on startup and daily thereafter. |
 | `internal/feed` | Composes catalog and policy into feeds. |
+| `internal/rank` | Scores approved videos and applies hard diversity constraints without I/O. |
 | `internal/auth` | Passwords, tokens, pairing codes, scoping rules. |
 | `internal/crypto` | AES-256-GCM sealing for stored secrets. |
 | `internal/api` | HTTP surface. |
@@ -82,8 +84,8 @@ Most were arrived at by fixing a real bug.
 Purity is what makes the rules exhaustively table-testable without a database.
 If you need a store type in policy, convert it at the boundary instead.
 
-**`internal/rank` must never call YouTube.**
-It does not exist yet, but the constraint is already load-bearing.
+**`internal/rank` must never call YouTube or import persistence.**
+The constraint is load-bearing.
 Ranking runs on every feed load; any per-request API call there exhausts the daily allocation before lunch.
 PLAN.md §8 and §15 cover it.
 
@@ -117,7 +119,7 @@ A video already outside it when backfilled is never revisited, so its duration-b
 One short-TTL call site can drain it, and it cannot be bought back.
 
 **Migrations are now forward-only.**
-`000001` through `000005` are committed history.
+`000001` through `000006` are committed history.
 Add a new migration; do not edit an existing one.
 
 **Channel metadata and upload refreshes have separate clocks.**
@@ -161,6 +163,7 @@ make dev-db && make test-integration             # needs Postgres
 swift test --package-path ios/CoopKit            # generated client and shared Swift code
 xcodegen generate --spec ios/CooperTheCop/project.yml
 xcodegen generate --spec ios/CooperWatch/project.yml
+xcodebuild -project ios/CooperTheCop/CooperTheCop.xcodeproj -scheme CooperTheCop -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test CODE_SIGNING_ALLOWED=NO
 ```
 
 Integration tests are behind a build tag and skip without `COOP_TEST_DATABASE_DSN`.

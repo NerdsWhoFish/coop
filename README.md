@@ -8,9 +8,9 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
-> **Status: pre-alpha.** Phases 0 through 4 are complete.
+> **Status: pre-alpha.** Phases 0 through 4 and Phase 6 are complete.
 > The backend builds, migrates, serves, and keeps approved channels ingested.
-> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, and scoped parent invitations.
+> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, scoped parent invitations, and explainable recommendation tuning.
 > The child app handles pairing, approved feeds and channels, subscriptions, mixed search and approval requests, embedded playback, local reactions, sharing, and a policy-filtered Shorts feed.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md) for where things stand, the invariants worth not breaking, and what to build next.
@@ -65,7 +65,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `adr/` | Architecture decision records |
 | `docs/PLAN.md` | Full design document |
 
-The parent app (`Cooper The Cop`) is complete through Phase 2.
+The parent app (`Cooper The Cop`) is complete through Phase 2 and includes the Phase 6 recommendation mixer.
 The child app (`Cooper Watch`) is complete through Phase 4.
 
 ## Requirements

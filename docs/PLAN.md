@@ -563,6 +563,7 @@ Network and device setup docs, Google Cloud project walkthrough, demo family, co
 **Phase 6, recommendations.**
 `internal/rank`, parent-tunable weights, anti-tunnel constraints, explanation strings in the parent app.
 Deliberately last: `watch_event` has been collecting since Phase 1, so by the time this is built there is real history to tune against rather than guesses.
+Complete.
 
 ---
 
