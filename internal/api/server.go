@@ -90,6 +90,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/healthz", s.handleReadiness)
 	m.HandleFunc("GET /version", s.handleVersion)
 	if s.deps.Installer != nil {
+		m.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)
+		})
 		m.Handle("GET /install/", http.StripPrefix("/install", s.deps.Installer))
 		m.HandleFunc("GET /install", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)

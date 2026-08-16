@@ -62,6 +62,9 @@ func isHTTPMethod(value string) bool {
 func TestInstallerRoutesAreOptIn(t *testing.T) {
 	disabled := &Server{mux: http.NewServeMux()}
 	disabled.routes()
+	if got := routeStatus(disabled.mux, "/"); got != http.StatusNotFound {
+		t.Fatalf("disabled root status = %d, want 404", got)
+	}
 	if got := routeStatus(disabled.mux, "/install/"); got != http.StatusNotFound {
 		t.Fatalf("disabled installer status = %d, want 404", got)
 	}
@@ -73,6 +76,11 @@ func TestInstallerRoutesAreOptIn(t *testing.T) {
 		mux: http.NewServeMux(),
 	}
 	enabled.routes()
+	rootRecorder := httptest.NewRecorder()
+	enabled.mux.ServeHTTP(rootRecorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rootRecorder.Code != http.StatusPermanentRedirect || rootRecorder.Header().Get("Location") != "/install/" {
+		t.Fatalf("root redirect = %d %q", rootRecorder.Code, rootRecorder.Header().Get("Location"))
+	}
 	if got := routeStatus(enabled.mux, "/install/"); got != http.StatusNoContent {
 		t.Fatalf("enabled installer status = %d, want 204", got)
 	}
