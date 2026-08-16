@@ -310,7 +310,7 @@ func (c *Catalog) Videos(ctx context.Context, q FeedQuery) (FeedPage, error) {
 	if len(q.ChannelIDs) == 0 {
 		return FeedPage{}, nil
 	}
-	if q.Limit <= 0 || q.Limit > 100 {
+	if q.Limit <= 0 || q.Limit > 2000 {
 		q.Limit = 30
 	}
 

@@ -118,6 +118,72 @@ func (a *Activity) RecordWatch(ctx context.Context, childID uuid.UUID, videoID s
 	return wrap(a.db.WithContext(ctx).Create(&row).Error, "recording watch event")
 }
 
+// RankingWatch includes channel identity so a completion can improve later
+// uploads from the same channel without another catalog lookup.
+type RankingWatch struct {
+	VideoID            string
+	ChannelID          string
+	StartedAt          time.Time
+	CompletionFraction float64
+}
+
+// RankingWatches returns recent local viewing signals for the ranker.
+func (a *Activity) RankingWatches(ctx context.Context, childID uuid.UUID,
+	since time.Time) ([]RankingWatch, error) {
+
+	var rows []RankingWatch
+	err := a.db.WithContext(ctx).Model(&WatchEvent{}).
+		Select("watch_event.video_id, video.channel_id, watch_event.started_at, watch_event.completion_fraction").
+		Joins("JOIN video ON video.id = watch_event.video_id").
+		Where("watch_event.child_id = ? AND watch_event.started_at >= ?", childID, since).
+		Order("watch_event.started_at DESC").
+		Scan(&rows).Error
+	return rows, wrap(err, "listing ranking watches")
+}
+
+// Reactions returns all explicit local preferences for one child.
+func (a *Activity) Reactions(ctx context.Context, childID uuid.UUID) ([]Reaction, error) {
+	var rows []Reaction
+	err := a.db.WithContext(ctx).Where("child_id = ?", childID).Find(&rows).Error
+	return rows, wrap(err, "listing reactions")
+}
+
+// ChannelWeights returns non-neutral parent preferences keyed by channel.
+func (a *Activity) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[string]int, error) {
+	var rows []ChannelWeight
+	err := a.db.WithContext(ctx).Where("child_id = ?", childID).Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("listing channel weights: %w", err)
+	}
+
+	weights := make(map[string]int, len(rows))
+	for _, row := range rows {
+		weights[row.ChannelID] = row.Weight
+	}
+	return weights, nil
+}
+
+// SetChannelWeight stores a soft parent preference. Neutral removes the row.
+func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
+	channelID string, weight int) error {
+
+	if weight < -2 || weight > 2 {
+		return fmt.Errorf("setting channel weight: weight must be between -2 and 2")
+	}
+	if weight == 0 {
+		return wrap(a.db.WithContext(ctx).
+			Delete(&ChannelWeight{}, "child_id = ? AND channel_id = ?", childID, channelID).Error,
+			"clearing channel weight")
+	}
+
+	row := ChannelWeight{ChildID: childID, ChannelID: channelID, Weight: weight, UpdatedAt: a.now()}
+	err := a.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "child_id"}, {Name: "channel_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"weight", "updated_at"}),
+	}).Create(&row).Error
+	return wrap(err, "setting channel weight")
+}
+
 // RaiseRequest records a child asking for a channel. A pending ask is updated
 // rather than duplicated, matching the partial unique index, so re-asking
 // cannot flood the parent's queue.

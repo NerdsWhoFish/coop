@@ -250,6 +250,15 @@ type WatchEvent struct {
 	CreatedAt          time.Time
 }
 
+// ChannelWeight is a parent's soft preference for one child's feed.
+// Zero is omitted from storage because it is the default.
+type ChannelWeight struct {
+	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ChannelID string    `gorm:"primaryKey"`
+	Weight    int       `gorm:"not null"`
+	UpdatedAt time.Time
+}
+
 // Request is a child asking for a channel they cannot yet watch.
 type Request struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
@@ -323,7 +332,7 @@ func AllModels() []any {
 		&Channel{}, &Video{},
 		&AllowGlobal{}, &AllowChild{}, &DenyChild{}, &BlockChannel{},
 		&Keyword{}, &VideoOverride{},
-		&Subscription{}, &Reaction{}, &WatchEvent{},
+		&Subscription{}, &Reaction{}, &WatchEvent{}, &ChannelWeight{},
 		&Request{}, &Suppression{},
 		&APICache{}, &QuotaSpend{}, &ChildSearch{},
 	}

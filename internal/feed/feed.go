@@ -4,15 +4,19 @@ package feed
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"hash/fnv"
 	"math/rand/v2"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/policy"
+	"github.com/nerdswhofish/coop/internal/rank"
 	"github.com/nerdswhofish/coop/internal/store"
 )
 
@@ -24,6 +28,11 @@ const maxRefillRounds = 4
 // shortsPoolSize caps how many Shorts take part in the shuffle. Large enough
 // that the feed does not feel repetitive, small enough to shuffle per request.
 const shortsPoolSize = 2000
+
+const (
+	recommendationPoolSize = 2000
+	rankingHistoryWindow   = 90 * 24 * time.Hour
+)
 
 // Service builds feeds for one family's children.
 type Service struct {
@@ -41,6 +50,20 @@ func New(catalog *store.Catalog, rules *store.Rules, activity *store.Activity) *
 type Page struct {
 	Videos     []store.Video
 	NextCursor string
+}
+
+// Recommendation is one ranked video with the explanation shown to parents.
+type Recommendation struct {
+	Video      store.Video
+	Score      float64
+	Reason     string
+	ReasonKind rank.ReasonKind
+}
+
+// RecommendationPage is the explainable form of a Home page.
+type RecommendationPage struct {
+	Recommendations []Recommendation
+	NextCursor      string
 }
 
 // SearchVideo is a search tile plus whether playback must wait for approval.
@@ -86,25 +109,194 @@ func (s *Service) Search(ctx context.Context, familyID, childID uuid.UUID,
 	return out, nil
 }
 
-// Home returns recent uploads from channels the child both subscribes to and
-// is allowed to watch.
+// Home returns a locally ranked, diverse page from approved channels.
 func (s *Service) Home(ctx context.Context, familyID, childID uuid.UUID,
 	limit int, cursor string) (Page, error) {
 
-	channelIDs, evaluator, err := s.watchableChannels(ctx, familyID, childID, true)
+	page, err := s.Recommendations(ctx, familyID, childID, limit, cursor)
 	if err != nil {
 		return Page{}, err
 	}
+
+	videos := make([]store.Video, 0, len(page.Recommendations))
+	for _, recommendation := range page.Recommendations {
+		videos = append(videos, recommendation.Video)
+	}
+	return Page{Videos: videos, NextCursor: page.NextCursor}, nil
+}
+
+// Recommendations ranks a bounded local catalog pool and exposes why each
+// video landed where it did. It never calls YouTube.
+func (s *Service) Recommendations(ctx context.Context, familyID, childID uuid.UUID,
+	limit int, cursor string) (RecommendationPage, error) {
+
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	channelIDs, evaluator, err := s.watchableChannels(ctx, familyID, childID, false)
+	if err != nil {
+		return RecommendationPage{}, err
+	}
 	if len(channelIDs) == 0 {
-		return Page{}, nil
+		return RecommendationPage{}, nil
 	}
 
-	return s.filteredPage(ctx, childID, evaluator, store.FeedQuery{
+	pool, err := s.catalog.Videos(ctx, store.FeedQuery{
 		ChannelIDs:    channelIDs,
 		ExcludeShorts: true,
-		Limit:         limit,
-		Cursor:        cursor,
+		Limit:         recommendationPoolSize,
 	})
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+	served, suppressed := evaluator.Filter(toPolicyVideos(pool.Videos))
+	if err := s.logSuppressions(ctx, childID, suppressed); err != nil {
+		return RecommendationPage{}, err
+	}
+	videos := selectByID(pool.Videos, served)
+	if len(videos) == 0 {
+		return RecommendationPage{}, nil
+	}
+
+	now := time.Now()
+	watches, err := s.activity.RankingWatches(ctx, childID, now.Add(-rankingHistoryWindow))
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+	reactions, err := s.activity.Reactions(ctx, childID)
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+	subscriptions, err := s.activity.SubscribedChannelIDs(ctx, childID)
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+	weights, err := s.activity.ChannelWeights(ctx, childID)
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+
+	ranked := rank.Videos(rank.Input{
+		Candidates:         rankCandidates(videos),
+		Watches:            rankWatches(watches),
+		Reactions:          rankReactions(reactions),
+		SubscribedChannels: stringSet(subscriptions),
+		ChannelWeights:     weights,
+		Now:                now,
+		PageSize:           limit,
+	})
+	start, err := recommendationStart(ranked, cursor)
+	if err != nil {
+		return RecommendationPage{}, err
+	}
+	end := min(start+limit, len(ranked))
+
+	byID := make(map[string]store.Video, len(videos))
+	for _, video := range videos {
+		byID[video.ID] = video
+	}
+	page := RecommendationPage{Recommendations: make([]Recommendation, 0, end-start)}
+	for _, item := range ranked[start:end] {
+		page.Recommendations = append(page.Recommendations, Recommendation{
+			Video:      byID[item.Candidate.ID],
+			Score:      item.Score,
+			Reason:     item.Reason,
+			ReasonKind: item.ReasonKind,
+		})
+	}
+	if end < len(ranked) {
+		page.NextCursor = encodeRecommendationCursor(ranked[end-1].Candidate.ID)
+	}
+	return page, nil
+}
+
+// ChannelWeights returns the parent's non-neutral feed preferences.
+func (s *Service) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[string]int, error) {
+	return s.activity.ChannelWeights(ctx, childID)
+}
+
+// SetChannelWeight changes a soft preference only for an approved channel.
+func (s *Service) SetChannelWeight(ctx context.Context, familyID, childID uuid.UUID,
+	channelID string, weight int) error {
+
+	evaluator, err := s.rules.Evaluator(ctx, familyID, childID)
+	if err != nil {
+		return err
+	}
+	if evaluator.Channel(channelID) != domain.StateAllowed {
+		return store.ErrNotFound
+	}
+	return s.activity.SetChannelWeight(ctx, childID, channelID, weight)
+}
+
+func rankCandidates(videos []store.Video) []rank.Candidate {
+	out := make([]rank.Candidate, 0, len(videos))
+	for _, video := range videos {
+		out = append(out, rank.Candidate{
+			ID: video.ID, ChannelID: video.ChannelID, PublishedAt: video.PublishedAt,
+		})
+	}
+	return out
+}
+
+func rankWatches(watches []store.RankingWatch) []rank.Watch {
+	out := make([]rank.Watch, 0, len(watches))
+	for _, watch := range watches {
+		out = append(out, rank.Watch{
+			VideoID: watch.VideoID, ChannelID: watch.ChannelID,
+			StartedAt: watch.StartedAt, CompletionFraction: watch.CompletionFraction,
+		})
+	}
+	return out
+}
+
+func rankReactions(reactions []store.Reaction) []rank.Reaction {
+	out := make([]rank.Reaction, 0, len(reactions))
+	for _, reaction := range reactions {
+		out = append(out, rank.Reaction{VideoID: reaction.VideoID, Kind: reaction.Kind})
+	}
+	return out
+}
+
+func stringSet(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, value := range values {
+		out[value] = true
+	}
+	return out
+}
+
+func recommendationStart(ranked []rank.Recommendation, cursor string) (int, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+	videoID, err := decodeRecommendationCursor(cursor)
+	if err != nil {
+		return 0, err
+	}
+	index := slices.IndexFunc(ranked, func(item rank.Recommendation) bool {
+		return item.Candidate.ID == videoID
+	})
+	if index < 0 {
+		return 0, fmt.Errorf("recommendation cursor no longer exists")
+	}
+	return index + 1, nil
+}
+
+func encodeRecommendationCursor(videoID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte("recommendation:" + videoID))
+}
+
+func decodeRecommendationCursor(cursor string) (string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", fmt.Errorf("malformed recommendation cursor: %w", err)
+	}
+	videoID, found := strings.CutPrefix(string(raw), "recommendation:")
+	if !found || videoID == "" {
+		return "", fmt.Errorf("malformed recommendation cursor")
+	}
+	return videoID, nil
 }
 
 // Shorts returns a shuffled, looping feed of short videos. It pages by offset
@@ -242,9 +434,7 @@ func (s *Service) Watchable(ctx context.Context, familyID, childID uuid.UUID,
 	return video, nil
 }
 
-// watchableChannels resolves which channels a feed may draw from. Subscriptions
-// make the home feed the child's own rather than everything ever approved;
-// Shorts skips that, since a subscribed-only pool runs dry too fast.
+// watchableChannels resolves which channels a feed may draw from.
 func (s *Service) watchableChannels(ctx context.Context, familyID, childID uuid.UUID,
 	subscribedOnly bool) ([]string, *policy.Evaluator, error) {
 
