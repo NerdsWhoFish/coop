@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1220B137724741C9867CB826 /* ChannelSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC8E2450BD9CD97B605B272D /* ChannelSearchView.swift */; };
 		14BC785746067A4818F975D9 /* RequestQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAF337A28072BFA4058D401 /* RequestQueueView.swift */; };
+		1952C189C8462984BA996258 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0278579E55DC70FC8333D42F /* Assets.xcassets */; };
 		2D7AD65157B8FB422F15FCEF /* RecommendationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B92356DC0DB24A410FC35F /* RecommendationModels.swift */; };
 		2EE1134AE164266178109602 /* RecommendationTuningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE00EFF23012454E59612BAD /* RecommendationTuningView.swift */; };
 		2F07AC46CE414D7F8BA54A9F /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A939CC28E13F6BBA929C4C08 /* RulesView.swift */; };
@@ -56,6 +57,7 @@
 /* Begin PBXFileReference section */
 		013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperTheCopTests.swift; sourceTree = "<group>"; };
 		01CFA18E6CB0B681B7DCC526 /* ChildDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildDevicesView.swift; sourceTree = "<group>"; };
+		0278579E55DC70FC8333D42F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		08EEC45B1391EF07F6893444 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		09443C460292AC0B137AAE9F /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
 		0F9522A513AFB6C7D5CFB441 /* TOTPVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOTPVerificationView.swift; sourceTree = "<group>"; };
@@ -236,8 +238,17 @@
 				BD19C2DAF4CB0D80C16BD3B5 /* DesignSystem */,
 				43266378E2D2506906D49262 /* Features */,
 				8D126FD213886F2DD7AD01AE /* Packages */,
+				D97013D91E8F3EC8A2B92A00 /* Resources */,
 				B409A09E450FF30E86D4DA4E /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D97013D91E8F3EC8A2B92A00 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0278579E55DC70FC8333D42F /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -342,6 +353,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1952C189C8462984BA996258 /* Assets.xcassets in Resources */,
 				A41D82758974A8DCC5116595 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -588,7 +600,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -610,7 +622,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		08C8405AF3AEFB1DE7AD6C26 /* ChildRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E37811CB8A7D9409E7C9D9 /* ChildRequestsView.swift */; };
 		0A92FBDF6E77A7FDC66B90D6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9654E746A4F5B63910469124 /* PrivacyInfo.xcprivacy */; };
+		2D3A3ECCCA1C9D2369CEA03B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33119F8E83ACDE41586BDB34 /* Assets.xcassets */; };
 		2DCDFE7B84C789BBD453E07C /* CoopKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9882B426CAE32DA811C3ED99 /* CoopKit */; };
 		2F062356F712AFB09B4641E7 /* ChildRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E33F4CB246B3DB86A07F49 /* ChildRootView.swift */; };
 		3CE098DF15ED14EDF63DFB73 /* ChildAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17DB97E074DC486B076F205 /* ChildAppModel.swift */; };
@@ -52,6 +53,7 @@
 		22E33F4CB246B3DB86A07F49 /* ChildRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildRootView.swift; sourceTree = "<group>"; };
 		239D30DFF25873E82BCE02AE /* SubscriptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionsView.swift; sourceTree = "<group>"; };
 		2E82E953F0DCA636B8D8D3D0 /* ChannelPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPageView.swift; sourceTree = "<group>"; };
+		33119F8E83ACDE41586BDB34 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		52D6143ECBAEA2D40D1F2435 /* WatchPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPageView.swift; sourceTree = "<group>"; };
 		55E4B135EDDA821C30106CEA /* VideoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCard.swift; sourceTree = "<group>"; };
 		78177997C79BC196C892669F /* ChildSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildSearchView.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				1EB314632748B38DFF1926DB /* DesignSystem */,
 				79F37FEDA379CDCCC3C6AEDE /* Features */,
 				4EC5EFC053162D7146FA7C19 /* Packages */,
+				F48885FF824F1EFEB511CE6B /* Resources */,
 				470C2E0E6D65290B706028B6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -232,6 +235,14 @@
 				52D6143ECBAEA2D40D1F2435 /* WatchPageView.swift */,
 			);
 			path = Watch;
+			sourceTree = "<group>";
+		};
+		F48885FF824F1EFEB511CE6B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				33119F8E83ACDE41586BDB34 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		FA4C2FF92FCF88ABF17E732C /* CooperWatchTests */ = {
@@ -345,6 +356,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2D3A3ECCCA1C9D2369CEA03B /* Assets.xcassets in Resources */,
 				0A92FBDF6E77A7FDC66B90D6 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -446,7 +458,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper Watch";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -623,7 +635,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper Watch";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
