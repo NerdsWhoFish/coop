@@ -8,12 +8,13 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
-> **Status: pre-alpha.** The backend builds, migrates, serves, and keeps approved channels ingested.
-> Phase 2 is complete: the parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, and scoped parent invitations.
+> **Status: pre-alpha.** Phases 0 through 3 are complete.
+> The backend builds, migrates, serves, and keeps approved channels ingested.
+> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, and scoped parent invitations.
+> The child app handles pairing, approved feeds and channels, subscriptions, mixed search and approval requests, embedded playback, local reactions, and sharing.
 >
-> **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where things stand, the
-> invariants worth not breaking, and what to build next. The full design is in
-> [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls in [adr/](adr/).
+> **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md) for where things stand, the invariants worth not breaking, and what to build next.
+> The full design is in [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls is in [adr/](adr/).
 
 ## How it works
 
@@ -59,18 +60,20 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `api/openapi.yaml` | The API contract, source of truth for both clients |
 | `ios/CoopKit` | Generated Swift API client and shared native code |
 | `ios/CooperTheCop` | SwiftUI parent app and XcodeGen project source |
+| `ios/CooperWatch` | SwiftUI child app and XcodeGen project source |
 | `adr/` | Architecture decision records |
 | `docs/PLAN.md` | Full design document |
 
 The parent app (`Cooper The Cop`) is complete through Phase 2.
-The child app (`Cooper Watch`) lands in Phases 3 and 4.
+The child app (`Cooper Watch`) is complete through Phase 3.
+Its vertical Shorts experience lands in Phase 4.
 
 ## Requirements
 
 - Go 1.26 or newer
 - Postgres 16 or newer
 - A Google Cloud project with the YouTube Data API v3 enabled, and an API key
-- Xcode 16 or newer and XcodeGen 2.46 or newer for the parent app
+- Xcode 16 or newer and XcodeGen 2.46 or newer for the native apps
 
 Every family needs their own API key.
 The YouTube API Developer Policies forbid embedding API credentials in open source projects, so there is no shared key and there never will be.
@@ -87,13 +90,19 @@ make test          # run tests
 make lint          # vet and staticcheck
 ```
 
-The shared Swift package and parent app can be checked independently:
+The shared Swift package and native apps can be checked independently:
 
 ```sh
 swift test --package-path ios/CoopKit
 xcodegen generate --spec ios/CooperTheCop/project.yml
-xcodebuild -project ios/CooperTheCop/CooperTheCop.xcodeproj \
+xcodebuild -skipPackagePluginValidation \
+  -project ios/CooperTheCop/CooperTheCop.xcodeproj \
   -scheme CooperTheCop -destination 'generic/platform=iOS Simulator' build \
+  CODE_SIGNING_ALLOWED=NO
+xcodegen generate --spec ios/CooperWatch/project.yml
+xcodebuild -skipPackagePluginValidation \
+  -project ios/CooperWatch/CooperWatch.xcodeproj \
+  -scheme CooperWatch -destination 'generic/platform=iOS Simulator' build \
   CODE_SIGNING_ALLOWED=NO
 ```
 

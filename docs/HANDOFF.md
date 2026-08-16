@@ -3,9 +3,10 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status: **Phases 0 through 2 are complete.**
+Status: **Phases 0 through 3 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
 The native parent app covers the complete Phase 2 surface: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, and scoped parent invitations.
+The native child app covers the complete Phase 3 surface: secure pairing, home and subscription feeds, channel pages and follows, mixed search, approval requests, embedded playback, local reactions, watch reporting, and sharing.
 
 ---
 
@@ -45,7 +46,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Backfill.** The budget reserve exists; nothing spends it.
-- **The child app.** Phases 3 and 4.
+- **The Shorts feed.** Phase 4.
 - **The ranker** (`internal/rank`). Phase 6, deliberately last.
 
 ---
@@ -68,6 +69,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 | `cmd/coopd` | Composition root. |
 | `ios/CoopKit` | Swift package containing the generated API client and shared transport code. |
 | `ios/CooperTheCop` | XcodeGen source and SwiftUI parent application. |
+| `ios/CooperWatch` | XcodeGen source and SwiftUI child application. |
 
 ---
 
@@ -138,7 +140,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Build Phase 3**, the child app core: pairing, home, subscriptions, channel pages, mixed search, watch pages, reactions, and sharing.
+**1. Build Phase 4**, the vertical Shorts feed with single-player mounting, shuffle and loop, allowed channels only, and accessible non-overlay controls.
 
 ---
 
@@ -149,6 +151,8 @@ go test ./...                                    # unit tests
 make dev-db && make test-integration             # needs Postgres
 ./scripts/smoke.sh                               # end to end, needs a running server
 swift test --package-path ios/CoopKit            # generated client and shared Swift code
+xcodegen generate --spec ios/CooperTheCop/project.yml
+xcodegen generate --spec ios/CooperWatch/project.yml
 ```
 
 Integration tests are behind a build tag and skip without `COOP_TEST_DATABASE_DSN`.

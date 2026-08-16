@@ -551,6 +551,7 @@ Complete.
 
 **Phase 3, child app core.**
 Home, subscriptions, channel pages, search with lock treatment, watch page with embed, likes, share.
+Complete.
 
 **Phase 4, Shorts.**
 Vertical scroll-snap feed with RSS-based classification, non-overlay chrome, single-player mounting, shuffle and loop, allowed channels only.
