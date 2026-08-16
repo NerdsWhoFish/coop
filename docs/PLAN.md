@@ -547,6 +547,7 @@ Ends with a backend that is complete and exercisable via curl.
 **Phase 2, parent app.**
 Setup, children, parents, request queue, allowlists, keywords, suppressed videos, YouTube deep links.
 Built before the child app so there is something to approve with.
+Complete.
 
 **Phase 3, child app core.**
 Home, subscriptions, channel pages, search with lock treatment, watch page with embed, likes, share.

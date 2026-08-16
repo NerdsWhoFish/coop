@@ -9,7 +9,7 @@ When they find something new, they ask, and a parent approves it from their own 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
 > **Status: pre-alpha.** The backend builds, migrates, serves, and keeps approved channels ingested.
-> The parent app now connects to an instance, performs setup or login, stores its session in Keychain, works the live request queue, and manages child profiles and settings.
+> Phase 2 is complete: the parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, channel discovery, family settings, and scoped parent invitations.
 >
 > **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): where things stand, the
 > invariants worth not breaking, and what to build next. The full design is in
@@ -62,7 +62,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `adr/` | Architecture decision records |
 | `docs/PLAN.md` | Full design document |
 
-The parent app (`Cooper The Cop`) is in progress in Phase 2.
+The parent app (`Cooper The Cop`) is complete through Phase 2.
 The child app (`Cooper Watch`) lands in Phases 3 and 4.
 
 ## Requirements

@@ -3,9 +3,9 @@
 Written for someone picking this up cold.
 Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the big decisions went the way they did.
 
-Status: **Phase 0 and Phase 1 are complete, and Phase 2 is in progress.**
+Status: **Phases 0 through 2 are complete.**
 The backend builds, migrates, serves, and is exercisable end to end.
-The parent app has its generated client, setup and login flow, Keychain session storage, pending request queue, and child profile management.
+The native parent app covers the complete Phase 2 surface: setup, Keychain sessions, children and devices, requests, policy, suppressions, channel discovery and review links, API-key and quota status, and scoped parent invitations.
 
 ---
 
@@ -45,7 +45,7 @@ It covers first-run setup, login, scoping, pairing, device revocation, keywords,
 
 - **TOTP.** The column and the `totpEnrolled` flag exist; no enrollment or verification flow.
 - **Backfill.** The budget reserve exists; nothing spends it.
-- **The rest of the parent app and the child app.** Phases 2 through 4.
+- **The child app.** Phases 3 and 4.
 - **The ranker** (`internal/rank`). Phase 6, deliberately last.
 
 ---
@@ -138,7 +138,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Finish Phase 2**, starting with policy management, then suppressions, channel search, YouTube deep links, and parent invitations.
+**1. Build Phase 3**, the child app core: pairing, home, subscriptions, channel pages, mixed search, watch pages, reactions, and sharing.
 
 ---
 
