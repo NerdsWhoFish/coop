@@ -36,17 +36,7 @@ struct ShortsFeedView: View {
           feed
         }
       }
-      .navigationTitle("Shorts")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        Button {
-          Task { await reshuffle() }
-        } label: {
-          Image(systemName: "shuffle")
-        }
-        .disabled(isLoading)
-        .accessibilityLabel("Shuffle Shorts")
-      }
+      .toolbar(.hidden, for: .navigationBar)
       .watchBackground()
     }
     .task { await loadNextPage() }
@@ -57,11 +47,9 @@ struct ShortsFeedView: View {
   private var feed: some View {
     ScrollView(.vertical) {
       LazyVStack(spacing: 0) {
-        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+        ForEach(items) { item in
           ShortPageView(
             video: item.video,
-            position: index + 1,
-            isFirst: index == 0,
             isActive: isVisible && scenePhase == .active && currentID == item.id,
             model: model
           )

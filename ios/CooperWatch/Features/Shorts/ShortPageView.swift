@@ -3,10 +3,7 @@ import SwiftUI
 
 struct ShortPageView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   let video: Components.Schemas.Video
-  let position: Int
-  let isFirst: Bool
   let isActive: Bool
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
@@ -24,19 +21,15 @@ struct ShortPageView: View {
 
   var body: some View {
     GeometryReader { proxy in
-      ZStack {
-        atmosphericBackground
-
-        if proxy.size.width >= 700 {
-          wideLayout(size: proxy.size)
-        } else {
-          compactLayout(size: proxy.size)
-        }
+      VStack(spacing: 0) {
+        player
+          .frame(width: proxy.size.width)
+          .frame(maxHeight: .infinity)
+        actionBar
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
       .clipped()
     }
-    .dynamicTypeSize(.large ... .accessibility1)
     .task(id: isActive) {
       if isActive {
         await preparePlayback()
@@ -53,61 +46,19 @@ struct ShortPageView: View {
     .animation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0.12), value: isActive)
   }
 
-  private var atmosphericBackground: some View {
-    ZStack {
-      WatchTheme.background
-      RadialGradient(
-        colors: [accent.opacity(isActive ? 0.34 : 0.16), .clear],
-        center: .top,
-        startRadius: 20,
-        endRadius: 520
-      )
-      LinearGradient(
-        colors: [WatchTheme.background.opacity(0), WatchTheme.background],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-    }
-    .ignoresSafeArea()
-  }
-
-  private func compactLayout(size: CGSize) -> some View {
-    let fraction = dynamicTypeSize.isAccessibilitySize ? 0.42 : 0.62
-    let playerHeight = max(210, min(size.height * fraction, 540))
-    let playerWidth = min(size.width - 28, playerHeight * 9 / 16)
-
-    return VStack(spacing: 0) {
-      Spacer(minLength: 8)
-      player
-        .frame(width: playerWidth, height: playerHeight)
-      chrome
-        .frame(maxWidth: 560)
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-      Spacer(minLength: 0)
-    }
-  }
-
-  private func wideLayout(size: CGSize) -> some View {
-    let playerHeight = min(size.height - 54, 660)
-
-    return HStack(spacing: 40) {
-      player
-        .frame(width: playerHeight * 9 / 16, height: playerHeight)
-      chrome
-        .frame(maxWidth: 440, alignment: .leading)
-    }
-    .padding(.horizontal, 42)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-
   private var player: some View {
     ZStack {
       ShortArtwork(video: video, accent: accent)
 
       if isActive, model.isPreviewMode {
         ShortPreviewPlayer(accent: accent)
+          .accessibilityHidden(true)
+        Rectangle()
+          .fill(.black.opacity(0.001))
+          .allowsHitTesting(false)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel("Playing \(video.title)")
+          .accessibilityIdentifier("active-short-player")
       } else if isActive, let playerURL {
         YouTubeEmbeddedPlayer(url: playerURL)
           .transition(.opacity)
@@ -134,46 +85,15 @@ struct ShortPageView: View {
       }
     }
     .background(.black)
-    .clipShape(.rect(cornerRadius: 24))
-    .overlay {
-      RoundedRectangle(cornerRadius: 24)
-        .stroke(accent.opacity(isActive ? 0.92 : 0.24), lineWidth: isActive ? 3 : 1)
-    }
-    .shadow(color: accent.opacity(isActive ? 0.36 : 0.08), radius: isActive ? 24 : 8)
-    .scaleEffect(isActive || reduceMotion ? 1 : 0.96)
-    .accessibilityLabel(isActive ? "Playing \(video.title)" : "Short: \(video.title)")
-    .accessibilityIdentifier(isActive ? "active-short-player" : "short-player")
   }
 
-  private var chrome: some View {
-    VStack(alignment: .leading, spacing: dynamicTypeSize.isAccessibilitySize ? 10 : 14) {
-      HStack {
-        Label("SHORT \(position)", systemImage: "bolt.fill")
-          .font(.caption.weight(.black))
-          .tracking(1.4)
-          .foregroundStyle(accent)
-        Spacer()
-        if isActive {
-          Text("NOW PLAYING")
-            .font(.caption2.weight(.black))
-            .tracking(1.2)
-            .foregroundStyle(WatchTheme.green)
-            .accessibilityIdentifier("active-short-status")
-        }
-      }
-
-      Text(video.title)
-        .font(.title2.weight(.black))
-        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
-
-      NavigationLink {
-        ChannelPageView(channelID: video.channelId, model: model)
-      } label: {
-        Label(video.channelTitle ?? "Channel", systemImage: "play.square.stack.fill")
-          .font(.headline)
-          .foregroundStyle(WatchTheme.cyan)
-      }
-
+  private var actionBar: some View {
+    ZStack {
+      Rectangle()
+        .fill(WatchTheme.background)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Short actions")
+        .accessibilityIdentifier(isActive ? "active-short-action-bar" : "short-action-bar")
       HStack(spacing: 12) {
         reactionButton(.like, symbol: "hand.thumbsup.fill", label: "Like")
         reactionButton(.dislike, symbol: "hand.thumbsdown.fill", label: "Not for me")
@@ -186,15 +106,14 @@ struct ShortPageView: View {
             .opacity(0.35)
         }
       }
+      .frame(maxWidth: 260)
       .disabled(page == nil || isUpdatingReaction)
-
-      if isFirst, !dynamicTypeSize.isAccessibilitySize {
-        Label("Swipe up for another", systemImage: "arrow.up")
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(WatchTheme.foreground.opacity(0.64))
-      }
     }
+    .frame(height: 64)
     .foregroundStyle(WatchTheme.foreground)
+    .overlay(alignment: .top) {
+      Rectangle().fill(WatchTheme.foreground.opacity(0.12)).frame(height: 1)
+    }
   }
 
   private var playerURL: URL? {
@@ -206,18 +125,25 @@ struct ShortPageView: View {
     Button {
       updateReaction(value)
     } label: {
-      actionLabel(symbol: symbol, label: label)
+      actionLabel(
+        symbol: symbol,
+        label: label,
+        background: reaction == value ? accent : WatchTheme.surface
+      )
     }
     .foregroundStyle(reaction == value ? WatchTheme.background : WatchTheme.foreground)
-    .background(reaction == value ? accent : WatchTheme.surface, in: .rect(cornerRadius: 14))
     .accessibilityValue(reaction == value ? "Selected" : "Not selected")
   }
 
-  private func actionLabel(symbol: String, label: String) -> some View {
+  private func actionLabel(
+    symbol: String,
+    label: String,
+    background: Color = WatchTheme.surface
+  ) -> some View {
     Image(systemName: symbol)
       .font(.title3.weight(.bold))
       .frame(width: 48, height: 48)
-      .background(WatchTheme.surface, in: .rect(cornerRadius: 14))
+      .background(background, in: .rect(cornerRadius: 14))
       .accessibilityLabel(label)
   }
 
@@ -293,7 +219,7 @@ private struct ShortArtwork: View {
         endPoint: .bottomTrailing
       )
       AsyncImage(url: video.thumbnailUrl.flatMap(URL.init(string:))) { image in
-        image.resizable().scaledToFill()
+        image.resizable().scaledToFit()
       } placeholder: {
         Image(systemName: "bolt.fill")
           .font(.system(size: 72, weight: .black))

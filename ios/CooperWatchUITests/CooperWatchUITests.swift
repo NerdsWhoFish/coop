@@ -6,13 +6,24 @@ final class CooperWatchUITests: XCTestCase {
     let app = previewApp(tab: "shorts")
     app.launch()
 
-    XCTAssertTrue(app.staticTexts["A volcano makes its own lightning"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      element(labeled: "Playing A volcano makes its own lightning", in: app)
+        .waitForExistence(timeout: 5)
+    )
     XCTAssertEqual(activePlayers(in: app), 1)
+
+    let player = app.descendants(matching: .any)["active-short-player"]
+    let actionBar = app.descendants(matching: .any)["active-short-action-bar"]
+    XCTAssertTrue(actionBar.waitForExistence(timeout: 5))
+    XCTAssertEqual(player.frame.width, app.frame.width, accuracy: 1)
+    XCTAssertLessThanOrEqual(actionBar.frame.height, 64)
+    XCTAssertEqual(player.frame.maxY, actionBar.frame.minY, accuracy: 1)
 
     app.swipeUp()
 
     XCTAssertTrue(
-      app.staticTexts["Yes, octopuses change color while they dream"].waitForExistence(timeout: 5)
+      element(labeled: "Playing Yes, octopuses change color while they dream", in: app)
+        .waitForExistence(timeout: 5)
     )
     XCTAssertEqual(activePlayers(in: app), 1)
 
@@ -45,7 +56,7 @@ final class CooperWatchUITests: XCTestCase {
 
   @MainActor
   private func activePlayers(in app: XCUIApplication) -> Int {
-    app.staticTexts.matching(identifier: "active-short-status").count
+    app.descendants(matching: .any).matching(identifier: "active-short-player").count
   }
 
   @MainActor
