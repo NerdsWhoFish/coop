@@ -140,11 +140,16 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             build CODE_SIGNING_ALLOWED=NO
 
-      - name: Build the child app
+      - name: Test the child app
         run: |
+          COOP_IOS_SIMULATOR_ID="$(
+            xcrun simctl list devices available --json |
+              jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid'
+          )"
+          test -n "$COOP_IOS_SIMULATOR_ID"
           xcodebuild -quiet \
             -skipPackagePluginValidation \
             -project ios/CooperWatch/CooperWatch.xcodeproj \
             -scheme CooperWatch \
-            -destination 'generic/platform=iOS Simulator' \
-            build CODE_SIGNING_ALLOWED=NO
+            -destination "platform=iOS Simulator,id=$COOP_IOS_SIMULATOR_ID" \
+            test CODE_SIGNING_ALLOWED=NO
