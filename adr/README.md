@@ -18,3 +18,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0006](0006-native-client-project-generation.md) | Generate the Xcode project and Swift API client from text sources | accepted | 2026-08-16 |
 | [0007](0007-explainable-local-recommendation-ranking.md) | Rank the approved pool with local explainable signals and hard diversity constraints | accepted | 2026-08-16 |
 | [0008](0008-single-replica-kubernetes-deployment.md) | Ship an application-only Helm chart with one Coop replica | accepted | 2026-08-16 |
+| [0009](0009-production-authentication-and-audit-boundary.md) | Require challenge-based TOTP, persistent throttling, and transactional audit events | accepted | 2026-08-16 |
