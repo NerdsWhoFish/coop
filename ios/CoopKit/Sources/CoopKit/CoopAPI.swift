@@ -75,6 +75,46 @@ public actor CoopAPI {
     }
   }
 
+  public func children() async throws -> [Components.Schemas.Child] {
+    let output = try await client.listChildren()
+    guard case .ok(let response) = output else {
+      throw CoopAPIError.unexpectedResponse
+    }
+    return try response.body.json
+  }
+
+  @discardableResult
+  public func createChild(name: String) async throws -> Components.Schemas.Child {
+    let payload = Operations.CreateChild.Input.Body.JsonPayload(name: name)
+    let output = try await client.createChild(body: .json(payload))
+    guard case .created(let response) = output else {
+      throw CoopAPIError.unexpectedResponse
+    }
+    return try response.body.json
+  }
+
+  @discardableResult
+  public func updateChild(
+    id: String,
+    settings: Components.Schemas.ChildSettings
+  ) async throws -> Components.Schemas.Child {
+    let path = Operations.UpdateChild.Input.Path(childId: id)
+    let output = try await client.updateChild(path: path, body: .json(settings))
+    guard case .ok(let response) = output else {
+      throw CoopAPIError.unexpectedResponse
+    }
+    return try response.body.json
+  }
+
+  public func createPairingCode(childID: String) async throws -> Components.Schemas.PairingCode {
+    let path = Operations.CreatePairingCode.Input.Path(childId: childID)
+    let output = try await client.createPairingCode(path: path)
+    guard case .created(let response) = output else {
+      throw CoopAPIError.unexpectedResponse
+    }
+    return try response.body.json
+  }
+
   public func pendingRequests() async throws -> [Components.Schemas.Request] {
     let query = Operations.ListParentRequests.Input.Query(status: .pending)
     let output = try await client.listParentRequests(query: query)

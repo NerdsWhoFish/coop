@@ -537,7 +537,15 @@ func (s *Server) handleUpdateChild(w http.ResponseWriter, r *http.Request, p aut
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusOK, newChildDTO(updated, 0, 0))
+	devices, err := s.deps.Accounts.Devices(r.Context(), child.ID)
+	if err != nil {
+		return err
+	}
+	pending, err := s.deps.Activity.PendingRequestCounts(r.Context(), []uuid.UUID{child.ID})
+	if err != nil {
+		return err
+	}
+	writeJSON(w, s.deps.Logger, http.StatusOK, newChildDTO(updated, len(devices), pending[child.ID]))
 	return nil
 }
 

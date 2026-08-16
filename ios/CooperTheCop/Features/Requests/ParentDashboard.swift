@@ -8,12 +8,8 @@ struct ParentDashboard: View {
       RequestQueueView(model: model)
         .tabItem { Label("Requests", systemImage: "checklist") }
 
-      PlaceholderSection(
-        title: "Children",
-        detail: "Profiles, devices, subscriptions, and search budgets land here.",
-        symbol: "figure.2.and.child.holdinghands"
-      )
-      .tabItem { Label("Children", systemImage: "person.2.fill") }
+      ChildrenView(model: model)
+        .tabItem { Label("Children", systemImage: "person.2.fill") }
 
       PlaceholderSection(
         title: "Rules",

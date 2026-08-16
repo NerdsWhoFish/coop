@@ -13,11 +13,13 @@
 		3F4679FF82914E69C6399374 /* CooperTheCopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */; };
 		80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */; };
 		88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */; };
+		A1835FA76BA829A2E2C22A50 /* ChildrenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC129F7D8EDB00629539AD99 /* ChildrenView.swift */; };
 		AE8E292695210EA347BEE41B /* CoopTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90017104578429EF692D6F7E /* CoopTheme.swift */; };
 		C7ACE781E3581E40D70A3F84 /* ParentDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED2CC0E3A16B3D5A083C0CF /* ParentDashboard.swift */; };
 		C8E5CEBE6FAB5818049F96E1 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09443C460292AC0B137AAE9F /* ConnectView.swift */; };
 		C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EEC45B1391EF07F6893444 /* AppModel.swift */; };
 		D671422F0390536A04E279D0 /* CoopKit in Frameworks */ = {isa = PBXBuildFile; productRef = 95F7E2D164CF9D386EB89BA0 /* CoopKit */; };
+		FC3963E291052C6AC56FC448 /* ChildSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,9 +41,11 @@
 		8D1B606E767366D7D2994319 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		90017104578429EF692D6F7E /* CoopTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoopTheme.swift; sourceTree = "<group>"; };
 		9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperTheCopApp.swift; sourceTree = "<group>"; };
+		A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildSettingsView.swift; sourceTree = "<group>"; };
 		B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
 		CEAF337A28072BFA4058D401 /* RequestQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestQueueView.swift; sourceTree = "<group>"; };
 		DADDB6272E3B22D78B81F996 /* CooperTheCopTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperTheCopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC129F7D8EDB00629539AD99 /* ChildrenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildrenView.swift; sourceTree = "<group>"; };
 		F7B41CEE512EC6B27DC83900 /* CoopKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CoopKit; path = ../CoopKit; sourceTree = SOURCE_ROOT; };
 		FB25E912F258E653A65C838F /* CooperTheCop.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CooperTheCop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -71,9 +75,19 @@
 			isa = PBXGroup;
 			children = (
 				2D90C84C8ACF0BF1BBD51963 /* Authentication */,
+				62DCA39940CBBE1B2D5223A2 /* Children */,
 				9A86BCD28DA239B1AD368646 /* Requests */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		62DCA39940CBBE1B2D5223A2 /* Children */ = {
+			isa = PBXGroup;
+			children = (
+				DC129F7D8EDB00629539AD99 /* ChildrenView.swift */,
+				A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */,
+			);
+			path = Children;
 			sourceTree = "<group>";
 		};
 		8D126FD213886F2DD7AD01AE /* Packages */ = {
@@ -223,6 +237,8 @@
 			files = (
 				C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */,
 				88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */,
+				FC3963E291052C6AC56FC448 /* ChildSettingsView.swift in Sources */,
+				A1835FA76BA829A2E2C22A50 /* ChildrenView.swift in Sources */,
 				C8E5CEBE6FAB5818049F96E1 /* ConnectView.swift in Sources */,
 				AE8E292695210EA347BEE41B /* CoopTheme.swift in Sources */,
 				80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */,

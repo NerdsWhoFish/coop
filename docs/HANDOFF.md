@@ -5,7 +5,7 @@ Read [PLAN.md](PLAN.md) for the full design and [../adr/](../adr/) for why the b
 
 Status: **Phase 0 and Phase 1 are complete, and Phase 2 is in progress.**
 The backend builds, migrates, serves, and is exercisable end to end.
-The parent app has its generated client, setup and login flow, Keychain session storage, and pending request queue.
+The parent app has its generated client, setup and login flow, Keychain session storage, pending request queue, and child profile management.
 
 ---
 
@@ -138,7 +138,7 @@ Sharing the GORM pool means every query after startup migration fails with "data
 
 ## Next, in order
 
-**1. Finish Phase 2**, starting with children and policy management, then suppressions, channel search, YouTube deep links, and parent invitations.
+**1. Finish Phase 2**, starting with policy management, then suppressions, channel search, YouTube deep links, and parent invitations.
 
 ---
 

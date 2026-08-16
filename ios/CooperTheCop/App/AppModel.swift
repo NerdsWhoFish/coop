@@ -13,7 +13,9 @@ final class AppModel {
 
   var destination: Destination = .connecting
   var serverAddress: String
+  var parent: Components.Schemas.Parent?
   var requests: [Components.Schemas.Request] = []
+  var children: [Components.Schemas.Child] = []
   var isWorking = false
   var errorMessage: String?
 
@@ -43,10 +45,10 @@ final class AppModel {
       if usingStoredSession, let token = credentials.loadToken() {
         let authenticatedAPI = CoopAPI(serverURL: serverURL, token: token)
         do {
-          _ = try await authenticatedAPI.currentParent()
+          parent = try await authenticatedAPI.currentParent()
           api = authenticatedAPI
           destination = .dashboard
-          await loadRequests()
+          await loadDashboard()
           return
         } catch CoopAPIError.invalidSession {
           credentials.deleteToken()
@@ -63,7 +65,7 @@ final class AppModel {
       guard let api else { return }
       let session = try await api.logIn(email: email, password: password)
       try activate(session)
-      await loadRequests()
+      await loadDashboard()
     }
   }
 
@@ -78,8 +80,14 @@ final class AppModel {
         password: password
       )
       try activate(session)
-      await loadRequests()
+      await loadDashboard()
     }
+  }
+
+  func loadDashboard() async {
+    async let requestLoad: Void = loadRequests()
+    async let childLoad: Void = loadChildren()
+    _ = await (requestLoad, childLoad)
   }
 
   func loadRequests() async {
@@ -89,6 +97,37 @@ final class AppModel {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func loadChildren() async {
+    guard let api else { return }
+    do {
+      children = try await api.children()
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  func createChild(name: String) async throws {
+    guard let api else { return }
+    let child = try await api.createChild(name: name)
+    children.append(child)
+  }
+
+  func updateChild(
+    id: String,
+    settings: Components.Schemas.ChildSettings
+  ) async throws {
+    guard let api else { return }
+    let updated = try await api.updateChild(id: id, settings: settings)
+    if let index = children.firstIndex(where: { $0.value1.id == id }) {
+      children[index] = updated
+    }
+  }
+
+  func createPairingCode(childID: String) async throws -> Components.Schemas.PairingCode? {
+    guard let api else { return nil }
+    return try await api.createPairingCode(childID: childID)
   }
 
   func approve(requestID: String, globally: Bool) async throws {
@@ -108,7 +147,9 @@ final class AppModel {
   func logOut() {
     credentials.deleteToken()
     api = nil
+    parent = nil
     requests = []
+    children = []
     destination = .connecting
   }
 
@@ -116,6 +157,7 @@ final class AppModel {
     try credentials.saveToken(session.token)
     let serverURL = try ServerURL.normalize(serverAddress)
     api = CoopAPI(serverURL: serverURL, token: session.token)
+    parent = session.parent
     destination = .dashboard
   }
 
