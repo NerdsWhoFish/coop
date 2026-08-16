@@ -6,6 +6,7 @@ struct ShortPageView: View {
   let video: Components.Schemas.Video
   let isActive: Bool
   @Bindable var model: ChildAppModel
+  let onBlocked: () -> Void
   @State private var page: Components.Schemas.WatchPage?
   @State private var reaction: ChildReaction?
   @State private var isFetching = false
@@ -33,16 +34,21 @@ struct ShortPageView: View {
     .task(id: isActive) {
       if isActive {
         await preparePlayback()
+        await maintainPlaybackLease()
       }
     }
     .onChange(of: isActive) { _, active in
       if active {
         startWatchingIfReady()
       } else {
+        stopPlaybackLease()
         recordWatch()
       }
     }
-    .onDisappear { recordWatch() }
+    .onDisappear {
+      stopPlaybackLease()
+      recordWatch()
+    }
     .animation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0.12), value: isActive)
   }
 
@@ -187,6 +193,32 @@ struct ShortPageView: View {
     Task {
       await model.recordWatch(videoID: video.id, startedAt: startedAt, secondsWatched: seconds)
     }
+  }
+
+  private func maintainPlaybackLease() async {
+    guard isActive, page != nil else { return }
+    guard await model.updatePlayback(videoID: video.id, state: .started) else {
+      onBlocked()
+      return
+    }
+    do {
+      while !Task.isCancelled, isActive {
+        try await Task.sleep(for: .seconds(15))
+        guard await model.updatePlayback(videoID: video.id, state: .heartbeat) else {
+          recordWatch()
+          onBlocked()
+          return
+        }
+      }
+    } catch is CancellationError {
+      return
+    } catch {
+      return
+    }
+  }
+
+  private func stopPlaybackLease() {
+    Task { _ = await model.updatePlayback(videoID: video.id, state: .stopped) }
   }
 
   private func updateReaction(_ value: ChildReaction) {

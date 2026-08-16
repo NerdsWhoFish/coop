@@ -22,6 +22,7 @@ final class AppModel {
   var serverAddress: String
   var parent: Components.Schemas.Parent?
   var requests: [Components.Schemas.Request] = []
+  var activePlayback: [Components.Schemas.Playback] = []
   var children: [Components.Schemas.Child] = []
   var isWorking = false
   var errorMessage: String?
@@ -51,6 +52,7 @@ final class AppModel {
   static var isUIPreview: Bool { uiPreviewScreen != nil }
   static var showsRecommendationPreview: Bool { uiPreviewScreen == "recommendations" }
   static var showsFamilyPreview: Bool { uiPreviewScreen == "family" }
+  static var showsRequestsPreview: Bool { uiPreviewScreen == "requests" }
 
   static let recommendationPreviewChild = Components.Schemas.Child(
     value1: .init(id: "preview-child", name: "River", deviceCount: 2, pendingRequestCount: 1),
@@ -86,6 +88,41 @@ final class AppModel {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
     if Self.showsFamilyPreview {
       parent = Self.familyPreviewParent
+    } else if Self.showsRequestsPreview {
+      let channel = Components.Schemas.Channel(
+        id: "UCpreview",
+        title: "Build It Together",
+        youtubeUrl: "https://www.youtube.com/channel/UCpreview"
+      )
+      let video = Components.Schemas.Video(
+        id: "preview-video",
+        channelId: channel.id,
+        channelTitle: channel.title,
+        title: "A Castle Made from Cardboard",
+        durationSeconds: 486,
+        isShort: false
+      )
+      parent = Self.familyPreviewParent
+      requests = [
+        Components.Schemas.Request(
+          id: "preview-request",
+          childId: "preview-child",
+          childName: "River",
+          channel: channel,
+          promptedByVideo: video,
+          status: .pending,
+          createdAt: .now.addingTimeInterval(-90)
+        )
+      ]
+      activePlayback = [
+        Components.Schemas.Playback(
+          childId: "preview-child",
+          childName: "River",
+          video: video,
+          startedAt: .now.addingTimeInterval(-30)
+        )
+      ]
+      destination = .dashboard
     }
   }
 
@@ -180,6 +217,37 @@ final class AppModel {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func monitorPlayback() async {
+    guard let api else { return }
+    var cursor: String?
+    while !Task.isCancelled {
+      do {
+        let page = try await api.activePlayback(cursor: cursor)
+        activePlayback = page.items
+        cursor = page.cursor
+      } catch is CancellationError {
+        return
+      } catch {
+        if !Task.isCancelled {
+          try? await Task.sleep(for: .seconds(3))
+        }
+      }
+    }
+  }
+
+  func setVideoBlocked(_ blocked: Bool, videoID: String, childID: String) async throws {
+    guard let api else { return }
+    try await api.setVideoBlocked(blocked, videoID: videoID, childID: childID)
+    if blocked {
+      activePlayback.removeAll { $0.childId == childID && $0.video.id == videoID }
+    }
+  }
+
+  func videoBlocks(childID: String) async throws -> [Components.Schemas.VideoBlock] {
+    guard let api else { return [] }
+    return try await api.videoBlocks(childID: childID)
   }
 
   func createChild(name: String) async throws {
@@ -424,6 +492,7 @@ final class AppModel {
     api = nil
     parent = nil
     requests = []
+    activePlayback = []
     children = []
     destination = .connecting
   }

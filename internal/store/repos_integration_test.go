@@ -13,6 +13,7 @@ import (
 
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/domain"
+	"github.com/nerdswhofish/coop/internal/policy"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
 
@@ -742,5 +743,79 @@ func TestCatalogVideosByIDPreservesCallerOrder(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ID != secondID || got[1].ID != firstID {
 		t.Fatalf("VideosByID() = %+v, want second then first with missing skipped", got)
+	}
+}
+
+func TestVideoBlockOutranksApprovalAndPlaybackLeaseExpires(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 16, 14, 0, 0, 0, time.UTC)
+	clock := func() time.Time { return now }
+	accounts := NewAccounts(db, clock)
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Playback Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+	child, err := accounts.CreateChild(ctx, family.ID, "River", "", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	channelID := "UC" + uuid.NewString()
+	videoID := "video-" + uuid.NewString()
+	catalog := NewCatalog(db, clock)
+	if err := catalog.UpsertChannels(ctx, []youtube.Channel{{ID: channelID, Title: "Channel"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.UpsertVideos(ctx, []youtube.Video{{
+		ID: videoID, ChannelID: channelID, Title: "Video",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Channel{}, "id = ?", channelID) })
+
+	rules := NewRules(db, clock)
+	if err := rules.AllowGlobally(ctx, family.ID, channelID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := rules.BlockVideoForChild(ctx, child.ID, videoID, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	evaluator, err := rules.Evaluator(ctx, family.ID, child.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := evaluator.Video(policy.Video{ID: videoID, ChannelID: channelID}).Verdict; got != policy.VerdictVideoBlocked {
+		t.Fatalf("blocked video verdict = %q, want %q", got, policy.VerdictVideoBlocked)
+	}
+
+	activity := NewActivity(db, clock)
+	if err := activity.StartPlayback(ctx, child.ID, videoID); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("active playbacks = (%+v, %v), want one", rows, err)
+	}
+	now = now.Add(46 * time.Second)
+	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("expired playbacks = (%+v, %v), want none", rows, err)
+	}
+	if err := activity.RenewPlayback(ctx, child.ID, videoID); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
+	if err != nil || len(rows) != 1 || !rows[0].StartedAt.Equal(now.Add(-46*time.Second)) {
+		t.Fatalf("renewed playbacks = (%+v, %v), want original lease active", rows, err)
+	}
+	if err := activity.StopPlayback(ctx, child.ID, videoID); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("stopped playbacks = (%+v, %v), want none", rows, err)
 	}
 }

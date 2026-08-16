@@ -190,6 +190,23 @@ type watchPageDTO struct {
 	ShareURL string   `json:"shareUrl"`
 }
 
+type playbackDTO struct {
+	ChildID   uuid.UUID `json:"childId"`
+	ChildName string    `json:"childName"`
+	Video     videoDTO  `json:"video"`
+	StartedAt time.Time `json:"startedAt"`
+}
+
+type playbackPageDTO struct {
+	Items  []playbackDTO `json:"items"`
+	Cursor string        `json:"cursor"`
+}
+
+type videoBlockDTO struct {
+	Video     videoDTO  `json:"video"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type requestDTO struct {
 	ID            uuid.UUID  `json:"id"`
 	ChildID       uuid.UUID  `json:"childId"`

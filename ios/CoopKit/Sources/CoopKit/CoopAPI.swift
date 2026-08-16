@@ -278,6 +278,36 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func activePlayback(cursor: String? = nil) async throws
+    -> Components.Schemas.PlaybackPage
+  {
+    let query = Operations.ListActivePlayback.Input.Query(cursor: cursor)
+    let output = try await client.listActivePlayback(query: query)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func videoBlocks(childID: String) async throws -> [Components.Schemas.VideoBlock] {
+    let path = Operations.ListVideoBlocks.Input.Path(childId: childID)
+    let output = try await client.listVideoBlocks(path: path)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
+  public func setVideoBlocked(_ blocked: Bool, videoID: String, childID: String) async throws {
+    if blocked {
+      let path = Operations.BlockVideoForChild.Input.Path(childId: childID, videoId: videoID)
+      guard case .noContent = try await client.blockVideoForChild(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    } else {
+      let path = Operations.UnblockVideoForChild.Input.Path(childId: childID, videoId: videoID)
+      guard case .noContent = try await client.unblockVideoForChild(path: path) else {
+        throw CoopAPIError.unexpectedResponse
+      }
+    }
+  }
+
   public func setChildChannelWeight(_ weight: Int, channelID: String, childID: String)
     async throws
   {
@@ -557,6 +587,25 @@ public actor CoopAPI {
     else { throw CoopAPIError.unexpectedResponse }
   }
 
+  public func updatePlayback(
+    videoID: String,
+    state: PlaybackLeaseState
+  ) async throws -> Bool {
+    let apiState: Operations.UpdatePlaybackLease.Input.Body.JsonPayload.StatePayload =
+      switch state {
+      case .started: .started
+      case .heartbeat: .heartbeat
+      case .stopped: .stopped
+      }
+    let payload = Operations.UpdatePlaybackLease.Input.Body.JsonPayload(
+      videoId: videoID,
+      state: apiState
+    )
+    let output = try await client.updatePlaybackLease(body: .json(payload))
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json.allowed
+  }
+
   public func childRequests() async throws -> [Components.Schemas.Request] {
     let output = try await client.listChildRequests()
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
@@ -642,6 +691,12 @@ public struct ChildPairing: Sendable {
 public enum ChildReaction: Sendable, Equatable {
   case like
   case dislike
+}
+
+public enum PlaybackLeaseState: Sendable {
+  case started
+  case heartbeat
+  case stopped
 }
 
 private struct BearerAuthorizationMiddleware: ClientMiddleware {

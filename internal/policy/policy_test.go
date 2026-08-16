@@ -91,6 +91,7 @@ func TestEvaluatorVideo(t *testing.T) {
 		video     Video
 		keywords  []Keyword
 		overrides []string
+		blocks    []string
 		want      Verdict
 		wantField domain.MatchField
 	}{
@@ -179,11 +180,19 @@ func TestEvaluatorVideo(t *testing.T) {
 			overrides: []string{"v1"},
 			want:      VerdictChannelNotAllowed,
 		},
+		{
+			name:      "an explicit video block outranks channel approval and override",
+			video:     Video{ID: "v1", ChannelID: chAllowed, Title: "A scary monster"},
+			keywords:  []Keyword{scary},
+			overrides: []string{"v1"},
+			blocks:    []string{"v1"},
+			want:      VerdictVideoBlocked,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := NewEvaluator(allowedRules(), tt.keywords, tt.overrides)
+			e := NewEvaluator(allowedRules(), tt.keywords, tt.overrides, tt.blocks)
 			got := e.Video(tt.video)
 
 			if got.Verdict != tt.want {
@@ -251,7 +260,7 @@ func TestEvaluatorSearchVideo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil)
+			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil, nil)
 			if got := evaluator.SearchVideo(tt.video).Verdict; got != tt.want {
 				t.Errorf("Verdict = %q, want %q", got, tt.want)
 			}
@@ -266,7 +275,7 @@ func TestSuppressionCarriesKeywordIdentity(t *testing.T) {
 		ID: "kw-1", Term: "Scary", Scope: ScopeChild,
 		MatchTitle: true, WholeWord: true,
 	}
-	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil)
+	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil, nil)
 
 	d := e.Video(Video{ID: "v1", ChannelID: chAllowed, Title: "a SCARY thing"})
 	if d.Verdict != VerdictSuppressed {
@@ -417,7 +426,7 @@ func TestFilter(t *testing.T) {
 		ID: "kw-1", Term: "scary", Scope: ScopeFamily,
 		MatchTitle: true, WholeWord: true,
 	}
-	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil)
+	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil, nil)
 
 	served, suppressed := e.Filter([]Video{
 		{ID: "keep1", ChannelID: chAllowed, Title: "birdhouse"},
@@ -443,7 +452,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestFilterEmptyInput(t *testing.T) {
-	e := NewEvaluator(allowedRules(), nil, nil)
+	e := NewEvaluator(allowedRules(), nil, nil, nil)
 	served, suppressed := e.Filter(nil)
 	if served != nil || suppressed != nil {
 		t.Errorf("Filter(nil) = (%v, %v), want (nil, nil)", served, suppressed)

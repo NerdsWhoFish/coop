@@ -44,7 +44,53 @@ func (r *Rules) Evaluator(ctx context.Context, familyID, childID uuid.UUID) (*po
 	if err != nil {
 		return nil, err
 	}
-	return policy.NewEvaluator(channels, keywords, overrides), nil
+	blocks, err := r.blockedVideoIDs(ctx, childID)
+	if err != nil {
+		return nil, err
+	}
+	return policy.NewEvaluator(channels, keywords, overrides, blocks), nil
+}
+
+func (r *Rules) blockedVideoIDs(ctx context.Context, childID uuid.UUID) ([]string, error) {
+	var ids []string
+	err := r.db.WithContext(ctx).Model(&VideoBlock{}).
+		Where("child_id = ?", childID).
+		Pluck("video_id", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("loading video blocks: %w", err)
+	}
+	return ids, nil
+}
+
+// BlockVideoForChild hides one video without changing its channel approval.
+func (r *Rules) BlockVideoForChild(ctx context.Context, childID uuid.UUID, videoID string,
+	actorID uuid.UUID) error {
+	return r.childPolicyMutation(ctx, childID, actorID, "video.block_child",
+		"video", videoID, map[string]any{}, map[string]any{"blocked": true},
+		func(tx *gorm.DB) (bool, error) {
+			row := VideoBlock{ChildID: childID, VideoID: videoID, CreatedBy: actorID}
+			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
+			return result.RowsAffected > 0, wrap(result.Error, "blocking video for child")
+		})
+}
+
+// UnblockVideoForChild restores normal channel and keyword policy for a video.
+func (r *Rules) UnblockVideoForChild(ctx context.Context, childID uuid.UUID, videoID string,
+	actorID uuid.UUID) error {
+	return r.childPolicyMutation(ctx, childID, actorID, "video.unblock_child",
+		"video", videoID, map[string]any{"blocked": true}, map[string]any{},
+		func(tx *gorm.DB) (bool, error) {
+			result := tx.Delete(&VideoBlock{}, "child_id = ? AND video_id = ?", childID, videoID)
+			return result.RowsAffected > 0, wrap(result.Error, "unblocking video for child")
+		})
+}
+
+// BlockedVideos lists explicit video blocks for one child.
+func (r *Rules) BlockedVideos(ctx context.Context, childID uuid.UUID) ([]VideoBlock, error) {
+	var rows []VideoBlock
+	err := r.db.WithContext(ctx).Where("child_id = ?", childID).
+		Order("created_at DESC").Find(&rows).Error
+	return rows, wrap(err, "listing blocked videos")
 }
 
 func (r *Rules) channelRules(ctx context.Context, familyID, childID uuid.UUID) (policy.ChannelRules, error) {

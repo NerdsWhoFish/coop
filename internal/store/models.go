@@ -262,6 +262,14 @@ type VideoOverride struct {
 	CreatedAt time.Time
 }
 
+// VideoBlock hides one video from one child even when its channel is allowed.
+type VideoBlock struct {
+	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	VideoID   string    `gorm:"primaryKey"`
+	CreatedBy uuid.UUID `gorm:"type:uuid;not null"`
+	CreatedAt time.Time
+}
+
 // Subscription is local to Coop and never written to YouTube.
 type Subscription struct {
 	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
@@ -288,6 +296,16 @@ type WatchEvent struct {
 	SecondsWatched     int       `gorm:"not null;default:0"`
 	CompletionFraction float64   `gorm:"not null;default:0"`
 	CreatedAt          time.Time
+}
+
+// PlaybackSession is a renewable lease describing what a child is watching.
+// Active sessions older than the lease window are treated as stopped.
+type PlaybackSession struct {
+	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	VideoID   string    `gorm:"not null;index"`
+	StartedAt time.Time `gorm:"not null"`
+	UpdatedAt time.Time `gorm:"not null;index"`
+	Active    bool      `gorm:"not null;default:true;index"`
 }
 
 // ChannelWeight is a parent's soft preference for one child's feed.
@@ -372,8 +390,8 @@ func AllModels() []any {
 		&Child{}, &ChildDevice{}, &PairingCode{},
 		&Channel{}, &Video{},
 		&AllowGlobal{}, &AllowChild{}, &DenyChild{}, &BlockChannel{},
-		&Keyword{}, &VideoOverride{},
-		&Subscription{}, &Reaction{}, &WatchEvent{}, &ChannelWeight{},
+		&Keyword{}, &VideoOverride{}, &VideoBlock{},
+		&Subscription{}, &Reaction{}, &WatchEvent{}, &PlaybackSession{}, &ChannelWeight{},
 		&Request{}, &Suppression{},
 		&APICache{}, &QuotaSpend{}, &ChildSearch{},
 	}

@@ -147,6 +147,19 @@ final class ChildAppModel {
     )
   }
 
+  func updatePlayback(videoID: String, state: PlaybackLeaseState) async -> Bool {
+    #if DEBUG
+      if isPreviewMode { return true }
+    #endif
+    guard let api else { return true }
+    do {
+      return try await api.updatePlayback(videoID: videoID, state: state)
+    } catch {
+      // A transient heartbeat failure must not interrupt a child mid-video.
+      return true
+    }
+  }
+
   func requestChannel(channelID: String, videoID: String? = nil) async throws {
     _ = try await api?.requestChannel(channelID: channelID, promptedByVideoID: videoID)
   }

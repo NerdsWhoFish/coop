@@ -502,6 +502,56 @@ paths:
                 weight: { type: integer, minimum: -2, maximum: 2 }
       responses:
         "204": { description: Updated }
+
+  /parent/playback:
+    get:
+      operationId: listActivePlayback
+      tags: [child-activity]
+      summary: Long-poll the videos children are currently watching
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Return immediately when omitted; otherwise wait for the active set to change.
+      responses:
+        "200":
+          description: Current playback snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaybackPage" }
+
+  /parent/children/{childId}/video-blocks:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+    get:
+      operationId: listVideoBlocks
+      tags: [allowlist]
+      summary: Videos explicitly hidden from this child
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VideoBlock" }
+
+  /parent/children/{childId}/video-blocks/{videoId}:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+      - $ref: "#/components/parameters/VideoId"
+    put:
+      operationId: blockVideoForChild
+      tags: [allowlist]
+      summary: Hide one video even when its channel is approved
+      responses:
+        "204": { description: Blocked }
+    delete:
+      operationId: unblockVideoForChild
+      tags: [allowlist]
+      summary: Restore normal policy for one video
+      responses:
+        "204": { description: Unblocked }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # Pairing ------------------------------------------------------------------
@@ -1149,6 +1199,34 @@ paths:
       responses:
         "204": { description: Recorded }
 
+  /child/playback:
+    put:
+      operationId: updatePlaybackLease
+      tags: [child-activity]
+      summary: Start, renew, or stop the child's current playback lease
+      security:
+        - childToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [videoId, state]
+              properties:
+                videoId: { type: string }
+                state: { type: string, enum: [started, heartbeat, stopped] }
+      responses:
+        "200":
+          description: Whether policy still allows playback
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [allowed]
+                properties:
+                  allowed: { type: boolean }
+
   /child/requests:
     get:
       operationId: listChildRequests
@@ -1457,6 +1535,9 @@ components:
         thumbnailUrl: { type: string }
         bannerUrl: { type: string }
         subscriberCount: { type: integer, format: int64 }
+        youtubeUrl:
+          type: string
+          description: Canonical channel URL for parent review.
 
     ApprovedChannel:
       allOf:
@@ -1584,6 +1665,31 @@ components:
         shareUrl:
           type: string
           description: A canonical youtube.com link, for sharing out.
+
+    Playback:
+      type: object
+      required: [childId, childName, video, startedAt]
+      properties:
+        childId: { type: string, format: uuid }
+        childName: { type: string }
+        video: { $ref: "#/components/schemas/Video" }
+        startedAt: { type: string, format: date-time }
+
+    PlaybackPage:
+      type: object
+      required: [items, cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Playback" }
+        cursor: { type: string }
+
+    VideoBlock:
+      type: object
+      required: [video, createdAt]
+      properties:
+        video: { $ref: "#/components/schemas/Video" }
+        createdAt: { type: string, format: date-time }
 
     SearchResults:
       type: object

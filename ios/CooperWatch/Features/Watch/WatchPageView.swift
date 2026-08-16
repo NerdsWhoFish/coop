@@ -2,6 +2,7 @@ import CoopKit
 import SwiftUI
 
 struct WatchPageView: View {
+  @Environment(\.dismiss) private var dismiss
   let videoID: String
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
@@ -28,10 +29,12 @@ struct WatchPageView: View {
     .navigationTitle("Now watching")
     .navigationBarTitleDisplayMode(.inline)
     .task { await load() }
+    .task(id: page?.video.id) { await maintainPlaybackLease() }
     .onAppear { CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(true) }
     .onDisappear {
       CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(false)
       playerSession.stop()
+      Task { _ = await model.updatePlayback(videoID: videoID, state: .stopped) }
       recordWatch()
     }
     .watchBackground()
@@ -133,6 +136,29 @@ struct WatchPageView: View {
     let seconds = max(0, Int(Date.now.timeIntervalSince(startedAt)))
     Task {
       await model.recordWatch(videoID: videoID, startedAt: startedAt, secondsWatched: seconds)
+    }
+  }
+
+  private func maintainPlaybackLease() async {
+    guard page != nil else { return }
+    guard await model.updatePlayback(videoID: videoID, state: .started) else {
+      dismiss()
+      return
+    }
+    do {
+      while !Task.isCancelled {
+        try await Task.sleep(for: .seconds(15))
+        guard await model.updatePlayback(videoID: videoID, state: .heartbeat) else {
+          playerSession.stop()
+          await model.loadLibrary()
+          dismiss()
+          return
+        }
+      }
+    } catch is CancellationError {
+      return
+    } catch {
+      return
     }
   }
 }

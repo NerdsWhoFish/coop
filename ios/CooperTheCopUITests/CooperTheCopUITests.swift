@@ -2,6 +2,18 @@ import XCTest
 
 final class CooperTheCopUITests: XCTestCase {
   @MainActor
+  func testRequestsShowLivePlaybackAndYouTubeReviewLinks() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SCREEN"] = "requests"
+    app.launch()
+
+    XCTAssertTrue(app.staticTexts["NOW WATCHING"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["A Castle Made from Cardboard"].exists)
+    XCTAssertTrue(app.buttons["Block video"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["Build It Together"].exists)
+  }
+
+  @MainActor
   func testFamilyInstanceRowsStayCompact() throws {
     let app = XCUIApplication()
     app.launchEnvironment["COOP_UI_SCREEN"] = "family"

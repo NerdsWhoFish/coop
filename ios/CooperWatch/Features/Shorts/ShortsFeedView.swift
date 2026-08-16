@@ -51,7 +51,8 @@ struct ShortsFeedView: View {
           ShortPageView(
             video: item.video,
             isActive: isVisible && scenePhase == .active && currentID == item.id,
-            model: model
+            model: model,
+            onBlocked: { removeBlocked(item) }
           )
           .containerRelativeFrame(.vertical)
           .id(item.id)
@@ -103,6 +104,13 @@ struct ShortsFeedView: View {
     guard let index = items.firstIndex(where: { $0.id == currentID }) else { return }
     guard index >= items.count - 3 else { return }
     await loadNextPage()
+  }
+
+  private func removeBlocked(_ item: ShortOccurrence) {
+    guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+    let replacement = items.indices.contains(index + 1) ? items[index + 1].id : items.first?.id
+    items.remove(at: index)
+    currentID = replacement == item.id ? items.first?.id : replacement
   }
 
   private func reshuffle() async {

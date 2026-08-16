@@ -110,6 +110,7 @@ const (
 	VerdictLocked            Verdict = "locked"
 	VerdictLive              Verdict = "live"
 	VerdictSuppressed        Verdict = "suppressed"
+	VerdictVideoBlocked      Verdict = "video_blocked"
 )
 
 // Decision is a verdict plus, when suppressed, the keyword responsible.
@@ -193,15 +194,17 @@ type Evaluator struct {
 	rules     ChannelRules
 	matcher   *Matcher
 	overrides ChannelSet
+	blocks    ChannelSet
 }
 
 // NewEvaluator builds an evaluator. overrides are video IDs a parent has
 // re-allowed after a keyword caught them.
-func NewEvaluator(rules ChannelRules, keywords []Keyword, overrides []string) *Evaluator {
+func NewEvaluator(rules ChannelRules, keywords []Keyword, overrides, blocks []string) *Evaluator {
 	return &Evaluator{
 		rules:     rules,
 		matcher:   NewMatcher(keywords),
 		overrides: NewChannelSet(overrides...),
+		blocks:    NewChannelSet(blocks...),
 	}
 }
 
@@ -214,6 +217,9 @@ func (e *Evaluator) Channel(channelID string) domain.ChannelState {
 // checked before overrides so a re-allow cannot resurrect a livestream, and
 // overrides precede keywords so they can undo a false positive.
 func (e *Evaluator) Video(v Video) Decision {
+	if e.blocks.Has(v.ID) {
+		return Decision{Verdict: VerdictVideoBlocked}
+	}
 	if e.rules.State(v.ChannelID) != domain.StateAllowed {
 		return Decision{Verdict: VerdictChannelNotAllowed}
 	}
@@ -234,6 +240,9 @@ func (e *Evaluator) Video(v Video) Decision {
 // locked with an ask affordance. Allowed videos still pass through the normal
 // live and keyword rules.
 func (e *Evaluator) SearchVideo(v Video) Decision {
+	if e.blocks.Has(v.ID) {
+		return Decision{Verdict: VerdictHidden}
+	}
 	switch e.rules.State(v.ChannelID) {
 	case domain.StateBlocked:
 		return Decision{Verdict: VerdictHidden}

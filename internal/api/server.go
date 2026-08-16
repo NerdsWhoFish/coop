@@ -125,6 +125,10 @@ func (s *Server) routes() {
 	parent("GET /api/v1/parent/children/{childId}/recommendations", s.handleChildRecommendations)
 	parent("GET /api/v1/parent/children/{childId}/channel-weights", s.handleChildChannelWeights)
 	parent("PUT /api/v1/parent/children/{childId}/channel-weights/{channelId}", s.handleSetChildChannelWeight)
+	parent("GET /api/v1/parent/playback", s.handleActivePlayback)
+	parent("GET /api/v1/parent/children/{childId}/video-blocks", s.handleListVideoBlocks)
+	parent("PUT /api/v1/parent/children/{childId}/video-blocks/{videoId}", s.handleBlockVideo)
+	parent("DELETE /api/v1/parent/children/{childId}/video-blocks/{videoId}", s.handleUnblockVideo)
 
 	parent("POST /api/v1/parent/children/{childId}/pairing-code", s.handleCreatePairingCode)
 	parent("GET /api/v1/parent/children/{childId}/devices", s.handleListDevices)
@@ -171,6 +175,7 @@ func (s *Server) routes() {
 	child("PUT /api/v1/child/videos/{videoId}/reaction", s.handleSetReaction)
 	child("DELETE /api/v1/child/videos/{videoId}/reaction", s.handleClearReaction)
 	child("POST /api/v1/child/videos/{videoId}/watch", s.handleRecordWatch)
+	child("PUT /api/v1/child/playback", s.handlePlaybackLease)
 	child("GET /api/v1/child/requests", s.handleChildRequests)
 	child("POST /api/v1/child/requests", s.handleRaiseRequest)
 

@@ -8,6 +8,7 @@ struct RulesView: View {
   @State private var childChannels: [Components.Schemas.EffectiveChannel] = []
   @State private var blockedChannels: [Components.Schemas.BlockedChannel] = []
   @State private var keywords: [Components.Schemas.Keyword] = []
+  @State private var blockedVideos: [Components.Schemas.VideoBlock] = []
   @State private var isLoading = false
   @State private var showingSearch = false
   @State private var showingKeyword = false
@@ -84,6 +85,42 @@ struct RulesView: View {
             }
           }
         }
+
+        if childID != nil {
+          Section("Blocked videos") {
+            if blockedVideos.isEmpty {
+              Text("No individual videos are blocked for this child.")
+                .foregroundStyle(CoopTheme.foreground.opacity(0.65))
+            } else {
+              ForEach(blockedVideos, id: \.video.id) { block in
+                Link(destination: URL(string: "https://www.youtube.com/watch?v=\(block.video.id)")!)
+                {
+                  HStack(spacing: 12) {
+                    AsyncImage(url: block.video.thumbnailUrl.flatMap(URL.init(string:))) { image in
+                      image.resizable().scaledToFill()
+                    } placeholder: {
+                      Image(systemName: "play.rectangle.fill").foregroundStyle(CoopTheme.muted)
+                    }
+                    .frame(width: 56, height: 36)
+                    .clipShape(.rect(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 3) {
+                      Text(block.video.title).font(.headline).foregroundStyle(CoopTheme.foreground)
+                      Text(block.video.channelTitle ?? "Approved channel")
+                        .font(.caption)
+                        .foregroundStyle(CoopTheme.foreground.opacity(0.62))
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.up.right.square").foregroundStyle(CoopTheme.muted)
+                  }
+                }
+                .swipeActions {
+                  Button("Unblock") { unblockVideo(block.video.id) }
+                    .tint(CoopTheme.green)
+                }
+              }
+            }
+          }
+        }
       }
       .scrollContentBackground(.hidden)
       .background(CoopTheme.background)
@@ -118,9 +155,12 @@ struct RulesView: View {
       async let keywordLoad = model.keywords(childID: childID)
       async let blockLoad = model.blocklist()
       if let childID {
-        childChannels = try await model.childAllowlist(childID: childID)
+        async let channelLoad = model.childAllowlist(childID: childID)
+        async let videoBlockLoad = model.videoBlocks(childID: childID)
+        (childChannels, blockedVideos) = try await (channelLoad, videoBlockLoad)
       } else {
         globalChannels = try await model.globalAllowlist()
+        blockedVideos = []
       }
       (keywords, blockedChannels) = try await (keywordLoad, blockLoad)
     } catch {
@@ -138,6 +178,11 @@ struct RulesView: View {
 
   private func delete(_ keywordID: String) {
     mutate { try await model.deleteKeyword(id: keywordID) }
+  }
+
+  private func unblockVideo(_ videoID: String) {
+    guard let childID else { return }
+    mutate { try await model.setVideoBlocked(false, videoID: videoID, childID: childID) }
   }
 
   private func change(channel: Components.Schemas.EffectiveChannel, action: ChildChannelAction) {

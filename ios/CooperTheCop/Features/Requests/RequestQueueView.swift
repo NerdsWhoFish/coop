@@ -7,21 +7,34 @@ struct RequestQueueView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        if model.requests.isEmpty {
-          ContentUnavailableView(
-            "All clear",
-            systemImage: "checkmark.seal.fill",
-            description: Text("New channel requests will show up here.")
-          )
-          .containerRelativeFrame(.vertical, alignment: .center)
-        } else {
-          LazyVStack(spacing: 16) {
+        LazyVStack(spacing: 16) {
+          if !model.activePlayback.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+              Text("NOW WATCHING")
+                .font(.caption.weight(.black))
+                .tracking(1.5)
+                .foregroundStyle(CoopTheme.cyan)
+                .frame(maxWidth: .infinity, alignment: .leading)
+              ForEach(model.activePlayback, id: \.childId) { playback in
+                ActivePlaybackCard(playback: playback, model: model)
+              }
+            }
+          }
+
+          if model.requests.isEmpty {
+            ContentUnavailableView(
+              "All clear",
+              systemImage: "checkmark.seal.fill",
+              description: Text("New channel requests will show up here.")
+            )
+            .containerRelativeFrame(.vertical, alignment: .center)
+          } else {
             ForEach(model.requests, id: \.id) { request in
               RequestCard(request: request, model: model)
             }
           }
-          .padding()
         }
+        .padding()
       }
       .refreshable { await model.loadRequests() }
       .navigationTitle("Dispatch queue")
@@ -65,8 +78,17 @@ private struct RequestCard: View {
       }
 
       VStack(alignment: .leading, spacing: 5) {
-        Text(request.channel.title)
-          .font(.title3.bold())
+        if let rawURL = request.channel.youtubeUrl, let url = URL(string: rawURL) {
+          Link(destination: url) {
+            Label(request.channel.title, systemImage: "arrow.up.right.square")
+              .font(.title3.bold())
+          }
+          .foregroundStyle(CoopTheme.cyan)
+          .accessibilityHint("Opens this channel in YouTube")
+        } else {
+          Text(request.channel.title)
+            .font(.title3.bold())
+        }
         if let video = request.promptedByVideo {
           Text("Asked while looking for “\(video.title)”")
             .font(.subheadline)
@@ -142,6 +164,77 @@ private struct RequestCard: View {
       } catch {
         model.errorMessage = error.localizedDescription
         isWorking = false
+      }
+    }
+  }
+}
+
+private struct ActivePlaybackCard: View {
+  let playback: Components.Schemas.Playback
+  @Bindable var model: AppModel
+  @State private var isBlocking = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(spacing: 12) {
+        AsyncImage(url: playback.video.thumbnailUrl.flatMap(URL.init(string:))) { image in
+          image.resizable().scaledToFill()
+        } placeholder: {
+          Image(systemName: "play.rectangle.fill")
+            .foregroundStyle(CoopTheme.muted)
+        }
+        .frame(width: 88, height: 54)
+        .clipShape(.rect(cornerRadius: 10))
+
+        VStack(alignment: .leading, spacing: 3) {
+          Text(playback.childName.uppercased())
+            .font(.caption2.weight(.black))
+            .tracking(1.3)
+            .foregroundStyle(CoopTheme.purple)
+          Text(playback.video.title)
+            .font(.headline)
+            .lineLimit(2)
+          Text(playback.video.channelTitle ?? "Approved channel")
+            .font(.caption)
+            .foregroundStyle(CoopTheme.foreground.opacity(0.62))
+        }
+      }
+
+      HStack(spacing: 10) {
+        Link(destination: URL(string: "https://www.youtube.com/watch?v=\(playback.video.id)")!) {
+          Label("Open", systemImage: "arrow.up.right.square")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+
+        Button(role: .destructive) {
+          block()
+        } label: {
+          Label("Block video", systemImage: "nosign")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(CoopTheme.red)
+        .disabled(isBlocking)
+      }
+    }
+    .padding(18)
+    .background(CoopTheme.surface, in: .rect(cornerRadius: 20))
+    .accessibilityElement(children: .contain)
+  }
+
+  private func block() {
+    isBlocking = true
+    Task {
+      do {
+        try await model.setVideoBlocked(
+          true,
+          videoID: playback.video.id,
+          childID: playback.childId
+        )
+      } catch {
+        model.errorMessage = error.localizedDescription
+        isBlocking = false
       }
     }
   }

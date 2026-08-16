@@ -18,5 +18,6 @@ struct ParentDashboard: View {
         .tabItem { Label("Family", systemImage: "house.fill") }
     }
     .tint(CoopTheme.cyan)
+    .task { await model.monitorPlayback() }
   }
 }
