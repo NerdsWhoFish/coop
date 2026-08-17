@@ -18,7 +18,7 @@ const maxThumbnailBytes = 4 << 20
 
 // handleThumbnail proxies a video's thumbnail. Images are the one thing worth
 // relaying: static, no player functionality, and it removes a Google host a
-// child device would otherwise contact. See docs/PLAN.md §3.
+// child device would otherwise contact.
 func (s *Server) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoId")
 

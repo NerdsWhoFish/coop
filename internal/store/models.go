@@ -2,7 +2,7 @@
 //
 // Models here are persistence types. The policy engine and ranker take plain
 // domain structs and never import this package, so their rules stay testable
-// without a database. See docs/PLAN.md §5.
+// without a database.
 package store
 
 import (
@@ -169,7 +169,7 @@ type Channel struct {
 	BannerURL       string
 	SubscriberCount int64
 
-	// UploadsPlaylistID is derived from ID, never fetched. See docs/PLAN.md §8.
+	// UploadsPlaylistID is derived from ID, never fetched.
 	UploadsPlaylistID string
 
 	FetchedAt        time.Time  `gorm:"index"`
@@ -245,7 +245,7 @@ type Keyword struct {
 	MatchTitle bool `gorm:"not null;default:true"`
 	MatchTags  bool `gorm:"not null;default:true"`
 	// MatchDescription defaults off: descriptions carry sponsor copy and
-	// boilerplate, so matching them false-positives hard. See docs/PLAN.md §7.
+	// boilerplate, so matching them false-positives hard.
 	MatchDescription bool `gorm:"not null;default:false"`
 	WholeWord        bool `gorm:"not null;default:true"`
 
@@ -289,7 +289,7 @@ type Reaction struct {
 }
 
 // WatchEvent records viewing for the ranker. Completion matters more than
-// starts, so abandoned videos score themselves down. See docs/PLAN.md §15.
+// starts, so abandoned videos score themselves down.
 type WatchEvent struct {
 	ID                 uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	ChildID            uuid.UUID `gorm:"type:uuid;not null;index"`

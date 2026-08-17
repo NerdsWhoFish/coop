@@ -40,13 +40,9 @@ Coop keeps the YouTube experience children already understand while moving appro
 | <img src="docs/images/readme/parent-approval.jpg" alt="Cooper The Cop showing a child's channel approval request" width="260"> | <img src="docs/images/readme/parent-child-controls.jpg" alt="Cooper The Cop showing discovery, search, and device controls for one child" width="260"> | <img src="docs/images/readme/parent-recommendations.jpg" alt="Cooper The Cop explaining and tuning a child's recommendation mix" width="260"> |
 | Review requests and approve or deny them without touching the child's device. | Give every child their own discovery, search, Shorts, pairing, and content settings. | See why videos rank, then adjust the mix by channel instead of trusting a black-box feed. |
 
-> **Status: pre-release.** Phases 0 through 6 are implemented.
-> The backend builds, migrates, serves, and keeps approved channels ingested.
-> The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, per-child discovery controls, family settings, scoped parent invitations, and explainable recommendation tuning.
-> The child app handles pairing, approved feeds and channels, opt-in locked channel discovery, subscriptions, mixed search and approval requests, embedded playback, local reactions, sharing, and a policy-filtered Shorts feed.
->
-> **Picking this up?** Start with [docs/HANDOFF.md](docs/HANDOFF.md) for where things stand, the invariants worth not breaking, and what to build next.
-> The full design is in [docs/PLAN.md](docs/PLAN.md), and the reasoning behind the big calls is in [adr/](adr/).
+> **Status: ready for daily use.** The backend and both native iOS apps are complete, deployed, and ready for everyday family use.
+> Production deployment, registered-device installation, backups, recovery, and child-device restrictions are documented in [the deployment guide](docs/DEPLOYMENT.md).
+> The reasoning behind Coop's architectural decisions lives in [adr/](adr/).
 
 ## How it works
 
@@ -96,14 +92,13 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `ios/CooperTheCop` | SwiftUI parent app and XcodeGen project source |
 | `ios/CooperWatch` | SwiftUI child app and XcodeGen project source |
 | `adr/` | Architecture decision records |
-| `docs/PLAN.md` | Full design document |
 | `docs/DEPLOYMENT.md` | Production setup, device restrictions, recovery, and operations |
 | `deploy/ota` | Registered-device Ad Hoc builds and the local HTTPS install portal |
 
-The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the Phase 6 recommendation mixer.
-The child app (`Cooper Watch`) includes the complete Phase 3 and Phase 4 viewing experience.
+The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the recommendation mixer.
+The child app (`Cooper Watch`) includes pairing, feeds, subscriptions, search, approvals, playback, reactions, sharing, and Shorts.
 
-The code and repository-owned release package are ready for release-candidate testing.
+Coop is ready for daily family use through its self-hosted deployment and registered-device release tooling.
 App Store publication still depends on the legal, content-rights, signing, account, metadata, and human approval gates listed in [ios/AppStore/README.md](ios/AppStore/README.md).
 
 ## Requirements

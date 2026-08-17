@@ -17,7 +17,7 @@ import (
 
 // CacheFloor is the shortest TTL any cached YouTube response may have. A floor
 // rather than a default: one short-TTL call site can drain the daily search
-// allocation, which cannot be bought back. See docs/PLAN.md §8.
+// allocation, which cannot be bought back.
 const CacheFloor = time.Hour
 
 // SearchCallsPerDay is the hard per-project daily limit Google enforces on
@@ -245,7 +245,7 @@ func (c *Config) Validate() error {
 
 	if c.YouTube.CacheTTLDefault < CacheFloor {
 		errs = append(errs, fmt.Errorf(
-			"youtube.cache_ttl_default is %s, which is below the %s floor; see docs/PLAN.md §8",
+			"youtube.cache_ttl_default is %s, which is below the %s floor",
 			c.YouTube.CacheTTLDefault, CacheFloor))
 	}
 	if c.YouTube.DailySearchBudget > SearchCallsPerDay {

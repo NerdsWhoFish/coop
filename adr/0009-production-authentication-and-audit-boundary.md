@@ -10,7 +10,7 @@ Accepted
 
 ## Context and problem statement
 
-Phase 5 makes Coop reachable outside a development machine and promises TOTP, rate-limited lockout, and retained policy audit logs.
+A production Coop deployment is reachable outside a development machine and requires TOTP, rate-limited lockout, and retained policy audit logs.
 The existing parent login mints a session after password verification, unauthenticated setup and pairing have no attempt limit, and policy changes are only visible in request logs.
 Coop is self-hosted, so recovery cannot depend on a vendor support desk or a hidden administrative account.
 
@@ -74,4 +74,3 @@ TOTP reset and account unlock are host-only `coopd` commands that revoke affecte
 - Losing both the TOTP device and host access still locks out the account.
 - Audit integration touches every policy mutation and increases transaction scope.
 - Operators behind a reverse proxy must configure its address range correctly to obtain per-client throttling.
-

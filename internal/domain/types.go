@@ -37,7 +37,7 @@ func (s LiveState) IsLive() bool {
 
 // ShortSource records how a Shorts classification was decided. The RSS window
 // only moves forward, so a duration guess is permanent for that row and repair
-// is a manual pass, not a scheduled one. See docs/PLAN.md §8.
+// is a manual pass, not a scheduled one.
 type ShortSource string
 
 const (

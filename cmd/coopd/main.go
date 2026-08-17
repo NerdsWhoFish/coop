@@ -59,7 +59,7 @@ Flags:
   -config PATH   Path to a TOML config file (optional)
 
 Configuration is read from the config file if given, then overlaid by
-COOP_-prefixed environment variables. See docs/PLAN.md.
+COOP_-prefixed environment variables. See docs/DEPLOYMENT.md.
 `)
 }
 

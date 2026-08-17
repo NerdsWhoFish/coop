@@ -7,7 +7,6 @@ Date: 2026-08-15
 
 Coop's central promise is that a child only ever sees content a parent has approved.
 How that promise is modelled determines almost everything else: what the child app can render, how much work a parent has to do before the app is usable, and whether a child has any way to participate in what they are allowed to watch.
-The reasoning behind this record is developed in the project plan, section 7 (Policy engine) and section 14 (Known gaps).
 
 The naive model is binary: a channel is approved or it is not.
 That model has no way to distinguish a channel a parent has never seen from one a parent has deliberately refused, and it gives a child no route to ask for anything.

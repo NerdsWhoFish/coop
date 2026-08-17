@@ -9,7 +9,7 @@ import (
 
 // FeedURL is a channel's public Atom feed of recent uploads. It costs no API
 // quota, and doubles as the WebSub topic URL, so moving from polling to push
-// later needs no new integration. See docs/PLAN.md §8.
+// later needs no new integration.
 func FeedURL(channelID string) string {
 	return "https://www.youtube.com/feeds/videos.xml?channel_id=" + channelID
 }

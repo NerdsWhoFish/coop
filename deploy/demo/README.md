@@ -5,7 +5,7 @@ It is not a hard-coded demo mode and it never uses credentials committed to this
 
 ## Build the fixture
 
-1. Deploy the exact release candidate to a dedicated hostname and database.
+1. Deploy the exact Coop release being submitted to a dedicated hostname and database.
 2. Create a dedicated Google Cloud project and YouTube API key for the review environment.
 3. In Cooper The Cop, create a fictional admin and enroll a dedicated TOTP seed.
 4. Create at least two fictional children with different settings and channel scopes.

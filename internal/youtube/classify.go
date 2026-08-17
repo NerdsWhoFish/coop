@@ -88,7 +88,7 @@ func ParseISODuration(s string) (time.Duration, error) {
 
 // EmbedURL builds the player URL. Always youtube-nocookie.com, the embed-only
 // host, so a network filter can block youtube.com on a child's device without
-// breaking playback here. See docs/PLAN.md §3.
+// breaking playback here. ADR 0001 records why playback stays embedded.
 func EmbedURL(videoID string, autoplay bool) string {
 	v := "https://www.youtube-nocookie.com/embed/" + videoID + "?rel=0&modestbranding=1"
 	if autoplay {

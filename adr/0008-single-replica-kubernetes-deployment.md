@@ -10,7 +10,7 @@ Accepted
 
 ## Context and problem statement
 
-Coop needs a supported Kubernetes deployment path for Phase 5.
+Coop needs a supported Kubernetes deployment path.
 The server runs database migrations and starts quota-bearing background workers in the same process as the HTTP API.
 Those workers do not currently coordinate ownership or elect a leader, so multiple replicas could ingest the same channels, consume duplicate YouTube quota, and race cleanup work.
 PostgreSQL also has an independent lifecycle, backup strategy, and operational risk profile that should not be hidden inside an application chart.
@@ -33,7 +33,7 @@ Allowing replicas greater than one would turn a normal scaling control into a co
 ### Add leader election before shipping the chart
 
 Leader election would permit multiple HTTP replicas while restricting background work to one owner.
-It also adds leases, failure detection, shutdown semantics, and a new class of behavior that is not otherwise required for Phase 5.
+It also adds leases, failure detection, shutdown semantics, and a new class of behavior that the current deployment does not need.
 That work should happen when Coop actually needs horizontal API scaling, not be smuggled into deployment packaging.
 
 ### Bundle PostgreSQL as a chart dependency
@@ -66,4 +66,3 @@ The values schema rejects replica counts other than one so the operational const
 - An upgrade causes a short service interruption because the old process stops before the new one starts.
 - Coop cannot horizontally scale its HTTP API through this chart yet.
 - Operators must provision PostgreSQL and the Kubernetes Secret separately.
-

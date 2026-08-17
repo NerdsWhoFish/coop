@@ -11,7 +11,7 @@ import (
 
 // CacheFloor is the shortest TTL any cached response may have. A floor rather
 // than a default: one short-TTL call site can drain the search allocation,
-// which cannot be bought back. See docs/PLAN.md §8.
+// which cannot be bought back.
 const CacheFloor = time.Hour
 
 // Cache stores raw API responses keyed by request.
@@ -31,7 +31,7 @@ type TTLs struct {
 	Search  time.Duration
 }
 
-// DefaultTTLs are the lifetimes from docs/PLAN.md §8.
+// DefaultTTLs are the production cache lifetimes for each YouTube endpoint.
 func DefaultTTLs() TTLs {
 	return TTLs{
 		Default: CacheFloor,
