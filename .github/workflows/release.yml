@@ -9,7 +9,7 @@ on:
 permissions: {}
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  IMAGE: ghcr.io/nerdswhofish/coop
 
 jobs:
   binaries:
