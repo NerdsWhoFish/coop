@@ -141,13 +141,14 @@ type Child struct {
 
 // ChildDevice is one paired device holding a scoped, revocable token.
 type ChildDevice struct {
-	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	ChildID    uuid.UUID `gorm:"type:uuid;not null;index"`
-	Name       string    `gorm:"not null"`
-	TokenHash  string    `gorm:"not null;uniqueIndex"`
-	LastSeenAt *time.Time
-	RevokedAt  *time.Time
-	CreatedAt  time.Time
+	ID              uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ChildID         uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name            string    `gorm:"not null"`
+	TokenHash       string    `gorm:"not null;uniqueIndex"`
+	AllowSelfUnpair bool      `gorm:"not null;default:false"`
+	LastSeenAt      *time.Time
+	RevokedAt       *time.Time
+	CreatedAt       time.Time
 }
 
 // PairingCode is a single-use, expiring code that binds a device to a child.
@@ -302,7 +303,8 @@ type WatchEvent struct {
 // PlaybackSession is a renewable lease describing what a child is watching.
 // Active sessions older than the lease window are treated as stopped.
 type PlaybackSession struct {
-	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	DeviceID  uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ChildID   uuid.UUID `gorm:"type:uuid;not null;index"`
 	VideoID   string    `gorm:"not null;index"`
 	StartedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null;index"`

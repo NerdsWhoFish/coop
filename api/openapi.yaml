@@ -600,6 +600,26 @@ paths:
       responses:
         "204": { description: Revoked }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateChildDevice
+      tags: [pairing]
+      summary: Update controls for a paired device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [allowSelfUnpair]
+              properties:
+                allowSelfUnpair: { type: boolean }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # Allowlists ---------------------------------------------------------------
 
@@ -1525,7 +1545,7 @@ components:
 
     ChildProfile:
       type: object
-      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled]
+      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled, allowSelfUnpair]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1534,6 +1554,7 @@ components:
         watchPageAutoplay: { type: boolean }
         videoSearchTiles: { type: boolean }
         channelDiscoveryEnabled: { type: boolean }
+        allowSelfUnpair: { type: boolean }
 
     PairingCode:
       type: object
@@ -1547,12 +1568,13 @@ components:
 
     Device:
       type: object
-      required: [id, name, createdAt]
+      required: [id, name, createdAt, allowSelfUnpair]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         createdAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time }
+        allowSelfUnpair: { type: boolean }
 
     Channel:
       type: object
@@ -1717,10 +1739,12 @@ components:
 
     Playback:
       type: object
-      required: [childId, childName, video, startedAt]
+      required: [childId, childName, deviceId, deviceName, video, startedAt]
       properties:
         childId: { type: string, format: uuid }
         childName: { type: string }
+        deviceId: { type: string, format: uuid }
+        deviceName: { type: string }
         video: { $ref: "#/components/schemas/Video" }
         startedAt: { type: string, format: date-time }
 

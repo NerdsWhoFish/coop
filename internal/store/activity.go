@@ -119,14 +119,14 @@ func (a *Activity) RecordWatch(ctx context.Context, childID uuid.UUID, videoID s
 	return wrap(a.db.WithContext(ctx).Create(&row).Error, "recording watch event")
 }
 
-// StartPlayback opens or replaces the current playback lease for a child.
-func (a *Activity) StartPlayback(ctx context.Context, childID uuid.UUID, videoID string) error {
+// StartPlayback opens or replaces the current playback lease for a device.
+func (a *Activity) StartPlayback(ctx context.Context, deviceID, childID uuid.UUID, videoID string) error {
 	now := a.now()
 	row := PlaybackSession{
-		ChildID: childID, VideoID: videoID, StartedAt: now, UpdatedAt: now, Active: true,
+		DeviceID: deviceID, ChildID: childID, VideoID: videoID, StartedAt: now, UpdatedAt: now, Active: true,
 	}
 	err := a.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "child_id"}},
+		Columns: []clause.Column{{Name: "device_id"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"video_id": videoID, "started_at": now, "updated_at": now, "active": true,
 		}),
@@ -135,26 +135,34 @@ func (a *Activity) StartPlayback(ctx context.Context, childID uuid.UUID, videoID
 }
 
 // RenewPlayback keeps a matching active lease alive.
-func (a *Activity) RenewPlayback(ctx context.Context, childID uuid.UUID, videoID string) error {
+func (a *Activity) RenewPlayback(ctx context.Context, deviceID, childID uuid.UUID, videoID string) error {
 	result := a.db.WithContext(ctx).Model(&PlaybackSession{}).
-		Where("child_id = ? AND video_id = ? AND active = TRUE", childID, videoID).
+		Where("device_id = ? AND video_id = ? AND active = TRUE", deviceID, videoID).
 		Update("updated_at", a.now())
 	if result.Error != nil {
 		return fmt.Errorf("renewing playback lease: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return a.StartPlayback(ctx, childID, videoID)
+		return a.StartPlayback(ctx, deviceID, childID, videoID)
 	}
 	return nil
 }
 
 // StopPlayback closes only the matching lease, so a stale page cannot stop a
 // newer video that replaced it.
-func (a *Activity) StopPlayback(ctx context.Context, childID uuid.UUID, videoID string) error {
+func (a *Activity) StopPlayback(ctx context.Context, deviceID uuid.UUID, videoID string) error {
+	return wrap(a.db.WithContext(ctx).Model(&PlaybackSession{}).
+		Where("device_id = ? AND video_id = ? AND active = TRUE", deviceID, videoID).
+		Updates(map[string]any{"active": false, "updated_at": a.now()}).Error,
+		"stopping playback lease")
+}
+
+// StopChildPlayback closes every device lease for one blocked child/video pair.
+func (a *Activity) StopChildPlayback(ctx context.Context, childID uuid.UUID, videoID string) error {
 	return wrap(a.db.WithContext(ctx).Model(&PlaybackSession{}).
 		Where("child_id = ? AND video_id = ? AND active = TRUE", childID, videoID).
 		Updates(map[string]any{"active": false, "updated_at": a.now()}).Error,
-		"stopping playback lease")
+		"stopping child playback leases")
 }
 
 // ActivePlaybacks returns leases renewed after cutoff for the requested children.

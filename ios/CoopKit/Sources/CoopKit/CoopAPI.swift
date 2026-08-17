@@ -243,6 +243,18 @@ public actor CoopAPI {
     }
   }
 
+  public func updateChildDevice(id: String, allowSelfUnpair: Bool) async throws
+    -> Components.Schemas.Device
+  {
+    let path = Operations.UpdateChildDevice.Input.Path(deviceId: id)
+    let body = Operations.UpdateChildDevice.Input.Body.json(
+      .init(allowSelfUnpair: allowSelfUnpair)
+    )
+    let output = try await client.updateChildDevice(path: path, body: body)
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
   public func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {
     let output = try await client.getGlobalAllowlist()
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }

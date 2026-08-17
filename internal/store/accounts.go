@@ -809,6 +809,36 @@ func (a *Accounts) Devices(ctx context.Context, childID uuid.UUID) ([]ChildDevic
 	return devices, wrap(err, "listing devices")
 }
 
+// Device returns one active paired device.
+func (a *Accounts) Device(ctx context.Context, deviceID uuid.UUID) (ChildDevice, error) {
+	var device ChildDevice
+	err := a.db.WithContext(ctx).First(&device, "id = ? AND revoked_at IS NULL", deviceID).Error
+	return device, wrap(err, "reading device")
+}
+
+// SetDeviceSelfUnpair controls whether a child can clear this device's pairing.
+func (a *Accounts) SetDeviceSelfUnpair(ctx context.Context, deviceID, actorID uuid.UUID, allowed bool) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var device ChildDevice
+		if err := tx.First(&device, "id = ? AND revoked_at IS NULL", deviceID).Error; err != nil {
+			return wrap(err, "reading device before update")
+		}
+		familyID, err := familyIDForChild(tx, device.ChildID)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&device).Update("allow_self_unpair", allowed).Error; err != nil {
+			return fmt.Errorf("updating device self-unpair permission: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID, ChildID: &device.ChildID,
+			Action: "device.self_unpair.update", TargetType: "device", TargetID: device.ID.String(),
+			Before: map[string]any{"allowed": device.AllowSelfUnpair},
+			After:  map[string]any{"allowed": allowed}, CreatedAt: a.now(),
+		})
+	})
+}
+
 // RevokeDevice marks a device's token dead. The row is kept so the parent app
 // can still show that the device once existed.
 func (a *Accounts) RevokeDevice(ctx context.Context, deviceID, actorID uuid.UUID) error {
@@ -824,6 +854,10 @@ func (a *Accounts) RevokeDevice(ctx context.Context, deviceID, actorID uuid.UUID
 		now := a.now()
 		if err := tx.Model(&device).Update("revoked_at", now).Error; err != nil {
 			return fmt.Errorf("revoking device: %w", err)
+		}
+		if err := tx.Model(&PlaybackSession{}).Where("device_id = ?", device.ID).
+			Updates(map[string]any{"active": false, "updated_at": now}).Error; err != nil {
+			return fmt.Errorf("stopping revoked device playback: %w", err)
 		}
 		return appendAudit(tx, auditChange{
 			FamilyID: familyID, ActorParentID: &actorID, ChildID: &device.ChildID,

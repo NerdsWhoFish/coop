@@ -6,13 +6,25 @@ struct ChildDevicesView: View {
   @Bindable var model: AppModel
   @State private var devices: [Components.Schemas.Device] = []
   @State private var revoking: Components.Schemas.Device?
+  @State private var updatingDeviceIDs: Set<String> = []
 
   var body: some View {
     List(devices, id: \.id) { device in
-      VStack(alignment: .leading, spacing: 4) {
-        Text(device.name).font(.headline)
-        Text(lastSeen(device))
-          .font(.caption).foregroundStyle(CoopTheme.foreground.opacity(0.62))
+      VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(device.name).font(.headline)
+          Text(lastSeen(device))
+            .font(.caption).foregroundStyle(CoopTheme.foreground.opacity(0.62))
+        }
+        Toggle(
+          "Allow re-pairing",
+          isOn: Binding(
+            get: { device.allowSelfUnpair },
+            set: { update(device, allowSelfUnpair: $0) }
+          )
+        )
+        .tint(CoopTheme.cyan)
+        .disabled(updatingDeviceIDs.contains(device.id))
       }
       .swipeActions {
         Button("Revoke", role: .destructive) { revoking = device }
@@ -34,6 +46,13 @@ struct ChildDevicesView: View {
     .refreshable { await load() }
     .navigationTitle("\(child.value1.name)’s devices")
     .navigationBarTitleDisplayMode(.inline)
+    .safeAreaInset(edge: .bottom) {
+      Text("Re-pairing lets this device erase its Coop pairing and connect as a different child. It is locked by default.")
+        .font(.footnote)
+        .foregroundStyle(CoopTheme.foreground.opacity(0.68))
+        .padding()
+        .background(.ultraThinMaterial)
+    }
     .task { await load() }
     .confirmationDialog(
       "Revoke \(revoking?.name ?? "this device")?",
@@ -72,6 +91,29 @@ struct ChildDevicesView: View {
         model.errorMessage = error.localizedDescription
       }
       revoking = nil
+    }
+  }
+
+  private func update(_ device: Components.Schemas.Device, allowSelfUnpair: Bool) {
+    guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
+    guard updatingDeviceIDs.insert(device.id).inserted else { return }
+    devices[index].allowSelfUnpair = allowSelfUnpair
+    Task {
+      defer { updatingDeviceIDs.remove(device.id) }
+      do {
+        let updated = try await model.updateChildDevice(
+          id: device.id,
+          allowSelfUnpair: allowSelfUnpair
+        )
+        if let currentIndex = devices.firstIndex(where: { $0.id == device.id }) {
+          devices[currentIndex] = updated
+        }
+      } catch {
+        if let currentIndex = devices.firstIndex(where: { $0.id == device.id }) {
+          devices[currentIndex].allowSelfUnpair = device.allowSelfUnpair
+        }
+        model.errorMessage = error.localizedDescription
+      }
     }
   }
 

@@ -46,7 +46,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) error {
 		return internal(err)
 	}
 
-	child, _, err := s.deps.Accounts.RedeemPairingCode(r.Context(), code, body.DeviceName, token.Hash)
+	child, device, err := s.deps.Accounts.RedeemPairingCode(r.Context(), code, body.DeviceName, token.Hash)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Unknown, expired and already-used all read the same, so a code
@@ -64,7 +64,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) error {
 
 	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]any{
 		"token": token.Plain,
-		"child": newChildProfileDTO(child),
+		"child": newChildProfileDTO(child, device.AllowSelfUnpair),
 	})
 	return nil
 }
@@ -74,7 +74,11 @@ func (s *Server) handleChildMe(w http.ResponseWriter, r *http.Request, c auth.Ch
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusOK, newChildProfileDTO(child))
+	device, err := s.deps.Accounts.Device(r.Context(), c.DeviceID)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, s.deps.Logger, http.StatusOK, newChildProfileDTO(child, device.AllowSelfUnpair))
 	return nil
 }
 

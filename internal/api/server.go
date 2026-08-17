@@ -142,6 +142,7 @@ func (s *Server) routes() {
 
 	parent("POST /api/v1/parent/children/{childId}/pairing-code", s.handleCreatePairingCode)
 	parent("GET /api/v1/parent/children/{childId}/devices", s.handleListDevices)
+	parent("PATCH /api/v1/parent/devices/{deviceId}", s.handleUpdateDevice)
 	parent("DELETE /api/v1/parent/devices/{deviceId}", s.handleRevokeDevice)
 
 	parent("GET /api/v1/parent/allowlist/global", s.handleGlobalAllowlist)

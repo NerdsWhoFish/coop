@@ -765,13 +765,15 @@ func TestVideoBlockOutranksApprovalAndPlaybackLeaseExpires(t *testing.T) {
 
 	channelID := "UC" + uuid.NewString()
 	videoID := "video-" + uuid.NewString()
+	secondVideoID := "video-" + uuid.NewString()
 	catalog := NewCatalog(db, clock)
 	if err := catalog.UpsertChannels(ctx, []youtube.Channel{{ID: channelID, Title: "Channel"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.UpsertVideos(ctx, []youtube.Video{{
-		ID: videoID, ChannelID: channelID, Title: "Video",
-	}}); err != nil {
+	if err := catalog.UpsertVideos(ctx, []youtube.Video{
+		{ID: videoID, ChannelID: channelID, Title: "Video"},
+		{ID: secondVideoID, ChannelID: channelID, Title: "Second video"},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Delete(&Channel{}, "id = ?", channelID) })
@@ -792,26 +794,43 @@ func TestVideoBlockOutranksApprovalAndPlaybackLeaseExpires(t *testing.T) {
 	}
 
 	activity := NewActivity(db, clock)
-	if err := activity.StartPlayback(ctx, child.ID, videoID); err != nil {
+	devices := []ChildDevice{
+		{ChildID: child.ID, Name: "Bedroom iPad", TokenHash: "token-" + uuid.NewString()},
+		{ChildID: child.ID, Name: "Shared iPhone", TokenHash: "token-" + uuid.NewString()},
+	}
+	if err := db.Create(&devices).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.SetDeviceSelfUnpair(ctx, devices[0].ID, parent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	updatedDevice, err := accounts.Device(ctx, devices[0].ID)
+	if err != nil || !updatedDevice.AllowSelfUnpair {
+		t.Fatalf("updated device = (%+v, %v), want self-unpair enabled", updatedDevice, err)
+	}
+	if err := activity.StartPlayback(ctx, devices[0].ID, child.ID, videoID); err != nil {
+		t.Fatal(err)
+	}
+	if err := activity.StartPlayback(ctx, devices[1].ID, child.ID, secondVideoID); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("active playbacks = (%+v, %v), want one", rows, err)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("active playbacks = (%+v, %v), want two", rows, err)
 	}
 	now = now.Add(46 * time.Second)
 	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("expired playbacks = (%+v, %v), want none", rows, err)
 	}
-	if err := activity.RenewPlayback(ctx, child.ID, videoID); err != nil {
+	if err := activity.RenewPlayback(ctx, devices[0].ID, child.ID, videoID); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))
-	if err != nil || len(rows) != 1 || !rows[0].StartedAt.Equal(now.Add(-46*time.Second)) {
+	if err != nil || len(rows) != 1 || rows[0].DeviceID != devices[0].ID || !rows[0].StartedAt.Equal(now.Add(-46*time.Second)) {
 		t.Fatalf("renewed playbacks = (%+v, %v), want original lease active", rows, err)
 	}
-	if err := activity.StopPlayback(ctx, child.ID, videoID); err != nil {
+	if err := activity.StopPlayback(ctx, devices[0].ID, videoID); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = activity.ActivePlaybacks(ctx, []uuid.UUID{child.ID}, now.Add(-45*time.Second))

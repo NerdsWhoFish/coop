@@ -782,38 +782,59 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request, p aut
 	return nil
 }
 
+func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
+	device, err := s.deviceInScope(r, p)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		AllowSelfUnpair *bool `json:"allowSelfUnpair"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	if body.AllowSelfUnpair == nil {
+		return badRequest("allowSelfUnpair is required")
+	}
+	if err := s.deps.Accounts.SetDeviceSelfUnpair(r.Context(), device.ID, p.ID, *body.AllowSelfUnpair); err != nil {
+		return err
+	}
+	device.AllowSelfUnpair = *body.AllowSelfUnpair
+	writeJSON(w, s.deps.Logger, http.StatusOK, newDeviceDTO(device))
+	return nil
+}
+
 // handleRevokeDevice kills a device token. The device's child is checked for
 // scope first, so a scoped parent cannot revoke a device they cannot see.
 func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
+	device, err := s.deviceInScope(r, p)
+	if err != nil {
+		return err
+	}
+	if err := s.deps.Accounts.RevokeDevice(r.Context(), device.ID, p.ID); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) deviceInScope(r *http.Request, p auth.Parent) (store.ChildDevice, error) {
 	deviceID, err := pathUUID(r, "deviceId")
 	if err != nil {
-		return err
+		return store.ChildDevice{}, err
 	}
 
-	children, err := s.deps.Accounts.Children(r.Context(), p.FamilyID)
+	device, err := s.deps.Accounts.Device(r.Context(), deviceID)
 	if err != nil {
-		return err
+		return store.ChildDevice{}, err
 	}
-
-	for _, child := range children {
-		if !p.CanManage(child.ID) {
-			continue
-		}
-		devices, err := s.deps.Accounts.Devices(r.Context(), child.ID)
-		if err != nil {
-			return err
-		}
-		for _, device := range devices {
-			if device.ID == deviceID {
-				if err := s.deps.Accounts.RevokeDevice(r.Context(), deviceID, p.ID); err != nil {
-					return err
-				}
-				w.WriteHeader(http.StatusNoContent)
-				return nil
-			}
-		}
+	if err := p.RequireChild(device.ChildID); err != nil {
+		return store.ChildDevice{}, notFound()
 	}
-	return notFound()
+	if _, err := s.deps.Accounts.Child(r.Context(), p.FamilyID, device.ChildID); err != nil {
+		return store.ChildDevice{}, err
+	}
+	return device, nil
 }
 
 // childInScope resolves the childId path value and enforces the caller's scope.

@@ -15,7 +15,7 @@ struct RequestQueueView: View {
                 .tracking(1.5)
                 .foregroundStyle(CoopTheme.cyan)
                 .frame(maxWidth: .infinity, alignment: .leading)
-              ForEach(model.activePlayback, id: \.childId) { playback in
+              ForEach(model.activePlayback, id: \.deviceId) { playback in
                 ActivePlaybackCard(playback: playback, model: model)
               }
             }
@@ -191,6 +191,9 @@ private struct ActivePlaybackCard: View {
             .font(.caption2.weight(.black))
             .tracking(1.3)
             .foregroundStyle(CoopTheme.purple)
+          Label(playback.deviceName, systemImage: "ipad.and.iphone")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(CoopTheme.cyan)
           Text(playback.video.title)
             .font(.headline)
             .lineLimit(2)

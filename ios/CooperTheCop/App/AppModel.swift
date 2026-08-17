@@ -120,6 +120,8 @@ final class AppModel {
         Components.Schemas.Playback(
           childId: "preview-child",
           childName: "River",
+          deviceId: "preview-device",
+          deviceName: "River’s iPad",
           video: video,
           startedAt: .now.addingTimeInterval(-30)
         )
@@ -288,6 +290,13 @@ final class AppModel {
   func revokeChildDevice(id: String) async throws {
     guard let api else { return }
     try await api.revokeChildDevice(id: id)
+  }
+
+  func updateChildDevice(id: String, allowSelfUnpair: Bool) async throws
+    -> Components.Schemas.Device
+  {
+    guard let api else { throw CoopAPIError.invalidSession }
+    return try await api.updateChildDevice(id: id, allowSelfUnpair: allowSelfUnpair)
   }
 
   func globalAllowlist() async throws -> [Components.Schemas.ApprovedChannel] {

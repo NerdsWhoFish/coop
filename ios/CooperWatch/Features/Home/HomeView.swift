@@ -38,6 +38,10 @@ struct HomeView: View {
           .accessibilityLabel("My requests")
           Menu {
             Button("Pair a different device", role: .destructive) { model.unpair() }
+              .disabled(model.profile?.allowSelfUnpair != true)
+            if model.profile?.allowSelfUnpair != true {
+              Text("A parent must enable re-pairing for this device.")
+            }
           } label: {
             Image(systemName: "person.crop.circle.fill")
               .font(.title2).foregroundStyle(WatchTheme.purple)

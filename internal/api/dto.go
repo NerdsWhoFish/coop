@@ -96,9 +96,10 @@ type childProfileDTO struct {
 	WatchPageAutoplay       bool      `json:"watchPageAutoplay"`
 	VideoSearchTiles        bool      `json:"videoSearchTiles"`
 	ChannelDiscoveryEnabled bool      `json:"channelDiscoveryEnabled"`
+	AllowSelfUnpair         bool      `json:"allowSelfUnpair"`
 }
 
-func newChildProfileDTO(c store.Child) childProfileDTO {
+func newChildProfileDTO(c store.Child, allowSelfUnpair bool) childProfileDTO {
 	return childProfileDTO{
 		ID:                      c.ID,
 		Name:                    c.Name,
@@ -107,6 +108,7 @@ func newChildProfileDTO(c store.Child) childProfileDTO {
 		WatchPageAutoplay:       c.WatchPageAutoplay,
 		VideoSearchTiles:        c.VideoSearchTiles,
 		ChannelDiscoveryEnabled: c.ChannelDiscoveryEnabled,
+		AllowSelfUnpair:         allowSelfUnpair,
 	}
 }
 
@@ -205,10 +207,12 @@ type watchPageDTO struct {
 }
 
 type playbackDTO struct {
-	ChildID   uuid.UUID `json:"childId"`
-	ChildName string    `json:"childName"`
-	Video     videoDTO  `json:"video"`
-	StartedAt time.Time `json:"startedAt"`
+	ChildID    uuid.UUID `json:"childId"`
+	ChildName  string    `json:"childName"`
+	DeviceID   uuid.UUID `json:"deviceId"`
+	DeviceName string    `json:"deviceName"`
+	Video      videoDTO  `json:"video"`
+	StartedAt  time.Time `json:"startedAt"`
 }
 
 type playbackPageDTO struct {
@@ -264,18 +268,20 @@ func newKeywordDTO(k store.Keyword) keywordDTO {
 }
 
 type deviceDTO struct {
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+	ID              uuid.UUID  `json:"id"`
+	Name            string     `json:"name"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	LastSeenAt      *time.Time `json:"lastSeenAt,omitempty"`
+	AllowSelfUnpair bool       `json:"allowSelfUnpair"`
 }
 
 func newDeviceDTO(d store.ChildDevice) deviceDTO {
 	return deviceDTO{
-		ID:         d.ID,
-		Name:       d.Name,
-		CreatedAt:  d.CreatedAt,
-		LastSeenAt: d.LastSeenAt,
+		ID:              d.ID,
+		Name:            d.Name,
+		CreatedAt:       d.CreatedAt,
+		LastSeenAt:      d.LastSeenAt,
+		AllowSelfUnpair: d.AllowSelfUnpair,
 	}
 }
 

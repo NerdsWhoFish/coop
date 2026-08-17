@@ -40,7 +40,8 @@ final class ChildAppModel {
           shortsEnabled: ProcessInfo.processInfo.environment["COOP_UI_SHORTS_DISABLED"] != "1",
           watchPageAutoplay: false,
           videoSearchTiles: true,
-          channelDiscoveryEnabled: true
+          channelDiscoveryEnabled: true,
+          allowSelfUnpair: false
         )
         feed = Self.previewVideos
         discoveries = Self.previewDiscoveries
@@ -92,8 +93,10 @@ final class ChildAppModel {
       async let feedLoad = api.childFeed()
       async let subscriptionLoad = api.childSubscriptions()
       async let discoveryLoad = api.childDiscovery()
+      async let profileLoad = api.childProfile()
       (feed, subscriptions) = try await (feedLoad, subscriptionLoad)
       discoveries = (try? await discoveryLoad) ?? []
+      profile = try await profileLoad
     } catch {
       errorMessage = error.localizedDescription
     }

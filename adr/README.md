@@ -24,3 +24,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0012](0012-model-current-playback-as-renewable-leases.md) | Model current playback as renewable leases | accepted | 2026-08-16 |
 | [0013](0013-serve-ota-packages-from-coop.md) | Serve OTA packages from Coop | accepted | 2026-08-16 |
 | [0014](0014-opt-in-requestable-channel-discovery.md) | Add opt-in discovery without weakening channel approval | accepted | 2026-08-16 |
+| [0015](0015-key-playback-leases-by-device.md) | Key playback leases by paired device | accepted | 2026-08-17 |

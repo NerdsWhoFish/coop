@@ -33,7 +33,7 @@ func (s *Server) handlePlaybackLease(w http.ResponseWriter, r *http.Request, c a
 	}
 
 	if body.State == "stopped" {
-		if err := s.deps.Activity.StopPlayback(r.Context(), c.ID, body.VideoID); err != nil {
+		if err := s.deps.Activity.StopPlayback(r.Context(), c.DeviceID, body.VideoID); err != nil {
 			return err
 		}
 		writeJSON(w, s.deps.Logger, http.StatusOK, map[string]bool{"allowed": true})
@@ -45,7 +45,7 @@ func (s *Server) handlePlaybackLease(w http.ResponseWriter, r *http.Request, c a
 
 	if _, err := s.deps.Feed.Watchable(r.Context(), c.FamilyID, c.ID, body.VideoID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			if stopErr := s.deps.Activity.StopPlayback(r.Context(), c.ID, body.VideoID); stopErr != nil {
+			if stopErr := s.deps.Activity.StopPlayback(r.Context(), c.DeviceID, body.VideoID); stopErr != nil {
 				return stopErr
 			}
 			writeJSON(w, s.deps.Logger, http.StatusOK, map[string]bool{"allowed": false})
@@ -56,9 +56,9 @@ func (s *Server) handlePlaybackLease(w http.ResponseWriter, r *http.Request, c a
 
 	var err error
 	if body.State == "started" {
-		err = s.deps.Activity.StartPlayback(r.Context(), c.ID, body.VideoID)
+		err = s.deps.Activity.StartPlayback(r.Context(), c.DeviceID, c.ID, body.VideoID)
 	} else {
-		err = s.deps.Activity.RenewPlayback(r.Context(), c.ID, body.VideoID)
+		err = s.deps.Activity.RenewPlayback(r.Context(), c.DeviceID, c.ID, body.VideoID)
 	}
 	if err != nil {
 		return err
@@ -73,11 +73,19 @@ func (s *Server) handleActivePlayback(w http.ResponseWriter, r *http.Request, p 
 		return err
 	}
 	names := make(map[uuid.UUID]string, len(children))
+	deviceNames := make(map[uuid.UUID]string)
 	ids := make([]uuid.UUID, 0, len(children))
 	for _, child := range children {
 		if p.CanManage(child.ID) {
 			ids = append(ids, child.ID)
 			names[child.ID] = child.Name
+			devices, err := s.deps.Accounts.Devices(r.Context(), child.ID)
+			if err != nil {
+				return err
+			}
+			for _, device := range devices {
+				deviceNames[device.ID] = device.Name
+			}
 		}
 	}
 
@@ -88,7 +96,7 @@ func (s *Server) handleActivePlayback(w http.ResponseWriter, r *http.Request, p 
 	defer ticker.Stop()
 
 	for {
-		page, err := s.playbackSnapshot(r.Context(), ids, names)
+		page, err := s.playbackSnapshot(r.Context(), ids, names, deviceNames)
 		if err != nil {
 			return err
 		}
@@ -109,7 +117,7 @@ func (s *Server) handleActivePlayback(w http.ResponseWriter, r *http.Request, p 
 }
 
 func (s *Server) playbackSnapshot(ctx context.Context, childIDs []uuid.UUID,
-	names map[uuid.UUID]string) (playbackPageDTO, error) {
+	names map[uuid.UUID]string, deviceNames map[uuid.UUID]string) (playbackPageDTO, error) {
 	rows, err := s.deps.Activity.ActivePlaybacks(ctx, childIDs, s.deps.Now().Add(-playbackLeaseWindow))
 	if err != nil {
 		return playbackPageDTO{}, err
@@ -142,10 +150,12 @@ func (s *Server) playbackSnapshot(ctx context.Context, childIDs []uuid.UUID,
 			continue
 		}
 		_, _ = hash.Write([]byte(row.ChildID.String()))
+		_, _ = hash.Write([]byte(row.DeviceID.String()))
 		_, _ = hash.Write([]byte(row.VideoID))
 		_, _ = hash.Write([]byte(row.StartedAt.UTC().Format(time.RFC3339Nano)))
 		page.Items = append(page.Items, playbackDTO{
 			ChildID: row.ChildID, ChildName: names[row.ChildID],
+			DeviceID: row.DeviceID, DeviceName: deviceNames[row.DeviceID],
 			Video:     newVideoDTO(video, channels[video.ChannelID].Title, s.deps.Config.Server.PublicURL),
 			StartedAt: row.StartedAt,
 		})
@@ -194,7 +204,7 @@ func (s *Server) handleBlockVideo(w http.ResponseWriter, r *http.Request, p auth
 	if err := s.deps.Rules.BlockVideoForChild(r.Context(), child.ID, videoID, p.ID); err != nil {
 		return err
 	}
-	if err := s.deps.Activity.StopPlayback(r.Context(), child.ID, videoID); err != nil {
+	if err := s.deps.Activity.StopChildPlayback(r.Context(), child.ID, videoID); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
