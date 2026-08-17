@@ -83,10 +83,10 @@ publish_packages() {
   : "${COOP_KUBE_CONTEXT:?set COOP_KUBE_CONTEXT in deploy/ota/.env}"
   : "${COOP_KUBE_NAMESPACE:?set COOP_KUBE_NAMESPACE in deploy/ota/.env}"
   : "${COOP_OTA_PVC:?set COOP_OTA_PVC in deploy/ota/.env}"
-  local remote_directory="/var/lib/coop/ota"
+  local publisher_image="busybox:1.37.0@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0"
+  local remote_directory="/packages"
   local upload_id="upload-$$"
-  local claims
-  local pod
+  local pod="coop-ota-publisher-$$"
   local file
 
   for file in CooperTheCop.ipa CooperTheCop.ipa.version CooperWatch.ipa CooperWatch.ipa.version; do
@@ -96,25 +96,40 @@ publish_packages() {
     }
   done
 
-  pod="$(kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" get pods \
-    -l app.kubernetes.io/name=coop \
-    -o jsonpath='{.items[0].metadata.name}')"
-  [[ -n "$pod" ]] || {
-    print -u2 "no Coop pod found in $COOP_KUBE_NAMESPACE"
-    exit 1
+  cleanup_publisher() {
+    kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" delete pod "$pod" \
+      --ignore-not-found --wait=false >/dev/null 2>&1 || true
   }
-  claims="$(kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" get pod "$pod" \
-    -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}')"
-  [[ " $claims " == *" $COOP_OTA_PVC "* ]] || {
-    print -u2 "pod $pod does not mount PVC $COOP_OTA_PVC"
-    exit 1
-  }
+  trap cleanup_publisher EXIT INT TERM
 
-  cleanup_upload() {
-    kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" exec "$pod" -- \
-      rm -rf "$remote_directory/$upload_id" >/dev/null 2>&1 || true
-  }
-  trap cleanup_upload EXIT INT TERM
+  jq -n \
+    --arg name "$pod" \
+    --arg namespace "$COOP_KUBE_NAMESPACE" \
+    --arg image "$publisher_image" \
+    --arg claim "$COOP_OTA_PVC" \
+    '{
+      apiVersion: "v1",
+      kind: "Pod",
+      metadata: {name: $name, namespace: $namespace},
+      spec: {
+        restartPolicy: "Never",
+        securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532},
+        containers: [{
+          name: "publisher",
+          image: $image,
+          command: ["sh", "-c", "sleep 3600"],
+          securityContext: {
+            allowPrivilegeEscalation: false,
+            capabilities: {drop: ["ALL"]},
+            readOnlyRootFilesystem: true
+          },
+          volumeMounts: [{name: "packages", mountPath: "/packages"}]
+        }],
+        volumes: [{name: "packages", persistentVolumeClaim: {claimName: $claim}}]
+      }
+    }' | kubectl --context "$COOP_KUBE_CONTEXT" apply -f -
+  kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" wait \
+    --for=condition=Ready "pod/$pod" --timeout=2m
 
   kubectl --context "$COOP_KUBE_CONTEXT" -n "$COOP_KUBE_NAMESPACE" exec "$pod" -- \
     sh -c 'test -d "$1" && mkdir "$1/$2"' sh "$remote_directory" "$upload_id"
@@ -135,9 +150,10 @@ publish_packages() {
       mv "$upload/CooperWatch.ipa" "$directory/CooperWatch.ipa"
       mv "$upload/CooperWatch.ipa.version" "$directory/CooperWatch.ipa.version"
       rmdir "$upload"' sh "$remote_directory" "$upload_id"
+  cleanup_publisher
   trap - EXIT INT TERM
 
-  print "Published OTA packages to PVC $COOP_OTA_PVC through pod $pod"
+  print "Published OTA packages to PVC $COOP_OTA_PVC"
 }
 
 case "$action" in
@@ -154,6 +170,7 @@ case "$action" in
     ;;
   publish)
     require_command kubectl
+    require_command jq
     publish_packages
     ;;
 esac
