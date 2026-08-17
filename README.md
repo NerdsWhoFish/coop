@@ -8,6 +8,34 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
+## See Coop in action
+
+<p align="center">
+  <a href="https://youtu.be/GxQG6C_B9Oc">
+    <img src="https://img.youtube.com/vi/GxQG6C_B9Oc/maxresdefault.jpg" alt="Watch the Cooper The Cop demo" width="800">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/GxQG6C_B9Oc"><strong>Watch the full Cooper The Cop demo</strong></a>
+</p>
+
+Coop keeps the YouTube experience children already understand while moving approval, policy, and recommendation controls onto a parent's device.
+
+### Built for kids
+
+| Watch and choose what is next | Discover safely | Search with approval built in |
+| :---: | :---: | :---: |
+| <img src="docs/images/readme/child-watch-next.jpg" alt="Cooper Watch playing an approved video with Watch Next recommendations" width="260"> | <img src="docs/images/readme/child-discovery.jpg" alt="Cooper Watch suggesting a new channel that requires parent approval" width="260"> | <img src="docs/images/readme/child-search.jpg" alt="Cooper Watch search results with unapproved videos locked behind an Ask button" width="260"> |
+| Familiar playback, reactions, subscriptions, and Watch Next without comments or livestreams. | New channels can still appear, but the child must ask before watching them. | Approved content plays normally while everything else stays behind a clear approval boundary. |
+
+### Controlled by parents
+
+| Approve from your phone | Set rules per child | Tune recommendations |
+| :---: | :---: | :---: |
+| <img src="docs/images/readme/parent-approval.jpg" alt="Cooper The Cop showing a child's channel approval request" width="260"> | <img src="docs/images/readme/parent-child-controls.jpg" alt="Cooper The Cop showing discovery, search, and device controls for one child" width="260"> | <img src="docs/images/readme/parent-recommendations.jpg" alt="Cooper The Cop explaining and tuning a child's recommendation mix" width="260"> |
+| Review requests and approve or deny them without touching the child's device. | Give every child their own discovery, search, Shorts, pairing, and content settings. | See why videos rank, then adjust the mix by channel instead of trusting a black-box feed. |
+
 > **Status: pre-release.** Phases 0 through 6 are implemented.
 > The backend builds, migrates, serves, and keeps approved channels ingested.
 > The parent app handles setup, secure sessions, children and devices, requests, content policy, suppression audits, per-child discovery controls, family settings, scoped parent invitations, and explainable recommendation tuning.
