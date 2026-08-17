@@ -36,8 +36,7 @@ struct CooperWatchApp: App {
       ChildRootView(model: model)
         .preferredColorScheme(.dark)
         .task {
-          await model.checkForRequiredUpdate()
-          if model.requiredUpdate == nil { await model.restore() }
+          await model.launch()
         }
         .onChange(of: scenePhase) { _, phase in
           guard phase == .active else { return }

@@ -12,10 +12,14 @@ struct ChildRootView: View {
         }
       } else {
         switch model.destination {
-      case .pairing:
-        PairingView(model: model)
-      case .watch:
-        ChildDashboard(model: model)
+        case .launching:
+          CoopSplashView(hasError: model.errorMessage != nil) {
+            Task { await model.launch() }
+          }
+        case .pairing:
+          PairingView(model: model)
+        case .watch:
+          ChildDashboard(model: model)
         }
       }
     }

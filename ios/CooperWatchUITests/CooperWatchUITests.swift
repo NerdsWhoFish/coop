@@ -2,6 +2,23 @@ import XCTest
 
 final class CooperWatchUITests: XCTestCase {
   @MainActor
+  func testColdLaunchHidesPairingUntilRestorationFinishes() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SPLASH"] = "1"
+    app.launch()
+
+    XCTAssertTrue(app.descendants(matching: .any)["coop-splash-screen"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Opening your Coop…"].exists)
+    XCTAssertFalse(app.textFields["Coop server"].exists)
+    XCTAssertFalse(app.textFields["Pairing code"].exists)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Child cold-launch splash"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testRequiredUpdateAsksAChildForHelpAndBlocksPlayback() throws {
     let app = previewApp()
     app.launchEnvironment["COOP_UI_UPDATE_REQUIRED"] = "1"

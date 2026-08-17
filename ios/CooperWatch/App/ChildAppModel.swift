@@ -7,11 +7,12 @@ import UIKit
 @Observable
 final class ChildAppModel {
   enum Destination: Equatable {
+    case launching
     case pairing
     case watch
   }
 
-  var destination: Destination = .pairing
+  var destination: Destination = .launching
   var serverAddress: String
   var profile: Components.Schemas.ChildProfile?
   var feed: [Components.Schemas.Video] = []
@@ -32,6 +33,11 @@ final class ChildAppModel {
 
   init() {
     #if DEBUG
+      if ProcessInfo.processInfo.environment["COOP_UI_SPLASH"] == "1" {
+        isPreviewMode = true
+        serverAddress = "https://coop.example"
+        return
+      }
       if ProcessInfo.processInfo.environment["COOP_UI_PREVIEW"] == "1" {
         isPreviewMode = true
         serverAddress = "https://coop.example"
@@ -63,8 +69,22 @@ final class ChildAppModel {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
   }
 
+  func launch() async {
+    #if DEBUG
+      if isPreviewMode { return }
+    #endif
+    destination = .launching
+    errorMessage = nil
+    await checkForRequiredUpdate()
+    guard requiredUpdate == nil else { return }
+    await restore()
+  }
+
   func restore() async {
-    guard !serverAddress.isEmpty, let token = tokenStore.load() else { return }
+    guard !serverAddress.isEmpty, let token = tokenStore.load() else {
+      destination = .pairing
+      return
+    }
     await checkForRequiredUpdate()
     guard requiredUpdate == nil else { return }
     await perform {
@@ -74,6 +94,7 @@ final class ChildAppModel {
         profile = try await authenticatedAPI.childProfile()
       } catch CoopAPIError.invalidSession {
         tokenStore.delete()
+        destination = .pairing
         return
       }
       api = authenticatedAPI

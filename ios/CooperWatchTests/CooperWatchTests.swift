@@ -5,10 +5,10 @@ import Testing
 @testable import CooperWatch
 
 @MainActor
-@Test("starts at the pairing screen without a saved device")
-func startsAtPairing() {
+@Test("starts at the splash screen while saved state is restored")
+func startsAtSplash() {
   let model = ChildAppModel()
-  #expect(model.destination == .pairing)
+  #expect(model.destination == .launching)
 }
 
 @MainActor
