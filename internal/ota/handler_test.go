@@ -1,6 +1,7 @@
 package ota
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,6 +9,32 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestReleaseDescribesPublishedUpdate(t *testing.T) {
+	handler, directory := testHandler(t)
+	writePackage(t, directory, applications[1], "13", "signed-child-package")
+
+	recorder := request(t, handler, http.MethodGet, "/releases/child.json")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("release status = %d, want 200", recorder.Code)
+	}
+	var got release
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.App != "child" || got.Build != "13" || got.Title != "Cooper Watch" {
+		t.Fatalf("release = %+v", got)
+	}
+	if !strings.HasPrefix(got.InstallURL, "itms-services://?action=download-manifest") {
+		t.Fatalf("install URL = %q", got.InstallURL)
+	}
+	if got.InstallerURL != "https://coop.example/install/" {
+		t.Fatalf("installer URL = %q", got.InstallerURL)
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}
 
 func TestNewRequiresHTTPSAndExistingDirectory(t *testing.T) {
 	if _, err := New("http://coop.example", t.TempDir()); err == nil {

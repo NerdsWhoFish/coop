@@ -3,6 +3,7 @@ package ota
 
 import (
 	"embed"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -103,11 +104,44 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveStyles(w, r)
 	case strings.HasPrefix(r.URL.Path, "/manifests/"):
 		h.serveManifest(w, r, strings.TrimPrefix(r.URL.Path, "/manifests/"))
+	case strings.HasPrefix(r.URL.Path, "/releases/"):
+		h.serveRelease(w, r, strings.TrimPrefix(r.URL.Path, "/releases/"))
 	case strings.HasPrefix(r.URL.Path, "/apps/"):
 		h.serveIPA(w, r, strings.TrimPrefix(r.URL.Path, "/apps/"))
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+type release struct {
+	App          string `json:"app"`
+	Title        string `json:"title"`
+	Build        string `json:"build"`
+	InstallURL   string `json:"installUrl"`
+	InstallerURL string `json:"installerUrl"`
+}
+
+func (h *Handler) serveRelease(w http.ResponseWriter, r *http.Request, name string) {
+	app, ok := applicationBySlug(strings.TrimSuffix(name, ".json"))
+	if !ok || name != app.Slug+".json" {
+		http.NotFound(w, r)
+		return
+	}
+	build, available := h.version(app)
+	if !available {
+		http.NotFound(w, r)
+		return
+	}
+	manifestURL := h.baseURL.JoinPath("manifests", app.Slug+".plist").String()
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(release{
+		App:          app.Slug,
+		Title:        app.Title,
+		Build:        build,
+		InstallURL:   "itms-services://?action=download-manifest&url=" + url.QueryEscape(manifestURL),
+		InstallerURL: h.baseURL.String(),
+	})
 }
 
 func (h *Handler) serveIndex(w http.ResponseWriter, _ *http.Request) {
