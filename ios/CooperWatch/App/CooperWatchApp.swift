@@ -27,6 +27,7 @@ final class CooperWatchOrientationDelegate: NSObject, UIApplicationDelegate {
 
 @main
 struct CooperWatchApp: App {
+  @Environment(\.scenePhase) private var scenePhase
   @UIApplicationDelegateAdaptor(CooperWatchOrientationDelegate.self) private var orientationDelegate
   @State private var model = ChildAppModel()
 
@@ -34,7 +35,14 @@ struct CooperWatchApp: App {
     WindowGroup {
       ChildRootView(model: model)
         .preferredColorScheme(.dark)
-        .task { await model.restore() }
+        .task {
+          await model.checkForRequiredUpdate()
+          if model.requiredUpdate == nil { await model.restore() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+          guard phase == .active else { return }
+          Task { await model.checkForRequiredUpdate() }
+        }
     }
   }
 }

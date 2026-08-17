@@ -19,6 +19,7 @@ final class ChildAppModel {
   var subscriptions: [Components.Schemas.Channel] = []
   var isWorking = false
   var errorMessage: String?
+  var requiredUpdate: AppRelease?
   private(set) var isPreviewMode = false
 
   private var api: CoopAPI?
@@ -47,6 +48,15 @@ final class ChildAppModel {
         discoveries = Self.previewDiscoveries
         subscriptions = Self.previewChannels
         destination = .watch
+        if ProcessInfo.processInfo.environment["COOP_UI_UPDATE_REQUIRED"] == "1" {
+          requiredUpdate = AppRelease(
+            app: "child",
+            title: "Cooper Watch",
+            build: "13",
+            installUrl: "itms-services://?action=download-manifest&url=https://coop.example/install/child.plist",
+            installerUrl: "https://coop.example/install/"
+          )
+        }
         return
       }
     #endif
@@ -55,6 +65,8 @@ final class ChildAppModel {
 
   func restore() async {
     guard !serverAddress.isEmpty, let token = tokenStore.load() else { return }
+    await checkForRequiredUpdate()
+    guard requiredUpdate == nil else { return }
     await perform {
       let serverURL = try ServerURL.normalize(serverAddress)
       let authenticatedAPI = CoopAPI(serverURL: serverURL, token: token)
@@ -70,10 +82,30 @@ final class ChildAppModel {
     }
   }
 
+  func checkForRequiredUpdate() async {
+    #if DEBUG
+      if isPreviewMode { return }
+    #endif
+    guard !serverAddress.isEmpty else {
+      requiredUpdate = nil
+      return
+    }
+    do {
+      requiredUpdate = try await AppUpdate.requiredRelease(
+        serverAddress: serverAddress,
+        app: .child
+      )
+    } catch {
+      // Update metadata is allowed to fail open so a network outage cannot lock a child out.
+    }
+  }
+
   func pair(code: String) async {
     await perform {
       let serverURL = try ServerURL.normalize(serverAddress)
       defaults.set(serverAddress, forKey: Self.serverKey)
+      await checkForRequiredUpdate()
+      guard requiredUpdate == nil else { return }
       let publicAPI = CoopAPI(serverURL: serverURL)
       let pairing = try await publicAPI.pairChildDevice(
         code: code,

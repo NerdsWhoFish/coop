@@ -1,3 +1,4 @@
+import CoopKit
 import SwiftUI
 
 struct RootView: View {
@@ -5,7 +6,11 @@ struct RootView: View {
 
   var body: some View {
     Group {
-      if AppModel.showsRecommendationPreview {
+      if let release = model.requiredUpdate {
+        RequiredUpdateView(release: release, audience: .parent) {
+          await model.checkForRequiredUpdate()
+        }
+      } else if AppModel.showsRecommendationPreview {
         NavigationStack {
           RecommendationTuningView(child: AppModel.recommendationPreviewChild, model: model)
         }

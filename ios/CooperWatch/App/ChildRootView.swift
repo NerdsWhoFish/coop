@@ -1,3 +1,4 @@
+import CoopKit
 import SwiftUI
 
 struct ChildRootView: View {
@@ -5,11 +6,17 @@ struct ChildRootView: View {
 
   var body: some View {
     Group {
-      switch model.destination {
+      if let release = model.requiredUpdate {
+        RequiredUpdateView(release: release, audience: .child) {
+          await model.checkForRequiredUpdate()
+        }
+      } else {
+        switch model.destination {
       case .pairing:
         PairingView(model: model)
       case .watch:
         ChildDashboard(model: model)
+        }
       }
     }
     .alert("Something got tangled", isPresented: errorIsPresented) {

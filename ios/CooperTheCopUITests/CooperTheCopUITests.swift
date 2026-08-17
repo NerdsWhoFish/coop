@@ -2,6 +2,23 @@ import XCTest
 
 final class CooperTheCopUITests: XCTestCase {
   @MainActor
+  func testRequiredUpdateIsFriendlyAndBlocksTheParentApp() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SCREEN"] = "update"
+    app.launch()
+
+    XCTAssertTrue(app.descendants(matching: .any)["required-update-screen"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Update Coop"].isHittable)
+    XCTAssertTrue(app.staticTexts["A Coop update is ready"].exists)
+    XCTAssertFalse(app.tabBars.firstMatch.exists)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Parent required update"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testRequestsShowLivePlaybackAndYouTubeReviewLinks() throws {
     let app = XCUIApplication()
     app.launchEnvironment["COOP_UI_SCREEN"] = "requests"

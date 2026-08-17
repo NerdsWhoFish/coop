@@ -26,6 +26,7 @@ final class AppModel {
   var children: [Components.Schemas.Child] = []
   var isWorking = false
   var errorMessage: String?
+  var requiredUpdate: AppRelease?
 
   private var api: CoopAPI?
   private let credentials = SecureTokenStore(
@@ -54,6 +55,7 @@ final class AppModel {
   static var showsFamilyPreview: Bool { uiPreviewScreen == "family" }
   static var showsRequestsPreview: Bool { uiPreviewScreen == "requests" }
   static var showsChildSettingsPreview: Bool { uiPreviewScreen == "child-settings" }
+  static var showsUpdatePreview: Bool { uiPreviewScreen == "update" }
 
   static let recommendationPreviewChild = Components.Schemas.Child(
     value1: .init(id: "preview-child", name: "River", deviceCount: 2, pendingRequestCount: 1),
@@ -88,7 +90,15 @@ final class AppModel {
 
   init() {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
-    if Self.showsFamilyPreview {
+    if Self.showsUpdatePreview {
+      requiredUpdate = AppRelease(
+        app: "parent",
+        title: "Cooper The Cop",
+        build: "10",
+        installUrl: "itms-services://?action=download-manifest&url=https://coop.example/install/parent.plist",
+        installerUrl: "https://coop.example/install/"
+      )
+    } else if Self.showsFamilyPreview {
       parent = Self.familyPreviewParent
     } else if Self.showsRequestsPreview {
       let channel = Components.Schemas.Channel(
@@ -137,10 +147,30 @@ final class AppModel {
     await connect(usingStoredSession: true)
   }
 
+  func checkForRequiredUpdate() async {
+    #if DEBUG
+      if Self.showsUpdatePreview { return }
+    #endif
+    guard !serverAddress.isEmpty else {
+      requiredUpdate = nil
+      return
+    }
+    do {
+      requiredUpdate = try await AppUpdate.requiredRelease(
+        serverAddress: serverAddress,
+        app: .parent
+      )
+    } catch {
+      // Update metadata is allowed to fail open so a network outage cannot lock a family out.
+    }
+  }
+
   func connect(usingStoredSession: Bool = false) async {
     await perform {
       let serverURL = try ServerURL.normalize(serverAddress)
       defaults.set(serverAddress, forKey: Self.serverKey)
+      await checkForRequiredUpdate()
+      guard requiredUpdate == nil else { return }
 
       let publicAPI = CoopAPI(serverURL: serverURL)
       let needsSetup = try await publicAPI.setupStatus()

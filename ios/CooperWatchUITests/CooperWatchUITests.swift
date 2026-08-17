@@ -2,6 +2,23 @@ import XCTest
 
 final class CooperWatchUITests: XCTestCase {
   @MainActor
+  func testRequiredUpdateAsksAChildForHelpAndBlocksPlayback() throws {
+    let app = previewApp()
+    app.launchEnvironment["COOP_UI_UPDATE_REQUIRED"] = "1"
+    app.launch()
+
+    XCTAssertTrue(app.descendants(matching: .any)["required-update-screen"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Get the update"].isHittable)
+    XCTAssertTrue(app.staticTexts["Fresh Coop gear!"].exists)
+    XCTAssertFalse(app.tabBars.firstMatch.exists)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Child required update"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testShortsStayPortraitWhenDeviceRotates() throws {
     let app = previewApp(tab: "shorts")
     app.launch()
