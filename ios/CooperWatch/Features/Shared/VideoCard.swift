@@ -4,8 +4,19 @@ import SwiftUI
 struct VideoCard: View {
   let video: Components.Schemas.Video
   var locked = false
+  var model: ChildAppModel? = nil
+  var accessibilityIdentifier: String? = nil
 
+  @ViewBuilder
   var body: some View {
+    if let model {
+      linkedCard(model: model)
+    } else {
+      staticCard
+    }
+  }
+
+  private var staticCard: some View {
     VStack(alignment: .leading, spacing: 9) {
       VideoThumbnail(video: video, locked: locked)
         .aspectRatio(16 / 9, contentMode: .fit)
@@ -32,6 +43,52 @@ struct VideoCard: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(locked ? "Locked video, \(video.title)" : video.title)
+  }
+
+  private func linkedCard(model: ChildAppModel) -> some View {
+    VStack(alignment: .leading, spacing: 9) {
+      NavigationLink {
+        WatchPageView(videoID: video.id, model: model)
+      } label: {
+        VideoThumbnail(video: video, locked: false)
+          .aspectRatio(16 / 9, contentMode: .fit)
+          .clipShape(.rect(cornerRadius: 14))
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Watch \(video.title)")
+
+      HStack(alignment: .top, spacing: 11) {
+        Image(systemName: "play.square.stack.fill")
+          .font(.title2)
+          .foregroundStyle(WatchTheme.cyan)
+          .frame(width: 34, height: 34)
+
+        VStack(alignment: .leading, spacing: 3) {
+          NavigationLink {
+            WatchPageView(videoID: video.id, model: model)
+          } label: {
+            Text(video.title)
+              .font(.headline)
+              .lineLimit(2)
+              .foregroundStyle(WatchTheme.foreground)
+          }
+          .buttonStyle(.plain)
+          .accessibilityIdentifier(accessibilityIdentifier ?? "video-\(video.id)")
+
+          NavigationLink {
+            ChannelPageView(channelID: video.channelId, model: model)
+          } label: {
+            Text(metadata)
+              .font(.subheadline)
+              .lineLimit(1)
+              .foregroundStyle(WatchTheme.foreground.opacity(0.62))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Open \(video.channelTitle ?? "channel")")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
   }
 
   private var metadata: String {
@@ -127,14 +184,10 @@ struct VideoGrid: View {
   @ViewBuilder
   private func links() -> some View {
     ForEach(videos, id: \.id) { video in
-      NavigationLink {
-        WatchPageView(videoID: video.id, model: model)
-      } label: {
-        VideoCard(video: video)
-      }
-      .buttonStyle(.plain)
-      .accessibilityIdentifier(
-        accessibilityPrefix.map { "\($0)-\(video.id)" } ?? "video-\(video.id)"
+      VideoCard(
+        video: video,
+        model: model,
+        accessibilityIdentifier: accessibilityPrefix.map { "\($0)-\(video.id)" }
       )
     }
   }

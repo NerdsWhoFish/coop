@@ -71,12 +71,7 @@ struct ChildSearchView: View {
                     }
                     .buttonStyle(.plain).disabled(askedChannels.contains(video.channelId))
                   } else {
-                    NavigationLink {
-                      WatchPageView(videoID: video.id, model: model)
-                    } label: {
-                      VideoCard(video: video)
-                    }
-                    .buttonStyle(.plain)
+                    VideoCard(video: video, model: model)
                   }
                 }
               }

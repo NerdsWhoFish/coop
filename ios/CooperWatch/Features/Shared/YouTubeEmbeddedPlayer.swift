@@ -77,6 +77,15 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     load(url, in: view, coordinator: context.coordinator)
   }
 
+  func sizeThatFits(
+    _ proposal: ProposedViewSize,
+    uiView _: WKWebView,
+    context _: Context
+  ) -> CGSize? {
+    guard let width = proposal.width, let height = proposal.height else { return nil }
+    return CGSize(width: width, height: height)
+  }
+
   static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
     guard !coordinator.preservesPlayback else { return }
     view.stopLoading()

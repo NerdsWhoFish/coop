@@ -53,18 +53,18 @@ final class CooperWatchUITests: XCTestCase {
 
   @MainActor
   func testRegularVideoUsesTheWholeScreenInLandscape() throws {
+    XCUIDevice.shared.orientation = .landscapeLeft
+    defer { XCUIDevice.shared.orientation = .portrait }
+
     let app = previewApp()
     app.launch()
 
-    let video = app.staticTexts["Why Do Volcanoes Erupt?"]
+    let video = element(labeled: "Why Do Volcanoes Erupt?", in: app)
     XCTAssertTrue(video.waitForExistence(timeout: 5))
     video.tap()
 
     let player = app.descendants(matching: .any)["regular-video-player"]
     XCTAssertTrue(player.waitForExistence(timeout: 5))
-
-    XCUIDevice.shared.orientation = .landscapeLeft
-    defer { XCUIDevice.shared.orientation = .portrait }
 
     let landscape = NSPredicate { _, _ in
       app.frame.width > app.frame.height
@@ -77,10 +77,19 @@ final class CooperWatchUITests: XCTestCase {
     XCTAssertFalse(element(labeled: "Home", in: app).exists)
     XCTAssertFalse(app.navigationBars["Now watching"].exists)
 
-    app.swipeUp()
+    app.swipeLeft()
     let browseView = app.descendants(matching: .any)["landscape-browse-view"]
     XCTAssertTrue(browseView.waitForExistence(timeout: 5))
     XCTAssertTrue(app.descendants(matching: .any)["landscape-watch-next-heading"].exists)
+    XCTAssertTrue(element(labeled: "Like", in: app).exists)
+    XCTAssertTrue(element(labeled: "Not for me", in: app).exists)
+    XCTAssertTrue(element(labeled: "Subscribed", in: app).exists)
+    XCTAssertTrue(element(labeled: "Channel", in: app).exists)
+    XCTAssertTrue(element(labeled: "Crash Course Kids", in: app).exists)
+    browseView.swipeUp()
+    XCTAssertTrue(element(labeled: "Share", in: app).waitForExistence(timeout: 3))
+    XCTAssertFalse(element(labeled: "Home", in: app).exists)
+    XCTAssertFalse(app.navigationBars["Now watching"].exists)
     XCTAssertLessThan(player.frame.width, app.frame.width)
 
     let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -94,7 +103,7 @@ final class CooperWatchUITests: XCTestCase {
     let app = previewApp()
     app.launch()
 
-    let currentVideo = app.staticTexts["Why Do Volcanoes Erupt?"]
+    let currentVideo = element(labeled: "Why Do Volcanoes Erupt?", in: app)
     XCTAssertTrue(currentVideo.waitForExistence(timeout: 5))
     currentVideo.tap()
 
@@ -123,6 +132,10 @@ final class CooperWatchUITests: XCTestCase {
     let app = previewApp()
     app.launch()
 
+    if app.buttons["Discover"].waitForExistence(timeout: 2) {
+      app.buttons["Discover"].tap()
+    }
+
     let shelf = app.descendants(matching: .any)["discovery-shelf"]
     XCTAssertTrue(shelf.waitForExistence(timeout: 5))
     for _ in 0..<4 { app.swipeUp() }
@@ -131,6 +144,66 @@ final class CooperWatchUITests: XCTestCase {
     screenshot.name = "Locked channel discovery"
     screenshot.lifetime = .keepAlways
     add(screenshot)
+  }
+
+  @MainActor
+  func testHomeChannelNameOpensSubscriptionPage() throws {
+    let app = previewApp()
+    app.launch()
+
+    let channel = element(labeled: "Open Crash Course Kids", in: app)
+    XCTAssertTrue(channel.waitForExistence(timeout: 5))
+    channel.tap()
+
+    XCTAssertTrue(app.buttons["Subscribed"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Crash Course Kids"].exists)
+  }
+
+  @MainActor
+  func testPhoneHomeUsesThreeVerticalFeedTabs() throws {
+    let app = previewApp()
+    app.launch()
+
+    let picker = app.descendants(matching: .any)["home-section-picker"]
+    guard picker.waitForExistence(timeout: 2) else { throw XCTSkip("Phone layout") }
+    XCTAssertTrue(app.buttons["Recommendations"].exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Phone home recommendations"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+
+    app.buttons["Subscriptions"].tap()
+    XCTAssertTrue(element(labeled: "Why Do Volcanoes Erupt?", in: app).waitForExistence(timeout: 3))
+    app.buttons["Discover"].tap()
+    XCTAssertTrue(app.descendants(matching: .any)["discovery-shelf"].waitForExistence(timeout: 3))
+  }
+
+  @MainActor
+  func testPadHomeUsesThreeHorizontalShelves() throws {
+    let app = previewApp()
+    app.launch()
+
+    let recommendations = app.descendants(matching: .any)["home-recommendations-section"]
+    guard recommendations.waitForExistence(timeout: 2) else { throw XCTSkip("iPad layout") }
+    XCTAssertTrue(app.descendants(matching: .any)["home-subscriptions-section"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["home-discover-section"].exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "iPad home shelves"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
+  func testShortChannelLinkOpensSubscriptionPageAndStopsPlayback() throws {
+    let app = previewApp(tab: "shorts")
+    app.launch()
+
+    let channel = app.descendants(matching: .any)["short-channel-link"]
+    XCTAssertTrue(channel.waitForExistence(timeout: 5))
+    channel.tap()
+
+    XCTAssertTrue(app.buttons["Subscribed"].waitForExistence(timeout: 5))
+    XCTAssertEqual(activePlayers(in: app), 0)
   }
 
   @MainActor
@@ -162,7 +235,9 @@ final class CooperWatchUITests: XCTestCase {
     let homeTab = element(labeled: "Home", in: app)
     XCTAssertTrue(homeTab.waitForExistence(timeout: 5))
     homeTab.tap()
-    XCTAssertTrue(app.staticTexts["Why Do Volcanoes Erupt?"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      element(labeled: "Why Do Volcanoes Erupt?", in: app).waitForExistence(timeout: 5)
+    )
     XCTAssertEqual(activePlayers(in: app), 0)
   }
 
@@ -172,7 +247,9 @@ final class CooperWatchUITests: XCTestCase {
     app.launchEnvironment["COOP_UI_SHORTS_DISABLED"] = "1"
     app.launch()
 
-    XCTAssertTrue(app.staticTexts["Why Do Volcanoes Erupt?"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      element(labeled: "Why Do Volcanoes Erupt?", in: app).waitForExistence(timeout: 5)
+    )
     XCTAssertFalse(element(labeled: "Shorts", in: app).exists)
   }
 

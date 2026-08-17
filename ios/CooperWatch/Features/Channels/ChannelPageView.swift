@@ -58,10 +58,10 @@ struct ChannelPageView: View {
             .scaleEffect(asked && !reduceMotion ? 1.04 : 1)
           } else {
             Button(
-              page.subscribed ? "Following" : "Follow",
+              page.subscribed ? "Subscribed" : "Subscribe",
               systemImage: page.subscribed ? "checkmark" : "plus"
             ) {
-              follow(!page.subscribed)
+              subscribe(!page.subscribed)
             }
             .buttonStyle(.borderedProminent).tint(
               page.subscribed ? WatchTheme.green : WatchTheme.cyan
@@ -89,7 +89,7 @@ struct ChannelPageView: View {
     }
   }
 
-  private func follow(_ subscribed: Bool) {
+  private func subscribe(_ subscribed: Bool) {
     isWorking = true
     Task {
       do {

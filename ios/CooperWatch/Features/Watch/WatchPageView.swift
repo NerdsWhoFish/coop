@@ -13,6 +13,8 @@ struct WatchPageView: View {
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
   @State private var landscapeBrowsing = false
+  @State private var channelSubscribed = false
+  @State private var subscriptionIsWorking = false
 
   var body: some View {
     GeometryReader { proxy in
@@ -27,8 +29,8 @@ struct WatchPageView: View {
           portraitContent
         }
       }
-      .toolbar(isLandscape && !landscapeBrowsing ? .hidden : .visible, for: .navigationBar)
-      .toolbar(isLandscape && !landscapeBrowsing ? .hidden : .visible, for: .tabBar)
+      .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
+      .toolbar(isLandscape ? .hidden : .visible, for: .tabBar)
       .statusBarHidden(isLandscape && !landscapeBrowsing)
       .persistentSystemOverlays(isLandscape && !landscapeBrowsing ? .hidden : .automatic)
       .onChange(of: isLandscape) { _, landscape in
@@ -57,6 +59,7 @@ struct WatchPageView: View {
       Color.black.ignoresSafeArea()
       if let page {
         player(for: page)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
           .ignoresSafeArea()
       } else {
         ProgressView()
@@ -68,7 +71,7 @@ struct WatchPageView: View {
             landscapeBrowsing = true
           }
         } label: {
-          Label("Swipe up to browse", systemImage: "chevron.up")
+          Label("Swipe left to browse", systemImage: "chevron.left")
             .font(.caption.weight(.bold))
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
@@ -82,8 +85,8 @@ struct WatchPageView: View {
     .contentShape(.rect)
     .simultaneousGesture(
       DragGesture(minimumDistance: 30).onEnded { value in
-        guard value.translation.height < -60,
-          abs(value.translation.height) > abs(value.translation.width)
+        guard value.translation.width < -60,
+          abs(value.translation.width) > abs(value.translation.height)
         else { return }
         withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) {
           landscapeBrowsing = true
@@ -95,12 +98,15 @@ struct WatchPageView: View {
   private func landscapeBrowseContent(proxy: GeometryProxy) -> some View {
     ScrollView {
       if let page {
-        HStack(alignment: .top, spacing: 18) {
-          VStack(alignment: .leading, spacing: 12) {
-            player(for: page)
-              .aspectRatio(16 / 9, contentMode: .fit)
-              .clipShape(.rect(cornerRadius: 14))
-            Text(page.video.title).font(.headline).lineLimit(2)
+        VStack(alignment: .leading, spacing: 14) {
+          HStack {
+            Button { dismiss() } label: {
+              Label("Back", systemImage: "chevron.left")
+            }
+            .buttonStyle(.bordered)
+
+            Spacer()
+
             Button {
               withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1)) {
                 landscapeBrowsing = false
@@ -108,27 +114,38 @@ struct WatchPageView: View {
             } label: {
               Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.borderedProminent)
           }
-          .frame(width: proxy.size.width * 0.56)
 
-          VStack(alignment: .leading, spacing: 12) {
-            Text("Watch next")
-              .font(.title3.bold())
-              .accessibilityIdentifier("landscape-watch-next-heading")
-            VideoGrid(
-              videos: model.watchNext(excluding: page.video.id),
-              model: model,
-              accessibilityPrefix: "landscape-watch-next",
-              style: .list
-            )
-            DiscoveryShelf(
-              title: "Explore next",
-              discoveries: model.discoverNext(excluding: page.video.id),
-              model: model
-            )
+          HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
+              player(for: page)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipShape(.rect(cornerRadius: 14))
+              Text(page.video.title).font(.headline).lineLimit(2)
+              channelLink(for: page)
+              reactionControls(for: page)
+            }
+            .frame(width: proxy.size.width * 0.56)
+
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Watch next")
+                .font(.title3.bold())
+                .accessibilityIdentifier("landscape-watch-next-heading")
+              VideoGrid(
+                videos: model.watchNext(excluding: page.video.id),
+                model: model,
+                accessibilityPrefix: "landscape-watch-next",
+                style: .list
+              )
+              DiscoveryShelf(
+                title: "Explore next",
+                discoveries: model.discoverNext(excluding: page.video.id),
+                model: model
+              )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
         .padding(.bottom, 60)
@@ -148,23 +165,8 @@ struct WatchPageView: View {
             .clipShape(.rect(cornerRadius: 16))
 
           Text(page.video.title).font(.title2.bold())
-          NavigationLink {
-            ChannelPageView(channelID: page.video.channelId, model: model)
-          } label: {
-            Label(page.video.channelTitle ?? "Channel", systemImage: "play.square.stack.fill")
-              .font(.headline).foregroundStyle(WatchTheme.cyan)
-          }
-
-          HStack(spacing: 12) {
-            reactionButton(.like, label: "Like", symbol: "hand.thumbsup.fill")
-            reactionButton(.dislike, label: "Not for me", symbol: "hand.thumbsdown.fill")
-            if let share = page.shareUrl.flatMap(URL.init(string:)) {
-              ShareLink(item: share) {
-                Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
-              }
-              .buttonStyle(.bordered)
-            }
-          }
+          channelLink(for: page)
+          reactionControls(for: page)
 
           let recommendations = model.watchNext(excluding: page.video.id)
           if !recommendations.isEmpty {
@@ -221,6 +223,7 @@ struct WatchPageView: View {
       page = try await model.video(id: videoID)
       if let page {
         reaction = page.reaction == .like ? .like : (page.reaction == .dislike ? .dislike : nil)
+        channelSubscribed = model.isSubscribed(to: page.video.channelId)
         startedAt = .now
       }
     } catch { model.errorMessage = error.localizedDescription }
@@ -240,6 +243,66 @@ struct WatchPageView: View {
     }
     .buttonStyle(.borderedProminent)
     .tint(reaction == value ? WatchTheme.pink : WatchTheme.surface)
+  }
+
+  private func channelLink(for page: Components.Schemas.WatchPage) -> some View {
+    NavigationLink {
+      ChannelPageView(channelID: page.video.channelId, model: model)
+    } label: {
+      Label(page.video.channelTitle ?? "Channel", systemImage: "play.square.stack.fill")
+        .font(.headline)
+        .foregroundStyle(WatchTheme.cyan)
+    }
+  }
+
+  private func reactionControls(for page: Components.Schemas.WatchPage) -> some View {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 82, maximum: 150))], spacing: 10) {
+      reactionButton(.like, label: "Like", symbol: "hand.thumbsup.fill")
+      reactionButton(.dislike, label: "Not for me", symbol: "hand.thumbsdown.fill")
+      Button {
+        setSubscribed(!channelSubscribed, channelID: page.video.channelId)
+      } label: {
+        Label(
+          channelSubscribed ? "Subscribed" : "Subscribe",
+          systemImage: channelSubscribed ? "checkmark" : "plus"
+        )
+        .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(channelSubscribed ? WatchTheme.green : WatchTheme.cyan)
+      .foregroundStyle(WatchTheme.background)
+      .disabled(subscriptionIsWorking)
+
+      NavigationLink {
+        ChannelPageView(channelID: page.video.channelId, model: model)
+      } label: {
+        Label("Channel", systemImage: "play.square.stack.fill")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+
+      if let share = page.shareUrl.flatMap(URL.init(string:)) {
+        ShareLink(item: share) {
+          Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+      }
+    }
+    .font(.caption.weight(.semibold))
+  }
+
+  private func setSubscribed(_ subscribed: Bool, channelID: String) {
+    channelSubscribed = subscribed
+    subscriptionIsWorking = true
+    Task {
+      do {
+        try await model.setSubscribed(subscribed, channelID: channelID)
+      } catch {
+        channelSubscribed.toggle()
+        model.errorMessage = error.localizedDescription
+      }
+      subscriptionIsWorking = false
+    }
   }
 
   private func recordWatch() {

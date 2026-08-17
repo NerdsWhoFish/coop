@@ -157,6 +157,14 @@ final class ChildAppModel {
 
   func channel(id: String) async throws -> Components.Schemas.ChannelPage? {
     #if DEBUG
+      if isPreviewMode, let channel = Self.previewChannels.first(where: { $0.id == id }) {
+        return Components.Schemas.ChannelPage(
+          channel: channel,
+          state: .allowed,
+          subscribed: isSubscribed(to: id),
+          videos: (Self.previewVideos + Self.previewShorts).filter { $0.channelId == id }
+        )
+      }
       if isPreviewMode,
         let discovery = Self.previewDiscoveries.first(where: { $0.video.channelId == id })
       {
@@ -218,6 +226,10 @@ final class ChildAppModel {
     guard let api else { return }
     try await api.setSubscribed(subscribed, channelID: channelID)
     subscriptions = try await api.childSubscriptions()
+  }
+
+  func isSubscribed(to channelID: String) -> Bool {
+    subscriptions.contains { $0.id == channelID }
   }
 
   func setReaction(_ reaction: ChildReaction?, videoID: String) async throws {

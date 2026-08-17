@@ -29,7 +29,7 @@ struct SubscriptionsView: View {
           ContentUnavailableView(
             "No favorite channels yet",
             systemImage: "play.square.stack",
-            description: Text("Open an approved channel and tap Follow.")
+            description: Text("Open an approved channel and tap Subscribe.")
           )
           .allowsHitTesting(false)
         }

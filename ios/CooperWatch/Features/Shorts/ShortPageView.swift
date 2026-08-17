@@ -89,6 +89,24 @@ struct ShortPageView: View {
         .padding(22)
         .background(.black.opacity(0.82), in: .rect(cornerRadius: 20))
       }
+
+      if isActive {
+        NavigationLink {
+          ChannelPageView(channelID: video.channelId, model: model)
+        } label: {
+          Label(video.channelTitle ?? "Channel", systemImage: "play.square.stack.fill")
+            .font(.subheadline.weight(.bold))
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.black.opacity(0.72), in: .capsule)
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .accessibilityIdentifier("short-channel-link")
+      }
     }
     .background(.black)
   }
