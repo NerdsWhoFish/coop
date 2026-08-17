@@ -3,34 +3,45 @@ import SwiftUI
 
 struct WatchPageView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.playbackSurfaceActive) private var playbackSurfaceActive
+  @Environment(\.scenePhase) private var scenePhase
   let videoID: String
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
   @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
+  @State private var landscapeBrowsing = false
 
   var body: some View {
     GeometryReader { proxy in
       let isLandscape = proxy.size.width > proxy.size.height
 
       Group {
-        if isLandscape {
+        if isLandscape, !landscapeBrowsing {
           landscapeContent
+        } else if isLandscape {
+          landscapeBrowseContent(proxy: proxy)
         } else {
           portraitContent
         }
       }
-      .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
-      .toolbar(isLandscape ? .hidden : .visible, for: .tabBar)
-      .statusBarHidden(isLandscape)
-      .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
+      .toolbar(isLandscape && !landscapeBrowsing ? .hidden : .visible, for: .navigationBar)
+      .toolbar(isLandscape && !landscapeBrowsing ? .hidden : .visible, for: .tabBar)
+      .statusBarHidden(isLandscape && !landscapeBrowsing)
+      .persistentSystemOverlays(isLandscape && !landscapeBrowsing ? .hidden : .automatic)
+      .onChange(of: isLandscape) { _, landscape in
+        if !landscape { landscapeBrowsing = false }
+      }
     }
     .navigationTitle("Now watching")
     .navigationBarTitleDisplayMode(.inline)
     .task { await load() }
-    .task(id: page?.video.id) { await maintainPlaybackLease() }
-    .onAppear { CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(true) }
+    .task(id: playbackTaskID) { await maintainPlaybackLease() }
+    .onAppear { syncPlaybackVisibility() }
+    .onChange(of: playbackSurfaceActive) { _, _ in syncPlaybackVisibility() }
+    .onChange(of: scenePhase) { _, _ in syncPlaybackVisibility() }
     .onDisappear {
       CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(false)
       playerSession.stop()
@@ -50,7 +61,82 @@ struct WatchPageView: View {
       } else {
         ProgressView()
       }
+      VStack {
+        Spacer()
+        Button {
+          withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) {
+            landscapeBrowsing = true
+          }
+        } label: {
+          Label("Swipe up to browse", systemImage: "chevron.up")
+            .font(.caption.weight(.bold))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .background(.black.opacity(0.72), in: .capsule)
+        }
+        .foregroundStyle(.white)
+        .accessibilityIdentifier("landscape-browse-button")
+        .padding(.bottom, 8)
+      }
     }
+    .contentShape(.rect)
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 30).onEnded { value in
+        guard value.translation.height < -60,
+          abs(value.translation.height) > abs(value.translation.width)
+        else { return }
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) {
+          landscapeBrowsing = true
+        }
+      }
+    )
+  }
+
+  private func landscapeBrowseContent(proxy: GeometryProxy) -> some View {
+    ScrollView {
+      if let page {
+        HStack(alignment: .top, spacing: 18) {
+          VStack(alignment: .leading, spacing: 12) {
+            player(for: page)
+              .aspectRatio(16 / 9, contentMode: .fit)
+              .clipShape(.rect(cornerRadius: 14))
+            Text(page.video.title).font(.headline).lineLimit(2)
+            Button {
+              withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1)) {
+                landscapeBrowsing = false
+              }
+            } label: {
+              Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .buttonStyle(.bordered)
+          }
+          .frame(width: proxy.size.width * 0.56)
+
+          VStack(alignment: .leading, spacing: 12) {
+            Text("Watch next")
+              .font(.title3.bold())
+              .accessibilityIdentifier("landscape-watch-next-heading")
+            VideoGrid(
+              videos: model.watchNext(excluding: page.video.id),
+              model: model,
+              accessibilityPrefix: "landscape-watch-next",
+              style: .list
+            )
+            DiscoveryShelf(
+              title: "Explore next",
+              discoveries: model.discoverNext(excluding: page.video.id),
+              model: model
+            )
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(18)
+        .padding(.bottom, 60)
+      } else {
+        ProgressView().padding(.top, 40)
+      }
+    }
+    .accessibilityIdentifier("landscape-browse-view")
   }
 
   private var portraitContent: some View {
@@ -158,6 +244,7 @@ struct WatchPageView: View {
 
   private func recordWatch() {
     guard let startedAt else { return }
+    self.startedAt = nil
     let seconds = max(0, Int(Date.now.timeIntervalSince(startedAt)))
     Task {
       await model.recordWatch(videoID: videoID, startedAt: startedAt, secondsWatched: seconds)
@@ -165,7 +252,7 @@ struct WatchPageView: View {
   }
 
   private func maintainPlaybackLease() async {
-    guard page != nil else { return }
+    guard page != nil, isPlaybackActive else { return }
     guard await model.updatePlayback(videoID: videoID, state: .started) else {
       dismiss()
       return
@@ -185,5 +272,24 @@ struct WatchPageView: View {
     } catch {
       return
     }
+  }
+
+  private var isPlaybackActive: Bool {
+    playbackSurfaceActive && scenePhase == .active
+  }
+
+  private var playbackTaskID: String {
+    "\(page?.video.id ?? "loading")-\(isPlaybackActive)"
+  }
+
+  private func syncPlaybackVisibility() {
+    CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(isPlaybackActive)
+    if isPlaybackActive {
+      if page != nil, startedAt == nil { startedAt = .now }
+      return
+    }
+    playerSession.stop()
+    Task { _ = await model.updatePlayback(videoID: videoID, state: .stopped) }
+    recordWatch()
   }
 }

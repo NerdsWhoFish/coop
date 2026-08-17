@@ -43,8 +43,14 @@ final class CooperWatchUITests: XCTestCase {
     XCTAssertFalse(element(labeled: "Home", in: app).exists)
     XCTAssertFalse(app.navigationBars["Now watching"].exists)
 
+    app.swipeUp()
+    let browseView = app.descendants(matching: .any)["landscape-browse-view"]
+    XCTAssertTrue(browseView.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.descendants(matching: .any)["landscape-watch-next-heading"].exists)
+    XCTAssertLessThan(player.frame.width, app.frame.width)
+
     let screenshot = XCTAttachment(screenshot: app.screenshot())
-    screenshot.name = "Regular video fullscreen landscape"
+    screenshot.name = "Regular video landscape browse"
     screenshot.lifetime = .keepAlways
     add(screenshot)
   }

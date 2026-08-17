@@ -27,20 +27,24 @@ struct ChildDashboard: View {
   var body: some View {
     TabView(selection: $selectedTab) {
       HomeView(model: model)
+        .environment(\.playbackSurfaceActive, selectedTab == .home)
         .tag(Tab.home)
         .tabItem { Label("Home", systemImage: "house.fill") }
 
       if model.profile?.shortsEnabled == true {
         ShortsFeedView(model: model)
+          .environment(\.playbackSurfaceActive, selectedTab == .shorts)
           .tag(Tab.shorts)
           .tabItem { Label("Shorts", systemImage: "bolt.fill") }
       }
 
       SubscriptionsView(model: model)
+        .environment(\.playbackSurfaceActive, selectedTab == .channels)
         .tag(Tab.channels)
         .tabItem { Label("Channels", systemImage: "play.square.stack.fill") }
 
       ChildSearchView(model: model)
+        .environment(\.playbackSurfaceActive, selectedTab == .search)
         .tag(Tab.search)
         .tabItem { Label("Search", systemImage: "magnifyingglass") }
     }

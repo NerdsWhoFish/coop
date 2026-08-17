@@ -9,6 +9,7 @@ struct ShortOccurrence: Identifiable {
 struct ShortsFeedView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.playbackSurfaceActive) private var playbackSurfaceActive
   @Bindable var model: ChildAppModel
   @State private var sessionID = UUID().uuidString
   @State private var items: [ShortOccurrence] = []
@@ -16,7 +17,6 @@ struct ShortsFeedView: View {
   @State private var nextOffset = 0
   @State private var isLoading = false
   @State private var loadError: String?
-  @State private var isVisible = false
 
   private let pageSize = 8
 
@@ -40,8 +40,6 @@ struct ShortsFeedView: View {
       .watchBackground()
     }
     .task { await loadNextPage() }
-    .onAppear { isVisible = true }
-    .onDisappear { isVisible = false }
   }
 
   private var feed: some View {
@@ -50,7 +48,7 @@ struct ShortsFeedView: View {
         ForEach(items) { item in
           ShortPageView(
             video: item.video,
-            isActive: isVisible && scenePhase == .active && currentID == item.id,
+            isActive: playbackSurfaceActive && scenePhase == .active && currentID == item.id,
             model: model,
             onBlocked: { removeBlocked(item) }
           )
