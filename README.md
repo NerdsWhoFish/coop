@@ -8,6 +8,10 @@ When they find something new, they ask, and a parent approves it from their own 
 
 No Google account on the child's device. No comments, in either direction. No livestreams.
 
+> **Want us to set it up?** Nerds Who Fish offers a one-time Coop setup for $500.
+> You provide a computer capable of running Docker, and we'll install and configure Coop for your family.
+> [Send us a message through our contact form](https://www.nerdswhofish.com/#contact) and mention Coop.
+
 ## See Coop in action
 
 <p align="center">
