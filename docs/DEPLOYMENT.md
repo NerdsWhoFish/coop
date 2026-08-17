@@ -53,12 +53,18 @@ Apply these DNS rules to the child's device or network policy group:
 
 | Host | Rule | Reason |
 | --- | --- | --- |
+| Your Coop backend | Allow | API, proxied video thumbnails, pairing, and update checks |
+| `*.youtube-nocookie.com` | Allow | Privacy-enhanced player embedded by Coop |
+| `*.googlevideo.com` | Allow | Video and audio media used by the embedded player |
+| `*.ytimg.com` | Allow | Player artwork and static assets |
+| `yt3.ggpht.com` | Allow | Channel artwork returned by YouTube |
+| `yt3.googleusercontent.com` | Allow | Channel artwork returned by YouTube |
+| `jnn-pa.googleapis.com` | Allow | YouTube player integrity service |
+| `fonts.gstatic.com` | Allow | Fonts used by the embedded player |
 | `www.youtube.com` | Block | YouTube web client |
 | `m.youtube.com` | Block | YouTube mobile web client |
+| `youtu.be` | Block | YouTube short links |
 | `youtubei.googleapis.com` | Block | Native YouTube application API |
-| `www.youtube-nocookie.com` | Allow | Official player embedded by Coop |
-| `*.googlevideo.com` | Allow | Video media used by the embedded player |
-| `i.ytimg.com` | Block or omit | Coop proxies thumbnails |
 
 Apply the rules per device when possible so they do not break YouTube for adults on the same network.
 Test the native YouTube app, Safari, Coop playback, and playback after moving the child device between Wi-Fi and cellular.

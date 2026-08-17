@@ -109,6 +109,8 @@ App Store publication still depends on the legal, content-rights, signing, accou
 - A Google Cloud project with the YouTube Data API v3 enabled, and an API key
 - Xcode 16 or newer and XcodeGen 2.46 or newer for the native apps
 
+Child-device network filtering must allow your Coop backend and the small set of YouTube player hosts listed in [the deployment guide](docs/DEPLOYMENT.md#4-restrict-the-child-device).
+
 Every family needs their own API key.
 The YouTube API Developer Policies forbid embedding API credentials in open source projects, so there is no shared key and there never will be.
 The upside is that each family gets its own full daily quota.
