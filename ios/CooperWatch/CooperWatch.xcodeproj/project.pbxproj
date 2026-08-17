@@ -31,6 +31,7 @@
 		CF08EE71802925761FC7A0C4 /* ShortPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7F014777E8985C0E1FFD7B /* ShortPageView.swift */; };
 		E0A36CCE3CE9B4E740D1AF43 /* SubscriptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239D30DFF25873E82BCE02AE /* SubscriptionsView.swift */; };
 		EFC277FB81DE4BB266F78319 /* WatchPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52D6143ECBAEA2D40D1F2435 /* WatchPageView.swift */; };
+		F36EA7019B6EF04F74F512C6 /* VideoLoadingPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29514969D80043E4D6EAC950 /* VideoLoadingPlaceholder.swift */; };
 		FD5D03EA6F1AC6577346105E /* PlaybackVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21F707CFD850E11044C8EF74 /* PlaybackVisibility.swift */; };
 /* End PBXBuildFile section */
 
@@ -57,6 +58,7 @@
 		21F707CFD850E11044C8EF74 /* PlaybackVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackVisibility.swift; sourceTree = "<group>"; };
 		22E33F4CB246B3DB86A07F49 /* ChildRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildRootView.swift; sourceTree = "<group>"; };
 		239D30DFF25873E82BCE02AE /* SubscriptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionsView.swift; sourceTree = "<group>"; };
+		29514969D80043E4D6EAC950 /* VideoLoadingPlaceholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoLoadingPlaceholder.swift; sourceTree = "<group>"; };
 		2E82E953F0DCA636B8D8D3D0 /* ChannelPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelPageView.swift; sourceTree = "<group>"; };
 		33119F8E83ACDE41586BDB34 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		52D6143ECBAEA2D40D1F2435 /* WatchPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPageView.swift; sourceTree = "<group>"; };
@@ -99,6 +101,7 @@
 			children = (
 				55FDBE0A55E3B1CA9948DBB3 /* DiscoveryShelf.swift */,
 				55E4B135EDDA821C30106CEA /* VideoCard.swift */,
+				29514969D80043E4D6EAC950 /* VideoLoadingPlaceholder.swift */,
 				CA40CE3285DE22EF609BE418 /* YouTubeEmbeddedPlayer.swift */,
 			);
 			path = Shared;
@@ -397,6 +400,7 @@
 				5B396E626218992A88D44212 /* ShortsFeedView.swift in Sources */,
 				E0A36CCE3CE9B4E740D1AF43 /* SubscriptionsView.swift in Sources */,
 				AA87AE1486C4BF27D4B7B571 /* VideoCard.swift in Sources */,
+				F36EA7019B6EF04F74F512C6 /* VideoLoadingPlaceholder.swift in Sources */,
 				EFC277FB81DE4BB266F78319 /* WatchPageView.swift in Sources */,
 				A19BA1FA9E59402C1E87B9E4 /* WatchTheme.swift in Sources */,
 				10CB1FCF3BC1926399AE987D /* YouTubeEmbeddedPlayer.swift in Sources */,

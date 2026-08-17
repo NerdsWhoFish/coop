@@ -15,6 +15,7 @@ struct WatchPageView: View {
   @State private var landscapeBrowsing = false
   @State private var channelSubscribed = false
   @State private var subscriptionIsWorking = false
+  @State private var playerIsReady = false
 
   var body: some View {
     GeometryReader { proxy in
@@ -215,8 +216,31 @@ struct WatchPageView: View {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Playing \(page.video.title)")
       .accessibilityIdentifier("regular-video-player")
+      .overlay {
+        if model.showsPlayerLoadingPreview {
+          VideoLoadingPlaceholder(
+            thumbnailURL: page.video.thumbnailUrl.flatMap(URL.init(string:)),
+            accessibilityIdentifier: "regular-video-loading"
+          )
+        }
+      }
     } else if let url = URL(string: page.embedUrl) {
-      YouTubeEmbeddedPlayer(url: url, session: playerSession)
+      ZStack {
+        YouTubeEmbeddedPlayer(url: url, session: playerSession) {
+          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+            playerIsReady = true
+          }
+        }
+
+        if !playerIsReady {
+          VideoLoadingPlaceholder(
+            thumbnailURL: page.video.thumbnailUrl.flatMap(URL.init(string:)),
+            accessibilityIdentifier: "regular-video-loading"
+          )
+          .transition(.opacity)
+        }
+      }
+      .accessibilityIdentifier("regular-video-player")
     }
   }
 

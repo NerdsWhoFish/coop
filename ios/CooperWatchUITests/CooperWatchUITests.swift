@@ -38,6 +38,36 @@ final class CooperWatchUITests: XCTestCase {
   }
 
   @MainActor
+  func testPlayersShowThumbnailLoadingPlaceholders() throws {
+    let app = previewApp()
+    app.launchEnvironment["COOP_UI_PLAYER_LOADING"] = "1"
+    app.launch()
+
+    let video = element(labeled: "Why Do Volcanoes Erupt?", in: app)
+    XCTAssertTrue(video.waitForExistence(timeout: 5))
+    video.tap()
+    let loading = app.descendants(matching: .any)["regular-video-loading"]
+    XCTAssertTrue(loading.waitForExistence(timeout: 5))
+    XCTAssertEqual(loading.label, "Loading video")
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Regular video loading placeholder"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
+  func testShortsShowThumbnailLoadingPlaceholders() throws {
+    let app = previewApp(tab: "shorts")
+    app.launchEnvironment["COOP_UI_PLAYER_LOADING"] = "1"
+    app.launch()
+
+    let loading = app.descendants(matching: .any)["short-video-loading"]
+    XCTAssertTrue(loading.waitForExistence(timeout: 5))
+    XCTAssertEqual(loading.label, "Loading video")
+  }
+
+  @MainActor
   func testShortsStayPortraitWhenDeviceRotates() throws {
     let app = previewApp(tab: "shorts")
     app.launch()

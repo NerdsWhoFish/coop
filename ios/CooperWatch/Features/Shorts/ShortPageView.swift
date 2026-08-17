@@ -13,6 +13,7 @@ struct ShortPageView: View {
   @State private var isUpdatingReaction = false
   @State private var loadError: String?
   @State private var startedAt: Date?
+  @State private var playerIsReady = false
 
   private var accent: Color {
     let colors = [WatchTheme.cyan, WatchTheme.pink, WatchTheme.purple, WatchTheme.green]
@@ -42,6 +43,7 @@ struct ShortPageView: View {
       }
     }
     .onChange(of: isActive) { _, active in
+      playerIsReady = false
       if active {
         startWatchingIfReady()
       } else {
@@ -69,9 +71,27 @@ struct ShortPageView: View {
           .accessibilityElement(children: .ignore)
           .accessibilityLabel("Playing \(video.title)")
           .accessibilityIdentifier("active-short-player")
+        if model.showsPlayerLoadingPreview {
+          VideoLoadingPlaceholder(
+            thumbnailURL: video.thumbnailUrl.flatMap(URL.init(string:)),
+            accessibilityIdentifier: "short-video-loading"
+          )
+        }
       } else if isActive, let playerURL {
-        YouTubeEmbeddedPlayer(url: playerURL)
+        YouTubeEmbeddedPlayer(url: playerURL) {
+          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+            playerIsReady = true
+          }
+        }
+        .transition(.opacity)
+
+        if !playerIsReady {
+          VideoLoadingPlaceholder(
+            thumbnailURL: video.thumbnailUrl.flatMap(URL.init(string:)),
+            accessibilityIdentifier: "short-video-loading"
+          )
           .transition(.opacity)
+        }
       }
 
       if isActive, isFetching {

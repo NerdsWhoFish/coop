@@ -26,3 +26,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0014](0014-opt-in-requestable-channel-discovery.md) | Add opt-in discovery without weakening channel approval | accepted | 2026-08-16 |
 | [0015](0015-key-playback-leases-by-device.md) | Key playback leases by paired device | accepted | 2026-08-17 |
 | [0016](0016-require-the-latest-published-ota-build.md) | Require the latest published OTA build | accepted | 2026-08-17 |
+| [0017](0017-show-a-noninteractive-thumbnail-until-player-media-is-ready.md) | Show a noninteractive thumbnail until player media is ready | accepted | 2026-08-17 |

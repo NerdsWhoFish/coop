@@ -46,18 +46,25 @@ final class YouTubeEmbeddedPlayerSession {
 struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   let url: URL
   var session: YouTubeEmbeddedPlayerSession?
+  var onReady: () -> Void
 
-  init(url: URL, session: YouTubeEmbeddedPlayerSession? = nil) {
+  init(
+    url: URL,
+    session: YouTubeEmbeddedPlayerSession? = nil,
+    onReady: @escaping () -> Void = {}
+  ) {
     self.url = url
     self.session = session
+    self.onReady = onReady
   }
 
   func makeCoordinator() -> Coordinator {
-    Coordinator(preservesPlayback: session != nil)
+    Coordinator(preservesPlayback: session != nil, onReady: onReady)
   }
 
   func makeUIView(context: Context) -> WKWebView {
     let view = session?.webView ?? Self.makeWebView()
+    context.coordinator.attach(to: view)
     load(url, in: view, coordinator: context.coordinator)
     return view
   }
@@ -74,6 +81,8 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   }
 
   func updateUIView(_ view: WKWebView, context: Context) {
+    context.coordinator.onReady = onReady
+    context.coordinator.attach(to: view)
     load(url, in: view, coordinator: context.coordinator)
   }
 
@@ -87,6 +96,7 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   }
 
   static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+    coordinator.detach(from: view)
     guard !coordinator.preservesPlayback else { return }
     view.stopLoading()
     view.loadHTMLString("", baseURL: nil)
@@ -94,6 +104,7 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   }
 
   private func load(_ url: URL, in view: WKWebView, coordinator: Coordinator) {
+    coordinator.observeReadiness(of: url, in: view)
     let loadedURL = session?.loadedURL ?? coordinator.loadedURL
     guard
       loadedURL != url,
@@ -110,12 +121,101 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     view.load(request)
   }
 
-  final class Coordinator {
+  @MainActor
+  final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    private static let messageName = "coopPlayerReady"
+    // Navigation completion only means YouTube's document loaded; the player can still be black
+    // while its media initializes, so keep the placeholder until the video has usable data.
+    private static let readinessScript = """
+      (() => {
+        clearInterval(window.__coopPlayerReadyInterval);
+        const notifyWhenReady = () => {
+          const video = document.querySelector('video');
+          if (!video || video.readyState < 2) return;
+          clearInterval(window.__coopPlayerReadyInterval);
+          window.webkit.messageHandlers.coopPlayerReady.postMessage(true);
+        };
+        window.__coopPlayerReadyInterval = setInterval(notifyWhenReady, 250);
+        notifyWhenReady();
+      })();
+      """
+
     let preservesPlayback: Bool
     var loadedURL: URL?
+    var onReady: () -> Void
+    private weak var attachedView: WKWebView?
+    private var observedURL: URL?
+    private var reportedReady = false
 
-    init(preservesPlayback: Bool) {
+    init(preservesPlayback: Bool, onReady: @escaping () -> Void = {}) {
       self.preservesPlayback = preservesPlayback
+      self.onReady = onReady
+    }
+
+    func attach(to view: WKWebView) {
+      guard attachedView !== view else { return }
+      let controller = view.configuration.userContentController
+      controller.removeScriptMessageHandler(forName: Self.messageName)
+      controller.add(self, name: Self.messageName)
+      view.navigationDelegate = self
+      attachedView = view
+    }
+
+    func observeReadiness(of url: URL, in view: WKWebView) {
+      if observedURL != url {
+        stopObservingReadiness()
+        observedURL = url
+        reportedReady = false
+      }
+      guard !reportedReady else { return }
+      view.evaluateJavaScript(Self.readinessScript)
+      NSObject.cancelPreviousPerformRequests(
+        withTarget: self,
+        selector: #selector(revealPlayerAfterTimeout),
+        object: nil
+      )
+      perform(#selector(revealPlayerAfterTimeout), with: nil, afterDelay: 45)
+    }
+
+    func detach(from view: WKWebView) {
+      stopObservingReadiness()
+      view.configuration.userContentController.removeScriptMessageHandler(
+        forName: Self.messageName
+      )
+      view.navigationDelegate = nil
+      attachedView = nil
+    }
+
+    func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
+      guard !reportedReady else { return }
+      webView.evaluateJavaScript(Self.readinessScript)
+    }
+
+    func userContentController(
+      _: WKUserContentController,
+      didReceive message: WKScriptMessage
+    ) {
+      guard message.name == Self.messageName else { return }
+      markReady()
+    }
+
+    private func stopObservingReadiness() {
+      NSObject.cancelPreviousPerformRequests(
+        withTarget: self,
+        selector: #selector(revealPlayerAfterTimeout),
+        object: nil
+      )
+    }
+
+    @objc private func revealPlayerAfterTimeout() {
+      markReady()
+    }
+
+    private func markReady() {
+      guard !reportedReady else { return }
+      reportedReady = true
+      stopObservingReadiness()
+      onReady()
     }
   }
 }

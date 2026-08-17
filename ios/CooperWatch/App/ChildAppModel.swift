@@ -29,6 +29,7 @@ final class ChildAppModel {
   var requiredUpdate: AppRelease?
   var channelSearchRequest: ChannelSearchRequest?
   private(set) var isPreviewMode = false
+  private(set) var showsPlayerLoadingPreview = false
 
   private var api: CoopAPI?
   private let defaults = UserDefaults.standard
@@ -47,6 +48,8 @@ final class ChildAppModel {
       }
       if ProcessInfo.processInfo.environment["COOP_UI_PREVIEW"] == "1" {
         isPreviewMode = true
+        showsPlayerLoadingPreview =
+          ProcessInfo.processInfo.environment["COOP_UI_PLAYER_LOADING"] == "1"
         serverAddress = "https://coop.example"
         profile = Components.Schemas.ChildProfile(
           id: "preview-child",
