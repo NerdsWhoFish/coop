@@ -41,7 +41,7 @@ struct ChildDashboard: View {
       SubscriptionsView(model: model)
         .environment(\.playbackSurfaceActive, selectedTab == .channels)
         .tag(Tab.channels)
-        .tabItem { Label("Channels", systemImage: "play.square.stack.fill") }
+        .tabItem { Label("Subscriptions", systemImage: "play.square.stack.fill") }
 
       ChildSearchView(model: model)
         .environment(\.playbackSurfaceActive, selectedTab == .search)
@@ -49,5 +49,9 @@ struct ChildDashboard: View {
         .tabItem { Label("Search", systemImage: "magnifyingglass") }
     }
     .tint(WatchTheme.cyan)
+    .onChange(of: model.channelSearchRequest?.id) {
+      guard model.channelSearchRequest != nil else { return }
+      selectedTab = .search
+    }
   }
 }

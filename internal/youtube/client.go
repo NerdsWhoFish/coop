@@ -279,6 +279,18 @@ func (c *Client) Videos(ctx context.Context, ids []string, purpose domain.QuotaP
 // the scarce search bucket. The cheap detail calls are required before a video
 // can pass live-state and keyword policy or be stored safely.
 func (c *Client) Search(ctx context.Context, query string) (SearchResults, error) {
+	return c.search(ctx, query, "")
+}
+
+// SearchChannel finds videos matching query within one channel.
+func (c *Client) SearchChannel(ctx context.Context, query, channelID string) (SearchResults, error) {
+	if !ValidChannelID(channelID) {
+		return SearchResults{}, fmt.Errorf("not a channel ID: %q", channelID)
+	}
+	return c.search(ctx, query, channelID)
+}
+
+func (c *Client) search(ctx context.Context, query, channelID string) (SearchResults, error) {
 	normalized := NormalizeQuery(query)
 	if normalized == "" {
 		return SearchResults{}, nil
@@ -286,7 +298,12 @@ func (c *Client) Search(ctx context.Context, query string) (SearchResults, error
 
 	params := url.Values{}
 	params.Set("part", "snippet")
-	params.Set("type", "channel,video")
+	if channelID == "" {
+		params.Set("type", "channel,video")
+	} else {
+		params.Set("type", "video")
+		params.Set("channelId", channelID)
+	}
 	params.Set("q", normalized)
 	params.Set("maxResults", "25")
 

@@ -346,6 +346,41 @@ func TestMixedSearchIgnoresBlankQueries(t *testing.T) {
 	}
 }
 
+func TestSearchChannelScopesVideoResults(t *testing.T) {
+	const channelID = "UCabcdefghijklmnopqrstuv"
+
+	h := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/search":
+			if got := r.URL.Query().Get("type"); got != "video" {
+				t.Errorf("search type = %q, want video", got)
+			}
+			if got := r.URL.Query().Get("channelId"); got != channelID {
+				t.Errorf("channelId = %q, want %q", got, channelID)
+			}
+			_, _ = w.Write([]byte(`{"items":[{"id":{"videoId":"volcano"},"snippet":{"channelId":"` + channelID + `"}}]}`))
+		case "/channels":
+			_, _ = w.Write([]byte(`{"items":[{"id":"` + channelID + `","snippet":{"title":"Science","thumbnails":{}},"statistics":{},"brandingSettings":{}}]}`))
+		case "/videos":
+			_, _ = w.Write([]byte(`{"items":[{"id":"volcano","snippet":{"channelId":"` + channelID + `","channelTitle":"Science","title":"Volcano","publishedAt":"2026-08-01T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},"contentDetails":{"duration":"PT5M"},"status":{"embeddable":true}}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	got, err := h.client.SearchChannel(context.Background(), "volcano", channelID)
+	if err != nil {
+		t.Fatalf("SearchChannel() error = %v", err)
+	}
+	if len(got.Channels) != 0 {
+		t.Errorf("direct channel matches = %+v, want none", got.Channels)
+	}
+	if len(got.Videos) != 1 || got.Videos[0].ID != "volcano" {
+		t.Errorf("video matches = %+v, want volcano", got.Videos)
+	}
+}
+
 const videosBody = `{"items":[
  {"id":"vid1","snippet":{"channelId":"UCabcdefghijklmnopqrstuv","channelTitle":"Example",
    "title":"Regular","description":"d","tags":["a","b"],

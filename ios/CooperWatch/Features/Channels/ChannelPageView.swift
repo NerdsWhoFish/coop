@@ -40,6 +40,27 @@ struct ChannelPageView: View {
             Spacer()
           }
 
+          if model.profile?.videoSearchTiles == true {
+            Button {
+              model.openSearch(
+                channelID: page.channel.id,
+                channelTitle: page.channel.title
+              )
+            } label: {
+              HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                Text("Search " + page.channel.title)
+                Spacer()
+              }
+              .foregroundStyle(WatchTheme.foreground.opacity(0.72))
+              .padding(.horizontal, 16)
+              .frame(minHeight: 48)
+              .background(WatchTheme.surface, in: .rect(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("channel-search-button")
+          }
+
           if page.state == .requestable {
             Button {
               ask(page.channel.id)

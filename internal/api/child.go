@@ -308,6 +308,10 @@ func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c aut
 	if query == "" {
 		return badRequest("q is required")
 	}
+	channelID := r.URL.Query().Get("channelId")
+	if channelID != "" && !youtube.ValidChannelID(channelID) {
+		return badRequest("channelId is invalid")
+	}
 
 	child, err := s.deps.Accounts.Child(r.Context(), c.FamilyID, c.ID)
 	if err != nil {
@@ -334,7 +338,12 @@ func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c aut
 	var channels []youtube.Channel
 	var videos []store.Video
 	if child.VideoSearchTiles {
-		results, err := client.Search(r.Context(), query)
+		var results youtube.SearchResults
+		if channelID == "" {
+			results, err = client.Search(r.Context(), query)
+		} else {
+			results, err = client.SearchChannel(r.Context(), query, channelID)
+		}
 		if err != nil {
 			return err
 		}

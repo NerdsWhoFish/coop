@@ -6,6 +6,12 @@ import UIKit
 @MainActor
 @Observable
 final class ChildAppModel {
+  struct ChannelSearchRequest: Equatable {
+    let id = UUID()
+    let channelID: String
+    let channelTitle: String
+  }
+
   enum Destination: Equatable {
     case launching
     case pairing
@@ -21,6 +27,7 @@ final class ChildAppModel {
   var isWorking = false
   var errorMessage: String?
   var requiredUpdate: AppRelease?
+  var channelSearchRequest: ChannelSearchRequest?
   private(set) var isPreviewMode = false
 
   private var api: CoopAPI?
@@ -59,7 +66,8 @@ final class ChildAppModel {
             app: "child",
             title: "Cooper Watch",
             build: "13",
-            installUrl: "itms-services://?action=download-manifest&url=https://coop.example/install/child.plist",
+            installUrl:
+              "itms-services://?action=download-manifest&url=https://coop.example/install/child.plist",
             installerUrl: "https://coop.example/install/"
           )
         }
@@ -183,8 +191,26 @@ final class ChildAppModel {
     return try await api?.childChannel(id: id)
   }
 
-  func search(query: String) async throws -> Components.Schemas.SearchResults? {
-    try await api?.searchForChild(query: query)
+  func search(query: String, channelID: String? = nil) async throws
+    -> Components.Schemas.SearchResults?
+  {
+    #if DEBUG
+      if isPreviewMode {
+        let videos = (Self.previewVideos + Self.previewShorts).filter { video in
+          (channelID == nil || video.channelId == channelID)
+            && video.title.localizedCaseInsensitiveContains(query)
+        }
+        return Components.Schemas.SearchResults(channels: [], videos: videos)
+      }
+    #endif
+    return try await api?.searchForChild(query: query, channelID: channelID)
+  }
+
+  func openSearch(channelID: String, channelTitle: String) {
+    channelSearchRequest = ChannelSearchRequest(
+      channelID: channelID,
+      channelTitle: channelTitle
+    )
   }
 
   func video(id: String) async throws -> Components.Schemas.WatchPage? {

@@ -100,7 +100,9 @@ struct WatchPageView: View {
       if let page {
         VStack(alignment: .leading, spacing: 14) {
           HStack {
-            Button { dismiss() } label: {
+            Button {
+              dismiss()
+            } label: {
               Label("Back", systemImage: "chevron.left")
             }
             .buttonStyle(.bordered)
@@ -256,39 +258,50 @@ struct WatchPageView: View {
   }
 
   private func reactionControls(for page: Components.Schemas.WatchPage) -> some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 82, maximum: 150))], spacing: 10) {
-      reactionButton(.like, label: "Like", symbol: "hand.thumbsup.fill")
-      reactionButton(.dislike, label: "Not for me", symbol: "hand.thumbsdown.fill")
-      Button {
-        setSubscribed(!channelSubscribed, channelID: page.video.channelId)
-      } label: {
-        Label(
-          channelSubscribed ? "Subscribed" : "Subscribe",
-          systemImage: channelSubscribed ? "checkmark" : "plus"
-        )
-        .frame(maxWidth: .infinity)
+    Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+      GridRow {
+        reactionButton(.like, label: "Like", symbol: "hand.thumbsup.fill")
+        reactionButton(.dislike, label: "Not for me", symbol: "hand.thumbsdown.fill")
       }
-      .buttonStyle(.borderedProminent)
-      .tint(channelSubscribed ? WatchTheme.green : WatchTheme.cyan)
-      .foregroundStyle(WatchTheme.background)
-      .disabled(subscriptionIsWorking)
 
-      NavigationLink {
-        ChannelPageView(channelID: page.video.channelId, model: model)
-      } label: {
-        Label("Channel", systemImage: "play.square.stack.fill")
+      GridRow {
+        Button {
+          setSubscribed(!channelSubscribed, channelID: page.video.channelId)
+        } label: {
+          Label(
+            channelSubscribed ? "Subscribed" : "Subscribe",
+            systemImage: channelSubscribed ? "checkmark" : "plus"
+          )
           .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.bordered)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(channelSubscribed ? WatchTheme.green : WatchTheme.cyan)
+        .foregroundStyle(WatchTheme.background)
+        .disabled(subscriptionIsWorking)
 
-      if let share = page.shareUrl.flatMap(URL.init(string:)) {
-        ShareLink(item: share) {
-          Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+        NavigationLink {
+          ChannelPageView(channelID: page.video.channelId, model: model)
+        } label: {
+          Label("Channel", systemImage: "play.square.stack.fill")
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
       }
+
+      GridRow {
+        if let share = page.shareUrl.flatMap(URL.init(string:)) {
+          ShareLink(item: share) {
+            Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+          }
+          .buttonStyle(.bordered)
+        }
+        Color.clear
+      }
     }
+    .frame(maxWidth: .infinity)
     .font(.caption.weight(.semibold))
+    .lineLimit(1)
+    .minimumScaleFactor(0.72)
   }
 
   private func setSubscribed(_ subscribed: Bool, channelID: String) {

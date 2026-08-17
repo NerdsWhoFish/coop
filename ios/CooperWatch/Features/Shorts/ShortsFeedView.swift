@@ -43,44 +43,48 @@ struct ShortsFeedView: View {
   }
 
   private var feed: some View {
-    ScrollView(.vertical) {
-      LazyVStack(spacing: 0) {
-        ForEach(items) { item in
-          ShortPageView(
-            video: item.video,
-            isActive: playbackSurfaceActive && scenePhase == .active && currentID == item.id,
-            model: model,
-            onBlocked: { removeBlocked(item) }
-          )
-          .containerRelativeFrame(.vertical)
-          .id(item.id)
+    GeometryReader { proxy in
+      ScrollView(.vertical) {
+        LazyVStack(spacing: 0) {
+          ForEach(items) { item in
+            ShortPageView(
+              video: item.video,
+              isActive: playbackSurfaceActive && scenePhase == .active && currentID == item.id,
+              model: model,
+              onBlocked: { removeBlocked(item) }
+            )
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+            .id(item.id)
+          }
+        }
+        .scrollTargetLayout()
+      }
+      .scrollIndicators(.hidden)
+      .clipped()
+      .scrollPosition(id: $currentID)
+      .scrollTargetBehavior(.paging)
+      .refreshable { await reshuffle() }
+      .sensoryFeedback(.selection, trigger: currentID)
+      .overlay(alignment: .top) {
+        if let loadError {
+          HStack(spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+            Text(loadError).lineLimit(2)
+            Button("Retry") { Task { await loadNextPage() } }
+              .fontWeight(.bold)
+          }
+          .font(.footnote)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 10)
+          .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+          .padding(12)
         }
       }
-      .scrollTargetLayout()
-    }
-    .scrollIndicators(.hidden)
-    .scrollPosition(id: $currentID)
-    .scrollTargetBehavior(.paging)
-    .refreshable { await reshuffle() }
-    .sensoryFeedback(.selection, trigger: currentID)
-    .overlay(alignment: .top) {
-      if let loadError {
-        HStack(spacing: 10) {
-          Image(systemName: "wifi.exclamationmark")
-          Text(loadError).lineLimit(2)
-          Button("Retry") { Task { await loadNextPage() } }
-            .fontWeight(.bold)
-        }
-        .font(.footnote)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
-        .padding(12)
+      .onChange(of: currentID) { _, newValue in
+        guard let newValue else { return }
+        Task { await loadMoreIfNeeded(currentID: newValue) }
       }
-    }
-    .onChange(of: currentID) { _, newValue in
-      guard let newValue else { return }
-      Task { await loadMoreIfNeeded(currentID: newValue) }
     }
   }
 

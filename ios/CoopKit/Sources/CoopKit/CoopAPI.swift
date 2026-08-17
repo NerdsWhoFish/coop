@@ -560,8 +560,10 @@ public actor CoopAPI {
     return try response.body.json
   }
 
-  public func searchForChild(query: String) async throws -> Components.Schemas.SearchResults {
-    let query = Operations.SearchForChild.Input.Query(q: query)
+  public func searchForChild(query: String, channelID: String? = nil) async throws
+    -> Components.Schemas.SearchResults
+  {
+    let query = Operations.SearchForChild.Input.Query(q: query, channelId: channelID)
     let output = try await client.searchForChild(query: query)
     switch output {
     case .ok(let response):

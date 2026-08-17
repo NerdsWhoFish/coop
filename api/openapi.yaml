@@ -1161,6 +1161,11 @@ paths:
           in: query
           required: true
           schema: { type: string, minLength: 1 }
+        - name: channelId
+          in: query
+          required: false
+          description: Restrict video results to this channel.
+          schema: { $ref: "#/components/schemas/ChannelId" }
       responses:
         "200":
           description: OK

@@ -26,7 +26,11 @@ struct ShortPageView: View {
         player
           .frame(width: proxy.size.width)
           .frame(maxHeight: .infinity)
-        actionBar
+        if isActive {
+          actionBar
+        } else {
+          Color.clear.frame(height: 64)
+        }
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
       .clipped()

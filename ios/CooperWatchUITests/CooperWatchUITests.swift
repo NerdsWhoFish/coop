@@ -7,7 +7,8 @@ final class CooperWatchUITests: XCTestCase {
     app.launchEnvironment["COOP_UI_SPLASH"] = "1"
     app.launch()
 
-    XCTAssertTrue(app.descendants(matching: .any)["coop-splash-screen"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      app.descendants(matching: .any)["coop-splash-screen"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Opening your Coop…"].exists)
     XCTAssertFalse(app.textFields["Coop server"].exists)
     XCTAssertFalse(app.textFields["Pairing code"].exists)
@@ -24,7 +25,8 @@ final class CooperWatchUITests: XCTestCase {
     app.launchEnvironment["COOP_UI_UPDATE_REQUIRED"] = "1"
     app.launch()
 
-    XCTAssertTrue(app.descendants(matching: .any)["required-update-screen"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      app.descendants(matching: .any)["required-update-screen"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["Get the update"].isHittable)
     XCTAssertTrue(app.staticTexts["Fresh Coop gear!"].exists)
     XCTAssertFalse(app.tabBars.firstMatch.exists)
@@ -85,6 +87,11 @@ final class CooperWatchUITests: XCTestCase {
     XCTAssertTrue(element(labeled: "Not for me", in: app).exists)
     XCTAssertTrue(element(labeled: "Subscribed", in: app).exists)
     XCTAssertTrue(element(labeled: "Channel", in: app).exists)
+    XCTAssertFalse(
+      element(labeled: "Not for me", in: app).frame.intersects(
+        element(labeled: "Subscribed", in: app).frame
+      )
+    )
     XCTAssertTrue(element(labeled: "Crash Course Kids", in: app).exists)
     browseView.swipeUp()
     XCTAssertTrue(element(labeled: "Share", in: app).waitForExistence(timeout: 3))
@@ -172,10 +179,69 @@ final class CooperWatchUITests: XCTestCase {
     screenshot.lifetime = .keepAlways
     add(screenshot)
 
-    app.buttons["Subscriptions"].tap()
+    homeSectionButton("Subscriptions", in: app).tap()
     XCTAssertTrue(element(labeled: "Why Do Volcanoes Erupt?", in: app).waitForExistence(timeout: 3))
-    app.buttons["Discover"].tap()
+    homeSectionButton("Discover", in: app).tap()
     XCTAssertTrue(app.descendants(matching: .any)["discovery-shelf"].waitForExistence(timeout: 3))
+  }
+
+  @MainActor
+  func testChannelTabUsesSubscriptionTerminology() throws {
+    let app = previewApp(tab: "channels")
+    app.launch()
+
+    XCTAssertTrue(app.tabBars.buttons["Subscriptions"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.tabBars.buttons["Channels"].exists)
+  }
+
+  @MainActor
+  func testChannelSearchMovesToScopedSearchTab() throws {
+    let app = previewApp()
+    app.launch()
+
+    let channel = element(labeled: "Open Crash Course Kids", in: app)
+    XCTAssertTrue(channel.waitForExistence(timeout: 5))
+    channel.tap()
+
+    let searchChannel = app.descendants(matching: .any)["channel-search-button"]
+    XCTAssertTrue(searchChannel.waitForExistence(timeout: 5))
+    searchChannel.tap()
+
+    XCTAssertTrue(app.tabBars.buttons["Search"].isSelected)
+    XCTAssertTrue(
+      app.descendants(matching: .any)["channel-search-scope"].waitForExistence(timeout: 5))
+    XCTAssertTrue(element(labeled: "Crash Course Kids", in: app).exists)
+
+    let searchField = app.descendants(matching: .any)["child-search-field"]
+    XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+    searchField.tap()
+    searchField.typeText("volcanoes")
+    app.keyboards.buttons["search"].tap()
+
+    XCTAssertTrue(element(labeled: "Why Do Volcanoes Erupt?", in: app).waitForExistence(timeout: 5))
+    XCTAssertFalse(element(labeled: "Meeting the Cleverest Octopus in the Ocean", in: app).exists)
+  }
+
+  @MainActor
+  func testLandscapeSearchStaysBelowVisibleNavigationWhileTyping() throws {
+    XCUIDevice.shared.orientation = .landscapeLeft
+    defer { XCUIDevice.shared.orientation = .portrait }
+
+    let app = previewApp(tab: "search")
+    app.launch()
+
+    let searchField = app.descendants(matching: .any)["child-search-field"]
+    XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+    let homeTab = element(labeled: "Home", in: app)
+    XCTAssertTrue(homeTab.exists)
+    assertSearchField(searchField, staysInside: homeTab, in: app)
+
+    searchField.tap()
+    searchField.typeText("volcano")
+
+    XCTAssertTrue(homeTab.exists)
+    XCTAssertTrue(element(labeled: "Subscriptions", in: app).exists)
+    assertSearchField(searchField, staysInside: homeTab, in: app)
   }
 
   @MainActor
@@ -231,6 +297,10 @@ final class CooperWatchUITests: XCTestCase {
         .waitForExistence(timeout: 5)
     )
     XCTAssertEqual(activePlayers(in: app), 1)
+    let inactiveActionBars = app.descendants(matching: .any).matching(
+      identifier: "short-action-bar"
+    )
+    XCTAssertEqual(inactiveActionBars.count, 0)
 
     let homeTab = element(labeled: "Home", in: app)
     XCTAssertTrue(homeTab.waitForExistence(timeout: 5))
@@ -266,6 +336,27 @@ final class CooperWatchUITests: XCTestCase {
   @MainActor
   private func activePlayers(in app: XCUIApplication) -> Int {
     app.descendants(matching: .any).matching(identifier: "active-short-player").count
+  }
+
+  @MainActor
+  private func homeSectionButton(_ label: String, in app: XCUIApplication) -> XCUIElement {
+    app.buttons
+      .matching(identifier: "home-section-picker")
+      .matching(NSPredicate(format: "label == %@", label))
+      .firstMatch
+  }
+
+  @MainActor
+  private func assertSearchField(
+    _ searchField: XCUIElement,
+    staysInside navigationTab: XCUIElement,
+    in app: XCUIApplication
+  ) {
+    if navigationTab.frame.midY < app.frame.midY {
+      XCTAssertGreaterThanOrEqual(searchField.frame.minY, navigationTab.frame.maxY)
+    } else {
+      XCTAssertLessThanOrEqual(searchField.frame.maxY, navigationTab.frame.minY)
+    }
   }
 
   @MainActor
