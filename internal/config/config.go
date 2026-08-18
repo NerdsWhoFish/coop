@@ -31,6 +31,7 @@ type Config struct {
 	YouTube  YouTube  `toml:"youtube"`
 	Auth     Auth     `toml:"auth"`
 	OTA      OTA      `toml:"ota"`
+	APNS     APNS     `toml:"apns"`
 	Log      Log      `toml:"log"`
 }
 
@@ -118,6 +119,25 @@ type OTA struct {
 	Directory string `toml:"directory" env:"OTA_DIRECTORY"`
 }
 
+// APNS holds optional push notification delivery settings. The key is the
+// family's own APNs auth key, mirroring the bring-your-own YouTube key model.
+type APNS struct {
+	Enabled bool   `toml:"enabled" env:"APNS_ENABLED"`
+	KeyID   string `toml:"key_id"  env:"APNS_KEY_ID"`
+	TeamID  string `toml:"team_id" env:"APNS_TEAM_ID"`
+
+	// Key is the PEM contents of the .p8 auth key. A secret, so environment or
+	// secret file only, never the TOML file.
+	Key string `toml:"-" env:"APNS_KEY"`
+
+	// Environment selects Apple's push environment. Ad Hoc and App Store builds
+	// use production; only Xcode development builds use development.
+	Environment string `toml:"environment" env:"APNS_ENVIRONMENT"`
+
+	ParentBundleID string `toml:"parent_bundle_id" env:"APNS_PARENT_BUNDLE_ID"`
+	ChildBundleID  string `toml:"child_bundle_id"  env:"APNS_CHILD_BUNDLE_ID"`
+}
+
 // Log holds logging settings.
 type Log struct {
 	Level  string `toml:"level"  env:"LOG_LEVEL"`
@@ -163,6 +183,11 @@ func Defaults() *Config {
 			LockoutDuration:      15 * time.Minute,
 		},
 		OTA: OTA{Directory: "/var/lib/coop/ota"},
+		APNS: APNS{
+			Environment:    "production",
+			ParentBundleID: "fish.nerdswhofish.coop.parent",
+			ChildBundleID:  "fish.nerdswhofish.coop.child",
+		},
 		Log: Log{Level: "info", Format: "json"},
 	}
 }
@@ -204,6 +229,7 @@ func overlaySecretFiles(cfg *Config) error {
 	}{
 		{envName: "COOP_DATABASE_DSN_FILE", target: &cfg.Database.DSN},
 		{envName: "COOP_AUTH_ENCRYPTION_KEY_FILE", target: &cfg.Auth.EncryptionKey},
+		{envName: "COOP_APNS_KEY_FILE", target: &cfg.APNS.Key},
 	} {
 		path := os.Getenv(secret.envName)
 		if path == "" {
@@ -286,6 +312,24 @@ func (c *Config) Validate() error {
 	if c.Auth.LockoutDuration <= 0 {
 		errs = append(errs, errors.New("auth.lockout_duration must be positive"))
 	}
+	if c.APNS.Enabled {
+		if c.APNS.KeyID == "" {
+			errs = append(errs, errors.New("apns.key_id (COOP_APNS_KEY_ID) is required when APNs is enabled"))
+		}
+		if c.APNS.TeamID == "" {
+			errs = append(errs, errors.New("apns.team_id (COOP_APNS_TEAM_ID) is required when APNs is enabled"))
+		}
+		if c.APNS.Key == "" {
+			errs = append(errs, errors.New("COOP_APNS_KEY or COOP_APNS_KEY_FILE is required when APNs is enabled"))
+		}
+		if c.APNS.Environment != "production" && c.APNS.Environment != "development" {
+			errs = append(errs, errors.New("apns.environment must be production or development"))
+		}
+		if c.APNS.ParentBundleID == "" || c.APNS.ChildBundleID == "" {
+			errs = append(errs, errors.New("apns.parent_bundle_id and apns.child_bundle_id must not be empty"))
+		}
+	}
+
 	if c.OTA.Enabled && !filepath.IsAbs(c.OTA.Directory) {
 		errs = append(errs, errors.New("ota.directory (COOP_OTA_DIRECTORY) must be an absolute path when OTA serving is enabled"))
 	}

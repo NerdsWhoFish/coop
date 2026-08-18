@@ -388,6 +388,21 @@ type ChildSearch struct {
 	UpdatedAt time.Time
 }
 
+// PushToken is one APNs registration. Child tokens ride their device row so
+// unpairing revokes them through the cascade; parent tokens are removed at
+// sign-out and pruned when Apple reports them gone.
+type PushToken struct {
+	Token    string              `gorm:"primaryKey"`
+	FamilyID uuid.UUID           `gorm:"type:uuid;not null"`
+	Audience domain.PushAudience `gorm:"type:text;not null"`
+	ParentID *uuid.UUID          `gorm:"type:uuid;index"`
+	ChildID  *uuid.UUID          `gorm:"type:uuid;index"`
+	DeviceID *uuid.UUID          `gorm:"type:uuid"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // QuotaSpend is the daily ledger behind the circuit breaker. Day is stored in
 // Pacific time because that is when Google's quota resets.
 type QuotaSpend struct {
@@ -413,6 +428,6 @@ func AllModels() []any {
 		&Keyword{}, &VideoOverride{}, &VideoBlock{},
 		&Subscription{}, &Reaction{}, &WatchEvent{}, &PlaybackSession{}, &ChannelWeight{},
 		&Request{}, &Suppression{},
-		&APICache{}, &QuotaSpend{}, &ChildSearch{},
+		&APICache{}, &QuotaSpend{}, &ChildSearch{}, &PushToken{},
 	}
 }

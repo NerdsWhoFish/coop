@@ -576,13 +576,18 @@ func (s *Server) handleRaiseRequest(w http.ResponseWriter, r *http.Request, c au
 		return conflict("already_allowed", "this channel is already approved")
 	}
 
-	if _, err := s.deps.Catalog.Channel(r.Context(), body.ChannelID); err != nil {
+	channel, err := s.deps.Catalog.Channel(r.Context(), body.ChannelID)
+	if err != nil {
 		return err
 	}
 
 	request, err := s.deps.Activity.RaiseRequest(r.Context(), c.ID, body.ChannelID, body.PromptedByVideoID)
 	if err != nil {
 		return err
+	}
+
+	if child, err := s.deps.Accounts.Child(r.Context(), c.FamilyID, c.ID); err == nil {
+		s.deps.Push.ChannelRequested(c.FamilyID, c.ID, child.Name, channel.Title)
 	}
 
 	writeJSON(w, s.deps.Logger, http.StatusCreated, requestDTO{

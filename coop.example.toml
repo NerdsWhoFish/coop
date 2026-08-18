@@ -51,6 +51,18 @@ uploads_refresh_interval = "6h"
 # channel has never been ingested or its uploads refresh interval has elapsed.
 ingest_poll_interval = "1m"
 
+[apns]
+# Optional push notifications for channel requests and decisions, using your
+# own APNs auth key: developer.apple.com > Keys > add a key with the Apple
+# Push Notifications service checked, then download the .p8 once.
+# The key itself is a secret and comes only from the environment:
+# COOP_APNS_KEY (PEM contents) or COOP_APNS_KEY_FILE (path).
+enabled = false
+key_id = ""
+team_id = ""
+# Ad Hoc and App Store installs use production; Xcode builds use development.
+environment = "production"
+
 [log]
 level = "info"
 format = "json"

@@ -913,6 +913,37 @@ paths:
         "204": { description: Denied }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # Push notifications -------------------------------------------------------
+
+  /parent/push-token:
+    put:
+      operationId: saveParentPushToken
+      tags: [requests]
+      summary: Register this device for request notifications
+      description: |
+        Accepted even when the server has APNs delivery disabled, so enabling
+        it later needs no re-registration from installed apps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushTokenBody" }
+      responses:
+        "204": { description: Registered }
+
+  /parent/push-token/{token}:
+    delete:
+      operationId: deleteParentPushToken
+      tags: [requests]
+      summary: Unregister this device at sign-out
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Unregistered }
+
   # Suppressions -------------------------------------------------------------
 
   /parent/children/{childId}/suppressions:
@@ -1445,6 +1476,24 @@ paths:
                 properties:
                   allowed: { type: boolean }
 
+  /child/push-token:
+    put:
+      operationId: saveChildPushToken
+      tags: [child-activity]
+      summary: Register this paired device for decision notifications
+      description: |
+        Native devices only, since browsers cannot receive APNs. The
+        registration dies with the device pairing.
+      security:
+        - childToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushTokenBody" }
+      responses:
+        "204": { description: Registered }
+
   /child/requests:
     get:
       operationId: listChildRequests
@@ -1592,6 +1641,16 @@ components:
       type: string
       description: A YouTube channel ID.
       pattern: "^UC[A-Za-z0-9_-]{22}$"
+
+    PushTokenBody:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: The hexadecimal APNs device token.
+          minLength: 1
+          maxLength: 512
 
     RequestStatus:
       type: string

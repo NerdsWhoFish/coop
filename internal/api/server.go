@@ -15,6 +15,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
+	"github.com/nerdswhofish/coop/internal/push"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
 	"github.com/nerdswhofish/coop/internal/youtube"
@@ -39,6 +40,9 @@ type Deps struct {
 	Now       func() time.Time
 	Installer http.Handler
 	Web       http.Handler
+
+	// Push is optional; a nil service delivers nothing.
+	Push *push.Service
 }
 
 // Server routes and serves the API.
@@ -174,6 +178,9 @@ func (s *Server) routes() {
 	parent("POST /api/v1/parent/requests/{requestId}/approve", s.handleApproveRequest)
 	parent("POST /api/v1/parent/requests/{requestId}/deny", s.handleDenyRequest)
 
+	parent("PUT /api/v1/parent/push-token", s.handleSaveParentPushToken)
+	parent("DELETE /api/v1/parent/push-token/{token}", s.handleDeleteParentPushToken)
+
 	parent("GET /api/v1/parent/children/{childId}/suppressions", s.handleListSuppressions)
 	parent("POST /api/v1/parent/suppressions/{suppressionId}/override", s.handleOverrideSuppression)
 
@@ -196,6 +203,7 @@ func (s *Server) routes() {
 	child("PUT /api/v1/child/playback", s.handlePlaybackLease)
 	child("GET /api/v1/child/requests", s.handleChildRequests)
 	child("POST /api/v1/child/requests", s.handleRaiseRequest)
+	child("PUT /api/v1/child/push-token", s.handleSaveChildPushToken)
 	child("POST /api/v1/child/web-links/{linkId}/approve", s.handleApproveWebLinkAsChild)
 	child("DELETE /api/v1/child/session", s.handleWebLogout)
 

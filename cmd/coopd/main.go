@@ -25,6 +25,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
 	"github.com/nerdswhofish/coop/internal/ingest"
+	"github.com/nerdswhofish/coop/internal/push"
 	"github.com/nerdswhofish/coop/internal/ota"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
@@ -245,6 +246,18 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		logger.Info("OTA installer enabled", "path", "/install/", "directory", cfg.OTA.Directory)
 	}
 
+	var pusher *push.Service
+	if cfg.APNS.Enabled {
+		sender, err := push.NewAPNS([]byte(cfg.APNS.Key), cfg.APNS.KeyID, cfg.APNS.TeamID,
+			cfg.APNS.Environment == "production")
+		if err != nil {
+			return err
+		}
+		pusher = push.New(accounts, sender, cfg.APNS.ParentBundleID, cfg.APNS.ChildBundleID, logger)
+		defer pusher.Wait()
+		logger.Info("APNs delivery enabled", "environment", cfg.APNS.Environment)
+	}
+
 	api, err := api.NewServer(api.Deps{
 		Config:    cfg,
 		Logger:    logger,
@@ -261,6 +274,7 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		Now:       time.Now,
 		Installer: installer,
 		Web:       webapp.Handler(),
+		Push:      pusher,
 	})
 	if err != nil {
 		return err

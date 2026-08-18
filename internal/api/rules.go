@@ -504,6 +504,7 @@ func (s *Server) handleApproveRequest(w http.ResponseWriter, r *http.Request, p 
 		domain.RequestApproved, body.Note); err != nil {
 		return err
 	}
+	s.notifyRequestDecided(r, request, true)
 
 	w.WriteHeader(http.StatusNoContent)
 	return nil
@@ -542,9 +543,20 @@ func (s *Server) handleDenyRequest(w http.ResponseWriter, r *http.Request, p aut
 		domain.RequestDenied, body.Note); err != nil {
 		return err
 	}
+	s.notifyRequestDecided(r, request, false)
 
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+// notifyRequestDecided tells the child's devices. The channel title is
+// decoration: failing to resolve it must not fail the decision.
+func (s *Server) notifyRequestDecided(r *http.Request, request store.Request, approved bool) {
+	title := "a channel"
+	if channel, err := s.deps.Catalog.Channel(r.Context(), request.ChannelID); err == nil {
+		title = channel.Title
+	}
+	s.deps.Push.RequestDecided(request.ChildID, title, approved)
 }
 
 func (s *Server) requestInScope(r *http.Request, p auth.Parent) (store.Request, error) {

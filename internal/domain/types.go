@@ -66,6 +66,14 @@ const (
 	RequestDenied   RequestStatus = "denied"
 )
 
+// PushAudience is which app a push registration belongs to.
+type PushAudience string
+
+const (
+	PushAudienceParent PushAudience = "parent"
+	PushAudienceChild  PushAudience = "child"
+)
+
 // ReactionKind is a child's local like or dislike, never sent to YouTube.
 type ReactionKind string
 
