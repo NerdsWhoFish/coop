@@ -328,6 +328,11 @@ final class ChildAppModel {
     _ = try await api?.requestChannel(channelID: channelID, promptedByVideoID: videoID)
   }
 
+  func channelForVideo(id: String) async -> String? {
+    guard let api else { return nil }
+    return (try? await api.locateVideoChannel(id: id)) ?? nil
+  }
+
   func requests() async throws -> [Components.Schemas.Request] {
     try await api?.childRequests() ?? []
   }

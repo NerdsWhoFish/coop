@@ -2,8 +2,9 @@ import SwiftUI
 import WebKit
 
 enum YouTubeEmbedRequest {
-  /// The playback URL for the embed iframe, forced to autoplay inline.
-  static func playbackURL(for url: URL) -> URL? {
+  /// The playback URL for the embed iframe: autoplay inline, with the player
+  /// API enabled so the wrapper can hear YouTube's own readiness events.
+  static func playbackURL(for url: URL, origin: URL) -> URL? {
     guard
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
       components.scheme == "https",
@@ -13,6 +14,8 @@ enum YouTubeEmbedRequest {
     let playbackItems = [
       URLQueryItem(name: "autoplay", value: "1"),
       URLQueryItem(name: "playsinline", value: "1"),
+      URLQueryItem(name: "enablejsapi", value: "1"),
+      URLQueryItem(name: "origin", value: originString(of: origin)),
     ]
     let playbackNames = Set(playbackItems.map(\.name))
     components.queryItems =
@@ -21,9 +24,18 @@ enum YouTubeEmbedRequest {
     return components.url
   }
 
+  private static func originString(of url: URL) -> String {
+    var components = URLComponents()
+    components.scheme = url.scheme
+    components.host = url.host()
+    components.port = url.port
+    return components.string ?? ""
+  }
+
   /// Wraps the embed in an iframe because YouTube rejects referer-less embeds
   /// with error 153, and WebKit ignores a hand-set Referer on top-level loads.
-  /// Framing from the family's real Coop origin sends that referrer natively.
+  /// Framing from the Coop origin sends that referrer natively, and the script
+  /// relays YouTube's own onReady and playing events as the readiness signal.
   static func wrapperHTML(for playbackURL: URL) -> String {
     """
     <!doctype html>
@@ -38,6 +50,34 @@ enum YouTubeEmbedRequest {
     <body>
     <iframe src="\(playbackURL.absoluteString)"
       allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    <script>
+    (() => {
+      const source = 'https://www.youtube-nocookie.com';
+      const frame = document.querySelector('iframe');
+      let done = false;
+      const ready = () => {
+        if (done) return;
+        done = true;
+        clearInterval(handshake);
+        window.webkit.messageHandlers.coopPlayerReady.postMessage(true);
+      };
+      const handshake = setInterval(() => {
+        frame.contentWindow.postMessage(
+          JSON.stringify({event: 'listening', id: '1', channel: 'widget'}), source);
+      }, 300);
+      window.addEventListener('message', (event) => {
+        if (event.origin !== source) return;
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+        if (!data) return;
+        const playing =
+          (data.event === 'onStateChange' && data.info === 1) ||
+          (data.event === 'infoDelivery' && data.info && data.info.playerState === 1) ||
+          data.event === 'onReady';
+        if (playing) ready();
+      });
+    })();
+    </script>
     </body>
     </html>
     """
@@ -319,7 +359,7 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     let loadedURL = session?.loadedURL ?? coordinator.loadedURL
     guard
       loadedURL != url,
-      let playbackURL = YouTubeEmbedRequest.playbackURL(for: url)
+      let playbackURL = YouTubeEmbedRequest.playbackURL(for: url, origin: origin)
     else { return }
     if let session {
       session.loadedURL = url

@@ -109,7 +109,10 @@ final class CooperWatchUITests: XCTestCase {
     XCTAssertFalse(element(labeled: "Home", in: app).exists)
     XCTAssertFalse(app.navigationBars["Now watching"].exists)
 
-    app.swipeLeft()
+    // Browsing only opens from a right-edge swipe, so mid-screen drags stay
+    // with the player's own horizontally scrolling recommendations.
+    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
+    edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
     let browseView = app.descendants(matching: .any)["landscape-browse-view"]
     XCTAssertTrue(browseView.waitForExistence(timeout: 5))
     XCTAssertTrue(app.descendants(matching: .any)["landscape-watch-next-heading"].exists)

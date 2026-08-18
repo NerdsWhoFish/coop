@@ -11,6 +11,7 @@ struct WatchPageView: View {
   @State private var page: Components.Schemas.WatchPage?
   @State private var watchNext: [Components.Schemas.Video] = []
   @State private var tappedVideo: TappedVideo?
+  @State private var tappedChannel: TappedChannel?
   @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
@@ -25,7 +26,7 @@ struct WatchPageView: View {
 
       Group {
         if isLandscape, !landscapeBrowsing {
-          landscapeContent
+          landscapeContent(proxy: proxy)
         } else if isLandscape {
           landscapeBrowseContent(proxy: proxy)
         } else {
@@ -44,6 +45,13 @@ struct WatchPageView: View {
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(item: $tappedVideo) { tapped in
       WatchPageView(videoID: tapped.id, model: model)
+    }
+    .navigationDestination(item: $tappedChannel) { tapped in
+      ChannelPageView(
+        channelID: tapped.id,
+        promptedByVideoID: tapped.promptedByVideoID,
+        model: model
+      )
     }
     .task { await load() }
     .task(id: playbackTaskID) { await maintainPlaybackLease() }
@@ -64,7 +72,7 @@ struct WatchPageView: View {
   }
 
   @ViewBuilder
-  private var landscapeContent: some View {
+  private func landscapeContent(proxy: GeometryProxy) -> some View {
     ZStack {
       Color.black.ignoresSafeArea()
       if let page {
@@ -81,7 +89,7 @@ struct WatchPageView: View {
             landscapeBrowsing = true
           }
         } label: {
-          Label("Swipe left to browse", systemImage: "chevron.left")
+          Label("Swipe from the edge to browse", systemImage: "chevron.left")
             .font(.caption.weight(.bold))
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
@@ -95,7 +103,10 @@ struct WatchPageView: View {
     .contentShape(.rect)
     .simultaneousGesture(
       DragGesture(minimumDistance: 30).onEnded { value in
-        guard value.translation.width < -60,
+        // Only from the right edge: the player's own recommendation rows
+        // scroll horizontally, and a whole-screen swipe would hijack them.
+        guard value.startLocation.x > proxy.size.width - 44,
+          value.translation.width < -60,
           abs(value.translation.width) > abs(value.translation.height)
         else { return }
         withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) {
@@ -258,15 +269,17 @@ struct WatchPageView: View {
     }
   }
 
-  // A tap inside the player only navigates when Coop would serve the video;
-  // everything else gets a gentle nudge toward the ask flow.
+  // A tap inside the player navigates when Coop would serve the video, and
+  // otherwise lands on the channel page so the child can ask for it there.
   private func openTappedVideo(_ id: String) {
     guard id != videoID else { return }
     Task {
       if (try? await model.video(id: id)) != nil {
         tappedVideo = TappedVideo(id: id)
+      } else if let channelID = await model.channelForVideo(id: id) {
+        tappedChannel = TappedChannel(id: channelID, promptedByVideoID: id)
       } else {
-        model.errorMessage = "That video isn't in your Coop yet. Try searching for it to ask!"
+        model.errorMessage = "That video isn't in your Coop yet."
       }
     }
   }
@@ -427,4 +440,10 @@ struct WatchPageView: View {
 /// A video the child tapped inside the embedded player.
 struct TappedVideo: Identifiable, Hashable {
   let id: String
+}
+
+/// The channel behind an unwatchable tapped video, headed for the ask flow.
+struct TappedChannel: Identifiable, Hashable {
+  let id: String
+  let promptedByVideoID: String
 }

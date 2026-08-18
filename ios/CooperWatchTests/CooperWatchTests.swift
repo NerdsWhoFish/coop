@@ -54,13 +54,14 @@ func shortPlaybackRejectsUnexpectedHost() {
   #expect(url == nil)
 }
 
-@Test("YouTube embeds always autoplay inline")
+@Test("YouTube embeds always autoplay inline with the player API enabled")
 func youtubeEmbedPlaybackURL() throws {
   let playbackURL = try #require(
     YouTubeEmbedRequest.playbackURL(
       for: URL(
         string: "https://www.youtube-nocookie.com/embed/abc123?rel=0&autoplay=0&playsinline=0"
-      )!
+      )!,
+      origin: URL(string: "https://coop.example.net")!
     )
   )
   let components = try #require(
@@ -72,18 +73,23 @@ func youtubeEmbedPlaybackURL() throws {
   #expect(query["rel"] == "0")
   #expect(query["autoplay"] == "1")
   #expect(query["playsinline"] == "1")
+  #expect(query["enablejsapi"] == "1")
+  #expect(query["origin"] == "https://coop.example.net")
 }
 
 @Test("YouTube embeds reject untrusted player URLs")
 func youtubeEmbedRejectsUnexpectedURLs() {
+  let origin = URL(string: "https://coop.example.net")!
   #expect(
     YouTubeEmbedRequest.playbackURL(
-      for: URL(string: "http://www.youtube-nocookie.com/embed/abc123")!
+      for: URL(string: "http://www.youtube-nocookie.com/embed/abc123")!,
+      origin: origin
     ) == nil
   )
   #expect(
     YouTubeEmbedRequest.playbackURL(
-      for: URL(string: "https://www.youtube.com/embed/abc123")!
+      for: URL(string: "https://www.youtube.com/embed/abc123")!,
+      origin: origin
     ) == nil
   )
 }

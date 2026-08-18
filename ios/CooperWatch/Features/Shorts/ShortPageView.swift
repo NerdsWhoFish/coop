@@ -15,6 +15,7 @@ struct ShortPageView: View {
   @State private var startedAt: Date?
   @State private var playerIsReady = false
   @State private var tappedVideo: TappedVideo?
+  @State private var tappedChannel: TappedChannel?
 
   private var accent: Color {
     let colors = [WatchTheme.cyan, WatchTheme.pink, WatchTheme.purple, WatchTheme.green]
@@ -59,6 +60,13 @@ struct ShortPageView: View {
     .navigationDestination(item: $tappedVideo) { tapped in
       WatchPageView(videoID: tapped.id, model: model)
     }
+    .navigationDestination(item: $tappedChannel) { tapped in
+      ChannelPageView(
+        channelID: tapped.id,
+        promptedByVideoID: tapped.promptedByVideoID,
+        model: model
+      )
+    }
     .animation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0.12), value: isActive)
   }
 
@@ -67,8 +75,10 @@ struct ShortPageView: View {
     Task {
       if (try? await model.video(id: id)) != nil {
         tappedVideo = TappedVideo(id: id)
+      } else if let channelID = await model.channelForVideo(id: id) {
+        tappedChannel = TappedChannel(id: channelID, promptedByVideoID: id)
       } else {
-        loadError = "That video isn't in your Coop yet. Try searching for it to ask!"
+        loadError = "That video isn't in your Coop yet."
       }
     }
   }

@@ -704,6 +704,19 @@ public actor CoopAPI {
     }
   }
 
+  /// The channel behind a tapped video, or nil when Coop will not reveal it.
+  public func locateVideoChannel(id: String) async throws -> String? {
+    let path = Operations.LocateVideoChannel.Input.Path(videoId: id)
+    switch try await client.locateVideoChannel(path: path) {
+    case .ok(let response):
+      return try response.body.json.channelId
+    case .notFound:
+      return nil
+    default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func registerChildPushToken(_ token: String) async throws {
     let payload = Components.Schemas.PushTokenBody(token: token)
     guard case .noContent = try await client.saveChildPushToken(body: .json(payload)) else {
