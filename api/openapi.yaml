@@ -1392,6 +1392,31 @@ paths:
               schema: { $ref: "#/components/schemas/WatchPage" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /child/videos/{videoId}/channel:
+    parameters:
+      - $ref: "#/components/parameters/VideoId"
+    get:
+      operationId: locateVideoChannel
+      tags: [child-browse]
+      summary: The channel behind a tapped video, for the ask flow
+      description: |
+        Resolves a video the child tapped inside the player to its channel so
+        an unwatchable link can land on the channel page and its request
+        affordance. Videos on blocked channels read as not found.
+      security:
+        - childToken: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channelId]
+                properties:
+                  channelId: { $ref: "#/components/schemas/ChannelId" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /child/videos/{videoId}/reaction:
     parameters:
       - $ref: "#/components/parameters/VideoId"

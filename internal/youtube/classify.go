@@ -31,6 +31,11 @@ var channelIDPattern = regexp.MustCompile(`^UC[A-Za-z0-9_-]{22}$`)
 // ValidChannelID reports whether s is a well-formed YouTube channel ID.
 func ValidChannelID(s string) bool { return channelIDPattern.MatchString(s) }
 
+var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+
+// ValidVideoID reports whether s is a well-formed YouTube video ID.
+func ValidVideoID(s string) bool { return videoIDPattern.MatchString(s) }
+
 // ClassifyLive turns the two independent live signals into one state.
 // liveBroadcastContent alone is not enough: a finished stream reverts it to
 // "none" while keeping liveStreamingDetails, so archived streams would slip in.

@@ -600,6 +600,59 @@ func (s *Server) handleRaiseRequest(w http.ResponseWriter, r *http.Request, c au
 	return nil
 }
 
+// handleLocateVideoChannel resolves a tapped, unwatchable video to its channel
+// so the child lands on the ask page instead of a dead end. Blocked channels
+// read as not found, the same opacity the watch endpoint keeps.
+func (s *Server) handleLocateVideoChannel(w http.ResponseWriter, r *http.Request,
+	c auth.Child) error {
+
+	videoID := r.PathValue("videoId")
+	if !youtube.ValidVideoID(videoID) {
+		return badRequest("malformed video id")
+	}
+
+	channelID := ""
+	video, err := s.deps.Catalog.Video(r.Context(), videoID)
+	switch {
+	case err == nil:
+		channelID = video.ChannelID
+	case !errors.Is(err, store.ErrNotFound):
+		return err
+	default:
+		client, err := s.youtubeFor(r.Context(), c.FamilyID)
+		if err != nil {
+			return err
+		}
+		fetched, err := client.Videos(r.Context(), []string{videoID}, domain.PurposeFeed)
+		if err != nil {
+			return err
+		}
+		if len(fetched) == 0 {
+			return notFound()
+		}
+		channelID = fetched[0].ChannelID
+		// Catalog the branding the channel page needs, then the video so a
+		// raised request can carry it as context for the reviewing parent.
+		if err := s.ensureChannel(r.Context(), c.FamilyID, channelID); err != nil {
+			return err
+		}
+		if err := s.deps.Catalog.UpsertVideos(r.Context(), fetched); err != nil {
+			return err
+		}
+	}
+
+	evaluator, err := s.deps.Rules.Evaluator(r.Context(), c.FamilyID, c.ID)
+	if err != nil {
+		return err
+	}
+	if evaluator.Channel(channelID) == domain.StateBlocked {
+		return notFound()
+	}
+
+	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]string{"channelId": channelID})
+	return nil
+}
+
 // videoDTOs decorates videos with their channel titles in one lookup, rather
 // than a query per row.
 func (s *Server) videoDTOs(r *http.Request, videos []store.Video) ([]videoDTO, error) {

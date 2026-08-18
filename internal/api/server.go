@@ -197,6 +197,7 @@ func (s *Server) routes() {
 	child("GET /api/v1/child/channels/{channelId}", s.handleChildChannel)
 	child("GET /api/v1/child/search", s.handleChildSearch)
 	child("GET /api/v1/child/videos/{videoId}", s.handleWatch)
+	child("GET /api/v1/child/videos/{videoId}/channel", s.handleLocateVideoChannel)
 	child("PUT /api/v1/child/videos/{videoId}/reaction", s.handleSetReaction)
 	child("DELETE /api/v1/child/videos/{videoId}/reaction", s.handleClearReaction)
 	child("POST /api/v1/child/videos/{videoId}/watch", s.handleRecordWatch)
