@@ -32,7 +32,7 @@ export const api = {
   me: () => request<ChildProfile>('/child/me'),
   feed: () => request<{ items: Video[] }>('/child/feed?limit=60').then(x => x.items),
   discovery: () => request<{ items: Discovery[] }>('/child/discovery?limit=12').then(x => x.items),
-  shorts: (session: string) => request<{ items: Video[] }>(`/child/shorts?limit=40&session=${encodeURIComponent(session)}`).then(x => x.items),
+  shorts: (session: string, offset = 0, limit = 8) => request<{ items: Video[] }>(`/child/shorts?limit=${limit}&offset=${offset}&session=${encodeURIComponent(session)}`).then(x => x.items),
   subscriptions: () => request<Channel[]>('/child/subscriptions'),
   channel: (id: string) => request<ChannelPage>(`/child/channels/${encodeURIComponent(id)}`),
   search: (query: string, channelId?: string) => request<SearchResults>(

@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   ArrowLeft, Bell, Check, ChevronRight, Compass, Heart, Home as HomeIcon, LoaderCircle,
-  LockKeyhole, LogOut, Menu, Play, Search, Share2, Sparkles, ThumbsDown, ThumbsUp,
+  LockKeyhole, Menu, Play, RefreshCw, Search, Share2, Sparkles, ThumbsDown, ThumbsUp,
   TvMinimalPlay, Users, X,
 } from 'lucide-react'
 import { api, APIError } from './api'
 import type { Channel, ChannelPage, ChildProfile, ChildRequest, Discovery, Video, WatchPage as WatchData, WebLink } from './types'
+import { usePlaybackLease } from './usePlaybackLease'
+import { YouTubePlayer } from './YouTubePlayer'
+import { DeviceSessionAction } from './DeviceSessionAction'
 
 function App() {
   const [profile, setProfile] = useState<ChildProfile | null>(null)
@@ -26,7 +29,7 @@ function App() {
   useEffect(() => { void Promise.resolve().then(restore) }, [restore])
   if (loading) return <Splash />
   if (!profile) return <LinkDevice onLinked={setProfile} />
-  return <Shell profile={profile} onLogout={() => setProfile(null)} error={error} clearError={() => setError(null)} setError={setError} />
+  return <Shell profile={profile} onProfile={setProfile} onLogout={() => setProfile(null)} error={error} clearError={() => setError(null)} setError={setError} />
 }
 
 function Splash() {
@@ -107,13 +110,28 @@ function LinkDevice({ onLinked }: { onLinked: (profile: ChildProfile) => void })
   </main>
 }
 
-type ShellProps = { profile: ChildProfile; onLogout: () => void; error: string | null; clearError: () => void; setError: (text: string) => void }
-function Shell({ profile, onLogout, error, clearError, setError }: ShellProps) {
+type ShellProps = { profile: ChildProfile; onProfile: (profile: ChildProfile) => void; onLogout: () => void; error: string | null; clearError: () => void; setError: (text: string) => void }
+function Shell({ profile, onProfile, onLogout, error, clearError, setError }: ShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const refreshProfile = useCallback(() => api.me().then(onProfile), [onProfile])
   useEffect(() => { window.scrollTo(0, 0) }, [location.pathname, location.search])
-  async function logout() { try { await api.logout() } finally { onLogout(); navigate('/') } }
+  useEffect(() => {
+    const refreshOnFocus = () => { void refreshProfile().catch(() => {}) }
+    window.addEventListener('focus', refreshOnFocus)
+    return () => window.removeEventListener('focus', refreshOnFocus)
+  }, [refreshProfile])
+  async function logout() {
+    try {
+      await api.logout()
+      onLogout()
+      navigate('/')
+    } catch (cause) {
+      setMenuOpen(false)
+      setError(message(cause))
+    }
+  }
   const nav = [
     ['/', 'Home', HomeIcon],
     ...(profile.shortsEnabled ? [['/shorts', 'Shorts', Sparkles] as const] : []),
@@ -121,20 +139,21 @@ function Shell({ profile, onLogout, error, clearError, setError }: ShellProps) {
     ['/search', 'Search', Search],
   ] as const
   const viewing = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/channel/')
+  const immersive = location.pathname === '/shorts'
   return <div className="app-shell">
     <header className="topbar">
       <Link to="/" className="brand-lockup"><div className="coop-mark small"><Play fill="currentColor" /></div><span>COOPER WATCH</span></Link>
       <nav className="desktop-nav" aria-label="Main navigation">{nav.map(([to, label, Icon]) => <NavLink key={to} to={to} end={to === '/'}><Icon />{label}</NavLink>)}</nav>
       <button className="profile-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}><span>{profile.name.slice(0, 1)}</span><Menu /></button>
-      {menuOpen && <div className="profile-menu"><strong>{profile.name}</strong><small>This computer</small><button onClick={() => void logout()}><LogOut /> Sign out this device</button></div>}
+      {menuOpen && <div className="profile-menu"><strong>{profile.name}</strong><small>This computer</small><DeviceSessionAction allowSelfUnpair={profile.allowSelfUnpair} onLogout={() => void logout()} /></div>}
     </header>
-    <main className={viewing ? 'content viewing' : 'content'}>
+    <main className={`content${viewing ? ' viewing' : ''}${immersive ? ' immersive' : ''}`}>
       <Routes>
-        <Route path="/" element={<HomePage profile={profile} setError={setError} />} />
+        <Route path="/" element={<HomePage profile={profile} onProfile={onProfile} setError={setError} />} />
         <Route path="/shorts" element={profile.shortsEnabled ? <ShortsPage setError={setError} /> : <Navigate to="/" />} />
-        <Route path="/subscriptions" element={<SubscriptionsPage setError={setError} />} />
-        <Route path="/search" element={<SearchPage setError={setError} />} />
-        <Route path="/channel/:id" element={<ChannelView setError={setError} />} />
+        <Route path="/subscriptions" element={<SubscriptionsPage onProfile={onProfile} setError={setError} />} />
+        <Route path="/search" element={<SearchPage profile={profile} setError={setError} />} />
+        <Route path="/channel/:id" element={<ChannelView profile={profile} setError={setError} />} />
         <Route path="/watch/:id" element={<WatchPage setError={setError} />} />
         <Route path="/requests" element={<RequestsPage setError={setError} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -145,20 +164,22 @@ function Shell({ profile, onLogout, error, clearError, setError }: ShellProps) {
   </div>
 }
 
-function HomePage({ profile, setError }: { profile: ChildProfile; setError: (s: string) => void }) {
+function HomePage({ profile, onProfile, setError }: { profile: ChildProfile; onProfile: (profile: ChildProfile) => void; setError: (s: string) => void }) {
   const [feed, setFeed] = useState<Video[]>([]), [subscriptions, setSubscriptions] = useState<Channel[]>([]), [discoveries, setDiscoveries] = useState<Discovery[]>([])
   const [loading, setLoading] = useState(true)
+  const [phoneSection, setPhoneSection] = useState<'recommendations' | 'subscriptions' | 'discover'>('recommendations')
   const load = useCallback(async () => {
     setLoading(true)
-    try { const [f, s, d] = await Promise.all([api.feed(), api.subscriptions(), api.discovery().catch(() => [])]); setFeed(f); setSubscriptions(s); setDiscoveries(d) }
+    try { const [f, s, d, nextProfile] = await Promise.all([api.feed(), api.subscriptions(), api.discovery().catch(() => []), api.me()]); setFeed(f); setSubscriptions(s); setDiscoveries(d); onProfile(nextProfile) }
     catch (cause) { setError(message(cause)) } finally { setLoading(false) }
-  }, [setError])
+  }, [onProfile, setError])
   useEffect(() => { void Promise.resolve().then(load) }, [load])
   const followed = new Set(subscriptions.map(channel => channel.id))
   const subscriptionVideos = feed.filter(video => followed.has(video.channelId))
   return <>
-    <PageHeading eyebrow="YOUR COOP" title={`Hey, ${profile.name}!`} action={<Link className="icon-action" to="/requests"><Bell /><span>Requests</span></Link>} />
-    {loading ? <ShelfSkeletons /> : <div className="shelves">
+    <PageHeading eyebrow="YOUR COOP" title={`Hey, ${profile.name}!`} action={<div className="heading-actions"><button className="icon-action" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} /><span>Refresh</span></button><Link className="icon-action" to="/requests"><Bell /><span>Requests</span></Link></div>} />
+    <div className="home-section-picker" role="tablist" aria-label="Home sections">{(['recommendations', 'subscriptions', 'discover'] as const).map(section => <button key={section} role="tab" aria-selected={phoneSection === section} onClick={() => setPhoneSection(section)}>{section === 'discover' ? 'Discover' : section[0].toUpperCase() + section.slice(1)}</button>)}</div>
+    {loading ? <ShelfSkeletons /> : <div className="shelves" data-phone-section={phoneSection}>
       <VideoShelf title="Recommendations" icon={<Sparkles />} videos={feed} empty="Recommendations will show up as you watch." />
       <VideoShelf title="Subscriptions" icon={<Heart />} videos={subscriptionVideos} empty="Subscribe to a channel to keep its videos here." />
       <DiscoveryShelf discoveries={discoveries} />
@@ -174,50 +195,71 @@ function VideoShelf({ title, icon, videos, empty }: { title: string; icon: React
 
 function DiscoveryShelf({ discoveries }: { discoveries: Discovery[] }) {
   return <section className="shelf discover"><div className="section-heading"><span><Compass /></span><h2>Discover</h2><b>NEW CHANNELS</b><i /></div>
-    {discoveries.length ? <div className="video-rail">{discoveries.map(item => <VideoCard key={item.video.id} video={item.video} reason={item.reason} locked />)}</div> : <EmptyLine text="Parent-approved new channel ideas will show up here." />}
+    <p className="section-explainer">These match what you enjoy, but a grown-up still has to unlock the channel.</p>
+    {discoveries.length ? <div className="video-rail">{discoveries.map(item => <VideoCard key={item.video.id} video={item.video} reason={item.reason} locked pendingRequest={item.pendingRequest} />)}</div> : <EmptyLine text="Parent-approved new channel ideas will show up here." />}
   </section>
 }
 
-function VideoCard({ video, reason, locked = false }: { video: Video; reason?: string; locked?: boolean }) {
-  const target = locked || video.locked ? `/channel/${video.channelId}` : `/watch/${video.id}`
+type VideoCardProps = { video: Video; reason?: string; locked?: boolean; pendingRequest?: boolean; onAsk?: () => void }
+function VideoCard({ video, reason, locked = false, pendingRequest = false, onAsk }: VideoCardProps) {
+  const isLocked = locked || video.locked
+  const target = isLocked ? `/channel/${video.channelId}?video=${encodeURIComponent(video.id)}` : `/watch/${video.id}`
   const state = locked || video.locked ? undefined : { video }
+  const artwork = <><div className="image-fallback"><Play /></div>{video.thumbnailUrl && <img src={video.thumbnailUrl} alt="" loading="lazy" onError={event => { event.currentTarget.style.display = 'none' }} />}{isLocked ? <span className={`ask-badge${pendingRequest ? ' pending' : ''}`}>{pendingRequest ? <><Check /> ASKED</> : <><LockKeyhole /> ASK</>}</span> : <span className="duration">{duration(video.durationSeconds)}</span>}</>
   return <article className="video-card">
-    <Link to={target} state={state} className="thumbnail">
-      <div className="image-fallback"><Play /></div>{video.thumbnailUrl && <img src={video.thumbnailUrl} alt="" loading="lazy" onError={event => { event.currentTarget.style.display = 'none' }} />}
-      {(locked || video.locked) ? <span className="ask-badge"><LockKeyhole /> ASK</span> : <span className="duration">{duration(video.durationSeconds)}</span>}
-    </Link>
-    <div className="video-info"><Link className="video-title" to={target} state={state}>{video.title}</Link>
-      <Link className="channel-link" to={`/channel/${video.channelId}`}>{video.channelTitle ?? 'Channel'}</Link>{reason && <small>{reason}</small>}
+    {isLocked && onAsk ? <button className="thumbnail" onClick={onAsk} disabled={pendingRequest} aria-label={pendingRequest ? `Already asked for ${video.title}` : `Ask to watch ${video.title}`}>{artwork}</button> : <Link to={target} state={state} className="thumbnail">{artwork}</Link>}
+    <div className="video-info">{isLocked && onAsk ? <button className="video-title text-link" onClick={onAsk} disabled={pendingRequest}>{video.title}</button> : <Link className="video-title" to={target} state={state}>{video.title}</Link>}
+      <Link className="channel-link" to={`/channel/${video.channelId}?video=${encodeURIComponent(video.id)}`}>{video.channelTitle ?? 'Channel'}</Link>{reason && <small>{reason}</small>}{isLocked && <small className={pendingRequest ? 'request-waiting' : 'request-preview'}>{pendingRequest ? 'Waiting for a grown-up' : 'Preview channel'}</small>}
     </div>
   </article>
 }
 
-function SubscriptionsPage({ setError }: { setError: (s: string) => void }) {
+function SubscriptionsPage({ onProfile, setError }: { onProfile: (profile: ChildProfile) => void; setError: (s: string) => void }) {
   const [channels, setChannels] = useState<Channel[]>([]), [loading, setLoading] = useState(true)
-  useEffect(() => { api.subscriptions().then(setChannels).catch(c => setError(message(c))).finally(() => setLoading(false)) }, [setError])
-  return <><PageHeading eyebrow="YOUR FAVORITES" title="Subscriptions" />{loading ? <ShelfSkeletons /> : channels.length ? <div className="channel-grid">{channels.map(channel => <ChannelCard key={channel.id} channel={channel} />)}</div> : <EmptyState icon={<Users />} title="No subscriptions yet" text="Open an approved channel and tap Subscribe." />}</>
+  const load = useCallback(async () => {
+    setLoading(true)
+    try { const [nextChannels, nextProfile] = await Promise.all([api.subscriptions(), api.me()]); setChannels(nextChannels); onProfile(nextProfile) }
+    catch (cause) { setError(message(cause)) }
+    finally { setLoading(false) }
+  }, [onProfile, setError])
+  useEffect(() => { void Promise.resolve().then(load) }, [load])
+  return <><PageHeading eyebrow="YOUR FAVORITES" title="Subscriptions" action={<RefreshButton loading={loading} onRefresh={load} />} />{loading ? <ShelfSkeletons /> : channels.length ? <div className="channel-grid">{channels.map(channel => <ChannelCard key={channel.id} channel={channel} />)}</div> : <EmptyState icon={<Users />} title="No subscriptions yet" text="Open an approved channel and tap Subscribe." />}</>
 }
 
 function ChannelCard({ channel }: { channel: Channel }) {
-  return <Link className="channel-card" to={`/channel/${channel.id}`}><div className="channel-avatar"><span>{channel.title.slice(0, 1)}</span>{channel.thumbnailUrl && <img src={channel.thumbnailUrl} alt="" onError={event => { event.currentTarget.style.display = 'none' }} />}</div><div><strong>{channel.title}</strong><span>Open channel <ChevronRight /></span></div></Link>
+  const requestable = channel.state === 'requestable'
+  return <Link className="channel-card" to={`/channel/${channel.id}`}><div className="channel-avatar"><span>{channel.title.slice(0, 1)}</span>{channel.thumbnailUrl && <img src={channel.thumbnailUrl} alt="" onError={event => { event.currentTarget.style.display = 'none' }} />}</div><div><strong>{channel.title}</strong><span>{requestable ? channel.pendingRequest ? <><Check /> Asked</> : <><LockKeyhole /> Ask a parent</> : <>Open channel <ChevronRight /></>}</span></div></Link>
 }
 
-function SearchPage({ setError }: { setError: (s: string) => void }) {
+function SearchPage({ profile, setError }: { profile: ChildProfile; setError: (s: string) => void }) {
   const [params, setParams] = useSearchParams(), query = params.get('q') ?? '', channelId = params.get('channel') ?? undefined, channelTitle = params.get('channelName') ?? undefined
-  const [draft, setDraft] = useState(query), [channels, setChannels] = useState<Channel[]>([]), [videos, setVideos] = useState<Video[]>([]), [loading, setLoading] = useState(false)
-  useEffect(() => { void Promise.resolve().then(() => { setDraft(query); if (!query) { setChannels([]); setVideos([]); return }; setLoading(true); return api.search(query, channelId).then(result => { setChannels(result.channels); setVideos(result.videos) }).catch(c => setError(message(c))).finally(() => setLoading(false)) }) }, [query, channelId, setError])
+  const [draft, setDraft] = useState(query), [channels, setChannels] = useState<Channel[]>([]), [videos, setVideos] = useState<Video[]>([]), [loading, setLoading] = useState(false), [askedChannels, setAskedChannels] = useState<Set<string>>(new Set())
+  const search = useCallback(() => {
+    if (!query) { setChannels([]); setVideos([]); return Promise.resolve() }
+    setLoading(true)
+    return api.search(query, channelId).then(result => { setChannels(result.channels); setVideos(result.videos) }).catch(c => setError(message(c))).finally(() => setLoading(false))
+  }, [query, channelId, setError])
+  useEffect(() => { void Promise.resolve().then(() => { setDraft(query); return search() }) }, [query, search])
   function submit(event: React.FormEvent) { event.preventDefault(); setParams({ q: draft, ...(channelId ? { channel: channelId, channelName: channelTitle ?? '' } : {}) }) }
-  return <><PageHeading eyebrow={channelTitle ? `SEARCHING ${channelTitle.toUpperCase()}` : 'FIND SOMETHING'} title={channelTitle ? `Videos from ${channelTitle}` : 'Search'} />
+  async function ask(video: Video) {
+    try {
+      await api.ask(video.channelId, video.id)
+      setAskedChannels(current => new Set(current).add(video.channelId))
+    } catch (cause) { setError(message(cause)) }
+  }
+  if (channelId && !profile.videoSearchTiles) return <Navigate to={`/channel/${channelId}`} replace />
+  return <><PageHeading eyebrow={channelTitle ? `SEARCHING ${channelTitle.toUpperCase()}` : 'FIND SOMETHING'} title={channelTitle ? `Videos from ${channelTitle}` : 'Search'} action={query ? <RefreshButton loading={loading} onRefresh={search} /> : undefined} />
     <form className="search-box" onSubmit={submit}><Search /><input value={draft} onChange={e => setDraft(e.target.value)} placeholder={channelTitle ? `Search ${channelTitle}` : 'Channels and videos'} aria-label="Search channels and videos" /><button>Search</button></form>
     {channelId && <Link className="scope-chip" to={`/channel/${channelId}`}><ArrowLeft /> Back to {channelTitle}</Link>}
-    {loading ? <ShelfSkeletons /> : query ? <div className="search-results">{channels.length > 0 && <section><h2>Channels</h2><div className="channel-grid">{channels.map(c => <ChannelCard key={c.id} channel={c} />)}</div></section>}<section><h2>Videos</h2>{videos.length ? <div className="video-grid">{videos.map(v => <VideoCard key={v.id} video={v} locked={v.locked} />)}</div> : <EmptyLine text="No videos found. Try another search." />}</section></div> : <EmptyState icon={<Search />} title="What sounds good?" text="Search approved videos and channels. New channels stay locked until a parent says yes." />}
+    {loading ? <ShelfSkeletons /> : query ? <div className="search-results">{channels.length > 0 && <section><h2>Channels</h2><div className="channel-grid">{channels.map(c => <ChannelCard key={c.id} channel={c} />)}</div></section>}<section><h2>Videos</h2>{videos.length ? <div className="video-grid">{videos.map(v => <VideoCard key={v.id} video={v} locked={v.locked} pendingRequest={askedChannels.has(v.channelId)} onAsk={v.locked ? () => void ask(v) : undefined} />)}</div> : <EmptyLine text="No videos found. Try another search." />}</section></div> : <EmptyState icon={<Search />} title="What sounds good?" text="Search approved videos and channels. New channels stay locked until a parent says yes." />}
   </>
 }
 
-function ChannelView({ setError }: { setError: (s: string) => void }) {
-  const { id = '' } = useParams(), [page, setPage] = useState<ChannelPage | null>(null), [working, setWorking] = useState(false)
+function ChannelView({ profile, setError }: { profile: ChildProfile; setError: (s: string) => void }) {
+  const { id = '' } = useParams(), [params] = useSearchParams(), promptedByVideoId = params.get('video') ?? undefined
+  const [page, setPage] = useState<ChannelPage | null>(null), [working, setWorking] = useState(false), [refreshing, setRefreshing] = useState(false)
   const load = useCallback(() => api.channel(id).then(setPage).catch(c => setError(message(c))), [id, setError])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void Promise.resolve().then(load) }, [load])
   if (!page) return <ShelfSkeletons />
   async function toggle() {
     if (!page) return
@@ -230,16 +272,16 @@ function ChannelView({ setError }: { setError: (s: string) => void }) {
     if (!page) return
     const current = page
     setWorking(true)
-    try { await api.ask(id); setPage({ ...current, pendingRequest: true }) }
+    try { await api.ask(id, promptedByVideoId); setPage({ ...current, pendingRequest: true }) }
     catch (c) { setError(message(c)) } finally { setWorking(false) }
   }
   return <>
-    <Link to="/" className="back-link"><ArrowLeft /> Home</Link>
+    <div className="channel-toolbar"><Link to="/" className="back-link"><ArrowLeft /> Home</Link><RefreshButton loading={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false) }} /></div>
     <section className="channel-hero" style={page.channel.bannerUrl ? { backgroundImage: `linear-gradient(90deg, #282a36 15%, transparent), url(${page.channel.bannerUrl})` } : undefined}>
       <div className="channel-avatar large">{page.channel.thumbnailUrl ? <img src={page.channel.thumbnailUrl} alt="" /> : page.channel.title.slice(0, 1)}</div>
       <div><p className="eyebrow">CHANNEL</p><h1>{page.channel.title}</h1><p>{page.channel.description || 'Videos from this channel.'}</p><div className="button-row">
         {page.state === 'allowed' ? <button className={page.subscribed ? 'secondary selected' : 'primary'} onClick={() => void toggle()} disabled={working}>{page.subscribed ? <><Check /> Subscribed</> : 'Subscribe'}</button> : <button className="ask-button" onClick={() => void ask()} disabled={working || page.pendingRequest}>{page.pendingRequest ? <><Check /> Asked</> : <><LockKeyhole /> Ask a parent</>}</button>}
-        <Link className="secondary" to={`/search?channel=${id}&channelName=${encodeURIComponent(page.channel.title)}`}><Search /> Search channel</Link>
+        {profile.videoSearchTiles && <Link className="secondary" to={`/search?channel=${id}&channelName=${encodeURIComponent(page.channel.title)}`}><Search /> Search channel</Link>}
       </div></div>
     </section>
     {page.state === 'allowed' && <section className="shelf"><div className="section-heading"><span><Play /></span><h2>Videos</h2><i /></div>{page.videos.length ? <div className="video-grid">{page.videos.map(v => <VideoCard key={v.id} video={v} />)}</div> : <EmptyLine text="No videos have arrived yet." />}</section>}
@@ -253,28 +295,23 @@ function WatchPage({ setError }: { setError: (s: string) => void }) {
 
 function WatchPageContent({ id, setError }: { id: string; setError: (s: string) => void }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const pendingVideo = (location.state as { video?: Video } | null)?.video
-  const [page, setPage] = useState<WatchData | null>(null), [related, setRelated] = useState<Video[]>([]), [subscribed, setSubscribed] = useState(false)
-  const seconds = useRef(0)
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([api.watch(id), api.feed(), api.discovery().catch(() => []), api.subscriptions()])
-      .then(([watch, feed, discoveries, subs]) => {
-        if (cancelled) return
-        setPage(watch)
-        setRelated([...feed.filter(v => v.id !== id).slice(0, 6), ...discoveries.map(item => ({ ...item.video, locked: true })).slice(0, 6)])
-        setSubscribed(subs.some(c => c.id === watch.video.channelId))
-      })
-      .catch(c => { if (!cancelled) setError(message(c)) })
-    return () => { cancelled = true }
+  const [page, setPage] = useState<WatchData | null>(null), [related, setRelated] = useState<Video[]>([]), [discoveries, setDiscoveries] = useState<Discovery[]>([]), [subscribed, setSubscribed] = useState(false), [refreshing, setRefreshing] = useState(false)
+  const blocked = useCallback(() => navigate('/', { replace: true }), [navigate])
+  usePlaybackLease({ videoId: id, active: page !== null, onBlocked: blocked, onError: setError })
+  const load = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const [watch, feed, discovered, subs] = await Promise.all([api.watch(id), api.feed(), api.discovery().catch(() => []), api.subscriptions()])
+      setPage(watch)
+      setRelated(feed.filter(v => v.id !== id).slice(0, 12))
+      setDiscoveries(discovered.filter(item => item.video.id !== id).slice(0, 4))
+      setSubscribed(subs.some(c => c.id === watch.video.channelId))
+    } catch (cause) { setError(message(cause)) }
+    finally { setRefreshing(false) }
   }, [id, setError])
-  useEffect(() => {
-    const startedAt = new Date().toISOString()
-    seconds.current = 0
-    void api.playback(id, 'started').catch(c => setError(message(c)))
-    const timer = window.setInterval(() => { seconds.current += 15; void api.playback(id, 'heartbeat').then(result => { if (!result.allowed) window.location.assign('/') }).catch(() => {}) }, 15000)
-    return () => { window.clearInterval(timer); void api.playback(id, 'stopped'); void api.recordWatch(id, startedAt, seconds.current) }
-  }, [id, setError])
+  useEffect(() => { void Promise.resolve().then(load) }, [load])
   if (!page) return <div className="player-loading" style={pendingVideo?.thumbnailUrl ? { backgroundImage: `url(${pendingVideo.thumbnailUrl})` } : undefined}><div><LoaderCircle className="spin" /><span>Getting the video ready…</span></div></div>
   async function react(kind: 'like' | 'dislike') {
     if (!page) return
@@ -287,23 +324,61 @@ function WatchPageContent({ id, setError }: { id: string; setError: (s: string) 
   }
   return <div className="watch-layout">
     <section className="watch-main">
-      <div className="player-shell" style={{ backgroundImage: `url(${page.video.thumbnailUrl ?? ''})` }}><iframe src={`${page.embedUrl}&origin=${encodeURIComponent(window.location.origin)}&playsinline=1`} title={page.video.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div>
-      <h1>{page.video.title}</h1><div className="watch-meta"><Link to={`/channel/${page.video.channelId}`}>{page.video.channelTitle ?? 'Channel'}</Link><div className="watch-actions"><button className={page.reaction === 'like' ? 'active' : ''} onClick={() => void react('like')}><ThumbsUp /> Like</button><button className={page.reaction === 'dislike' ? 'active' : ''} onClick={() => void react('dislike')}><ThumbsDown /> Not for me</button><button className={subscribed ? 'active' : ''} onClick={() => void subscribe()}>{subscribed ? <Check /> : <Heart />} {subscribed ? 'Subscribed' : 'Subscribe'}</button><a href={page.shareUrl} target="_blank" rel="noreferrer"><Share2 /> Share</a></div></div>
+      <div className="player-shell"><YouTubePlayer embedUrl={page.embedUrl} title={page.video.title} thumbnailUrl={page.video.thumbnailUrl} /></div>
+      <h1>{page.video.title}</h1><div className="watch-meta"><Link to={`/channel/${page.video.channelId}`}>{page.video.channelTitle ?? 'Channel'}</Link><div className="watch-actions"><button className={page.reaction === 'like' ? 'active' : ''} onClick={() => void react('like')}><ThumbsUp /> Like</button><button className={page.reaction === 'dislike' ? 'active' : ''} onClick={() => void react('dislike')}><ThumbsDown /> Not for me</button><button className={subscribed ? 'active' : ''} onClick={() => void subscribe()}>{subscribed ? <Check /> : <Heart />} {subscribed ? 'Subscribed' : 'Subscribe'}</button><ShareAction url={page.shareUrl} title={page.video.title} /></div></div>
+      <RefreshButton loading={refreshing} onRefresh={load} label="Refresh this video" />
     </section>
-    <aside className="up-next"><p className="eyebrow">KEEP WATCHING</p><h2>Up next</h2><div className="related-list">{related.map(v => <VideoCard key={v.id} video={v} />)}</div></aside>
+    <aside className="up-next"><p className="eyebrow">KEEP WATCHING</p><h2>Watch next</h2><div className="related-list">{related.map(v => <VideoCard key={v.id} video={v} />)}</div>{discoveries.length > 0 && <><h2 className="explore-next">Explore next</h2><div className="related-list">{discoveries.map(item => <VideoCard key={item.video.id} video={item.video} reason={item.reason} locked pendingRequest={item.pendingRequest} />)}</div></>}</aside>
   </div>
 }
 
 function ShortsPage({ setError }: { setError: (s: string) => void }) {
   const [videos, setVideos] = useState<Video[]>([])
-  const session = useMemo(() => crypto.randomUUID(), [])
-  useEffect(() => { api.shorts(session).then(setVideos).catch(c => setError(message(c))) }, [session, setError])
-  return <div className="shorts-feed">{videos.map((video, index) => <Short key={`${video.id}-${index}`} video={video} setError={setError} />)}</div>
+  const [session, setSession] = useState(() => crypto.randomUUID())
+  const [loading, setLoading] = useState(false)
+  const nextOffset = useRef(0)
+  const loadingMore = useRef(false)
+  const hasMore = useRef(true)
+  const currentSession = useRef(session)
+  useEffect(() => { currentSession.current = session }, [session])
+  const loadMore = useCallback(async () => {
+    if (loadingMore.current || !hasMore.current) return
+    const requestedSession = session
+    loadingMore.current = true
+    setLoading(true)
+    try {
+      const page = await api.shorts(requestedSession, nextOffset.current, 8)
+      if (currentSession.current !== requestedSession) return
+      setVideos(current => [...current, ...page])
+      nextOffset.current += page.length
+      hasMore.current = page.length === 8
+    } catch (cause) { setError(message(cause)) }
+    finally {
+      if (currentSession.current === requestedSession) {
+        loadingMore.current = false
+        setLoading(false)
+      }
+    }
+  }, [session, setError])
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      setVideos([])
+      nextOffset.current = 0
+      hasMore.current = true
+      loadingMore.current = false
+      return loadMore()
+    })
+  }, [loadMore])
+  function reshuffle() { setSession(crypto.randomUUID()) }
+  function blocked(index: number) { setVideos(current => current.filter((_, candidate) => candidate !== index)) }
+  return <div className="shorts-wrap"><button className="shuffle-shorts" onClick={reshuffle} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} /> Shuffle Shorts</button><div className="shorts-feed">{videos.map((video, index) => <Short key={`${session}-${video.id}-${index}`} video={video} setError={setError} onActive={() => { if (index >= videos.length - 3) void loadMore() }} onBlocked={() => blocked(index)} />)}{loading && videos.length > 0 && <div className="shorts-loading"><LoaderCircle className="spin" /> Mixing more Shorts…</div>}{!loading && videos.length === 0 && <EmptyState icon={<Sparkles />} title="No Shorts yet" text="Approved Shorts will appear here after your channels refresh." />}</div></div>
 }
 
-function Short({ video, setError }: { video: Video; setError: (s: string) => void }) {
+function Short({ video, setError, onActive, onBlocked }: { video: Video; setError: (s: string) => void; onActive: () => void; onBlocked: () => void }) {
   const root = useRef<HTMLElement>(null), [active, setActive] = useState(false)
+  const becameActive = useEffectEvent(onActive)
   const [page, setPage] = useState<WatchData | null>(null), [reaction, setReaction] = useState<'like' | 'dislike' | undefined>()
+  usePlaybackLease({ videoId: video.id, active: active && page !== null, onBlocked, onError: setError })
   useEffect(() => {
     const node = root.current
     if (!node) return
@@ -314,45 +389,37 @@ function Short({ video, setError }: { video: Video; setError: (s: string) => voi
   useEffect(() => {
     if (!active) return
     let cancelled = false
-    let started = false
-    let watchedSeconds = 0
-    let heartbeat: number | undefined
-    const startedAt = new Date().toISOString()
-    api.watch(video.id).then(async data => {
+    becameActive()
+    api.watch(video.id).then(data => {
       if (cancelled) return
       setPage(data)
       setReaction(data.reaction)
-      await api.playback(video.id, 'started')
-      if (cancelled) {
-        void api.playback(video.id, 'stopped')
-        return
-      }
-      started = true
-      heartbeat = window.setInterval(() => {
-        watchedSeconds += 15
-        void api.playback(video.id, 'heartbeat')
-      }, 15000)
     }).catch(c => { if (!cancelled) setError(message(c)) })
-    return () => {
-      cancelled = true
-      if (heartbeat !== undefined) window.clearInterval(heartbeat)
-      if (started) {
-        void api.playback(video.id, 'stopped')
-        void api.recordWatch(video.id, startedAt, watchedSeconds)
-      }
-    }
+    return () => { cancelled = true }
   }, [active, video.id, setError])
   async function react(kind: 'like' | 'dislike') { const next = reaction === kind ? undefined : kind; try { await api.react(video.id, next); setReaction(next) } catch (c) { setError(message(c)) } }
-  return <section className="short" ref={root}><div className="short-player" style={{ backgroundImage: `url(${video.thumbnailUrl ?? ''})` }}>{active && page ? <iframe src={`${page.embedUrl}&origin=${encodeURIComponent(window.location.origin)}&playsinline=1`} title={video.title} allow="autoplay; encrypted-media" allowFullScreen /> : <LoaderCircle className="spin" />}</div>{active && <><div className="short-caption"><Link to={`/channel/${video.channelId}`}>{video.channelTitle ?? 'Channel'}</Link><strong>{video.title}</strong></div><div className="short-actions"><button className={reaction === 'like' ? 'active' : ''} onClick={() => void react('like')}><ThumbsUp /><span>Like</span></button><button className={reaction === 'dislike' ? 'active' : ''} onClick={() => void react('dislike')}><ThumbsDown /><span>Nope</span></button>{page && <a href={page.shareUrl} target="_blank" rel="noreferrer"><Share2 /><span>Share</span></a>}</div></>}</section>
+  return <section className="short" ref={root}><div className="short-player">{active && page ? <YouTubePlayer embedUrl={page.embedUrl} title={video.title} thumbnailUrl={video.thumbnailUrl} short /> : <div className="short-artwork" style={video.thumbnailUrl ? { backgroundImage: `url(${video.thumbnailUrl})` } : undefined}><LoaderCircle className="spin" /></div>}</div>{active && <><div className="short-caption"><Link to={`/channel/${video.channelId}`}>{video.channelTitle ?? 'Channel'}</Link><strong>{video.title}</strong></div><div className="short-actions"><button className={reaction === 'like' ? 'active' : ''} onClick={() => void react('like')}><ThumbsUp /><span>Like</span></button><button className={reaction === 'dislike' ? 'active' : ''} onClick={() => void react('dislike')}><ThumbsDown /><span>Not for me</span></button>{page && <ShareAction url={page.shareUrl} title={video.title} compact />}</div></>}</section>
 }
 
 function RequestsPage({ setError }: { setError: (s: string) => void }) {
-  const [requests, setRequests] = useState<ChildRequest[]>([])
-  useEffect(() => { api.requests().then(setRequests).catch(c => setError(message(c))) }, [setError])
-  return <><PageHeading eyebrow="YOUR QUESTIONS" title="Requests" />{requests.length ? <div className="request-list">{requests.map(r => <article key={r.id}><div className="channel-avatar">{r.channel.thumbnailUrl ? <img src={r.channel.thumbnailUrl} alt="" /> : r.channel.title.slice(0, 1)}</div><div><strong>{r.channel.title}</strong><small>Asked {relativeDate(r.createdAt)}</small></div><span className={`status ${r.status}`}>{r.status}</span></article>)}</div> : <EmptyState icon={<Bell />} title="No requests yet" text="When you find a new channel, you can ask a parent right from Coop." />}</>
+  const [requests, setRequests] = useState<ChildRequest[]>([]), [loading, setLoading] = useState(true)
+  const load = useCallback(() => { setLoading(true); return api.requests().then(setRequests).catch(c => setError(message(c))).finally(() => setLoading(false)) }, [setError])
+  useEffect(() => { void Promise.resolve().then(load) }, [load])
+  return <><PageHeading eyebrow="YOUR QUESTIONS" title="My asks" action={<RefreshButton loading={loading} onRefresh={load} />} />{loading ? <ShelfSkeletons /> : requests.length ? <div className="request-list">{requests.map(r => <article key={r.id}><div className="channel-avatar">{r.channel.thumbnailUrl ? <img src={r.channel.thumbnailUrl} alt="" /> : r.channel.title.slice(0, 1)}</div><div><strong>{r.channel.title}</strong><small>Asked {relativeDate(r.createdAt)}</small></div><span className={`status ${r.status}`}>{requestLabel(r.status)}</span></article>)}</div> : <EmptyState icon={<Bell />} title="No asks yet" text="When you ask for a locked channel, its answer will show up here." />}</>
 }
 
 function PageHeading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) { return <header className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div>{action}</header> }
+function RefreshButton({ loading, onRefresh, label = 'Refresh' }: { loading: boolean; onRefresh: () => void | Promise<unknown>; label?: string }) { return <button className="icon-action refresh-button" onClick={() => void onRefresh()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} /><span>{label}</span></button> }
+function ShareAction({ url, title, compact = false }: { url: string; title: string; compact?: boolean }) {
+  async function share() {
+    if (navigator.share) {
+      try { await navigator.share({ title, url }) } catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) window.open(url, '_blank', 'noopener,noreferrer') }
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  return <button onClick={() => void share()} aria-label={`Share ${title}`}><Share2 />{compact ? <span>Share</span> : ' Share'}</button>
+}
 function InlineError({ text }: { text: string }) { return <p className="inline-error" role="alert">{text}</p> }
 function EmptyLine({ text }: { text: string }) { return <div className="empty-line"><span>{text}</span></div> }
 function EmptyState({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <div className="empty-state"><span>{icon}</span><h2>{title}</h2><p>{text}</p></div> }
@@ -360,6 +427,7 @@ function ShelfSkeletons() { return <div className="skeletons" aria-label="Loadin
 function message(cause: unknown) { return cause instanceof Error ? cause.message : 'Coop could not finish that.' }
 function duration(total: number) { const minutes = Math.floor(total / 60), seconds = total % 60; return `${minutes}:${seconds.toString().padStart(2, '0')}` }
 function relativeDate(value: string) { const days = Math.floor((Date.now() - Date.parse(value)) / 86400000); return days < 1 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago` }
+function requestLabel(status: ChildRequest['status']) { return status === 'pending' ? 'Waiting' : status === 'approved' ? 'Approved' : 'Not this time' }
 function browserName() { const ua = navigator.userAgent; if (ua.includes('Edg')) return 'Edge'; if (ua.includes('Firefox')) return 'Firefox'; if (ua.includes('Chrome')) return 'Chrome'; if (ua.includes('Safari')) return 'Safari'; return 'Browser' }
 function platformName() { const ua = navigator.userAgent; if (ua.includes('Mac')) return 'Mac'; if (ua.includes('Windows')) return 'Windows'; if (ua.includes('Linux')) return 'Linux'; return 'computer' }
 

@@ -234,6 +234,13 @@ func webLinkApproval(r *http.Request) (uuid.UUID, string, error) {
 }
 
 func (s *Server) handleWebLogout(w http.ResponseWriter, r *http.Request, c auth.Child) error {
+	device, err := s.deps.Accounts.Device(r.Context(), c.DeviceID)
+	if err != nil {
+		return err
+	}
+	if !device.AllowSelfUnpair {
+		return forbidden("a parent disabled re-pairing for this device")
+	}
 	if err := s.deps.Accounts.RevokeOwnDevice(r.Context(), c.DeviceID); err != nil &&
 		!errors.Is(err, store.ErrNotFound) {
 		return err

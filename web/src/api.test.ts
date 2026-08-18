@@ -37,4 +37,27 @@ describe('browser authentication boundary', () => {
     expect(url).not.toContain('browser-only')
     expect(new Headers(init.headers).get('X-Coop-Link-Secret')).toBe('browser-only')
   })
+
+  it('requests deterministic Shorts pages instead of stopping after one batch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [] }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.shorts('family session', 16, 8)
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/child/shorts?limit=8&offset=16&session=family%20session')
+  })
+
+  it('preserves the video that prompted a channel request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: 'request', status: 'pending', channel: { id: 'channel-1', title: 'Channel' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.ask('channel-1', 'video-1')
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(JSON.parse(init.body as string)).toEqual({ channelId: 'channel-1', promptedByVideoId: 'video-1' })
+  })
 })
