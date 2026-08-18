@@ -29,7 +29,9 @@ struct ChannelSearchView: View {
               }
               Spacer()
               Menu {
-                Button("Clear for this scope") { clear(channel.id) }
+                Button(childID == nil ? "Approve for everyone" : "Approve for this child") {
+                  approve(channel.id)
+                }
                 Button("Block family-wide", role: .destructive) { block(channel.id) }
               } label: {
                 Label(resultLabel(channel.id), systemImage: resultSymbol(channel.id))
@@ -49,7 +51,7 @@ struct ChannelSearchView: View {
       }
       .searchable(text: $query, prompt: "YouTube channel")
       .onSubmit(of: .search, search)
-      .navigationTitle(childID == nil ? "Clear for everyone" : "Clear for child")
+      .navigationTitle(childID == nil ? "Approve or block channels" : "Approve for this child")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
@@ -73,7 +75,7 @@ struct ChannelSearchView: View {
     }
   }
 
-  private func clear(_ channelID: String) {
+  private func approve(_ channelID: String) {
     Task {
       do {
         try await model.allowChannel(channelID, childID: childID)
@@ -99,7 +101,7 @@ struct ChannelSearchView: View {
 
   private func resultLabel(_ channelID: String) -> String {
     if blocked.contains(channelID) { return "Blocked" }
-    if cleared.contains(channelID) { return "Cleared" }
+    if cleared.contains(channelID) { return "Approved" }
     return "Decide"
   }
 
