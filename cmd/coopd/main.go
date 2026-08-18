@@ -24,9 +24,10 @@ import (
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
+	"github.com/nerdswhofish/coop/internal/fledge"
 	"github.com/nerdswhofish/coop/internal/ingest"
+	"github.com/nerdswhofish/coop/internal/legacyinstall"
 	"github.com/nerdswhofish/coop/internal/push"
-	"github.com/nerdswhofish/coop/internal/ota"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
 	"github.com/nerdswhofish/coop/internal/webapp"
@@ -238,12 +239,17 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		return err
 	}
 	var installer http.Handler
-	if cfg.OTA.Enabled {
-		installer, err = ota.New(cfg.Server.PublicURL, cfg.OTA.Directory)
+	if cfg.Updates.Enabled {
+		releases, err := fledge.New(cfg.Updates.BaseURL)
 		if err != nil {
 			return err
 		}
-		logger.Info("OTA installer enabled", "path", "/install/", "directory", cfg.OTA.Directory)
+		installer, err = legacyinstall.New(releases,
+			cfg.Updates.ParentBundleID, cfg.Updates.ChildBundleID, logger, time.Now)
+		if err != nil {
+			return err
+		}
+		logger.Info("update metadata enabled", "fledge", cfg.Updates.BaseURL)
 	}
 
 	var pusher *push.Service

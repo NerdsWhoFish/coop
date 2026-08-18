@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,7 +30,7 @@ type Config struct {
 	Database Database `toml:"database"`
 	YouTube  YouTube  `toml:"youtube"`
 	Auth     Auth     `toml:"auth"`
-	OTA      OTA      `toml:"ota"`
+	Updates  Updates  `toml:"updates"`
 	APNS     APNS     `toml:"apns"`
 	Log      Log      `toml:"log"`
 }
@@ -113,10 +113,14 @@ type Auth struct {
 	LockoutDuration      time.Duration `toml:"lockout_duration"       env:"AUTH_LOCKOUT_DURATION"`
 }
 
-// OTA controls the optional registered-device application installer.
-type OTA struct {
-	Enabled   bool   `toml:"enabled"   env:"OTA_ENABLED"`
-	Directory string `toml:"directory" env:"OTA_DIRECTORY"`
+// Updates points clients at a Fledge server for over-the-air application
+// releases. Coop hosts no packages of its own; it only reads release metadata
+// so that clients need one server address rather than two.
+type Updates struct {
+	Enabled        bool   `toml:"enabled"          env:"UPDATES_ENABLED"`
+	BaseURL        string `toml:"base_url"         env:"UPDATES_BASE_URL"`
+	ParentBundleID string `toml:"parent_bundle_id" env:"UPDATES_PARENT_BUNDLE_ID"`
+	ChildBundleID  string `toml:"child_bundle_id"  env:"UPDATES_CHILD_BUNDLE_ID"`
 }
 
 // APNS holds optional push notification delivery settings. The key is the
@@ -182,7 +186,10 @@ func Defaults() *Config {
 			MaxFailures:          5,
 			LockoutDuration:      15 * time.Minute,
 		},
-		OTA: OTA{Directory: "/var/lib/coop/ota"},
+		Updates: Updates{
+			ParentBundleID: "fish.nerdswhofish.coop.parent",
+			ChildBundleID:  "fish.nerdswhofish.coop.child",
+		},
 		APNS: APNS{
 			Environment:    "production",
 			ParentBundleID: "fish.nerdswhofish.coop.parent",
@@ -330,8 +337,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.OTA.Enabled && !filepath.IsAbs(c.OTA.Directory) {
-		errs = append(errs, errors.New("ota.directory (COOP_OTA_DIRECTORY) must be an absolute path when OTA serving is enabled"))
+	if c.Updates.Enabled {
+		if parsed, err := url.Parse(c.Updates.BaseURL); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			errs = append(errs, errors.New("updates.base_url (COOP_UPDATES_BASE_URL) must be an HTTPS URL when updates are enabled"))
+		}
+		if c.Updates.ParentBundleID == "" || c.Updates.ChildBundleID == "" {
+			errs = append(errs, errors.New("updates.parent_bundle_id and updates.child_bundle_id must not be empty"))
+		}
 	}
 
 	switch c.Log.Format {

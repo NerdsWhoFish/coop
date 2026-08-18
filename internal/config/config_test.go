@@ -123,12 +123,26 @@ func TestValidate(t *testing.T) {
 			wantErr: "want debug, info, warn or error",
 		},
 		{
-			name: "relative OTA directory",
+			name: "plaintext updates URL",
 			mutate: func(c *Config) {
-				c.OTA.Enabled = true
-				c.OTA.Directory = "packages"
+				c.Updates.Enabled = true
+				c.Updates.BaseURL = "http://fledge.example"
 			},
-			wantErr: "ota.directory",
+			wantErr: "updates.base_url",
+		},
+		{
+			name: "updates enabled without a URL",
+			mutate: func(c *Config) { c.Updates.Enabled = true },
+			wantErr: "updates.base_url",
+		},
+		{
+			name: "updates enabled without a bundle identifier",
+			mutate: func(c *Config) {
+				c.Updates.Enabled = true
+				c.Updates.BaseURL = "https://fledge.example"
+				c.Updates.ChildBundleID = ""
+			},
+			wantErr: "updates.parent_bundle_id",
 		},
 	}
 
@@ -207,11 +221,11 @@ func TestLoadDefaultsFromEnv(t *testing.T) {
 	if cfg.Auth.InvitationTTL != 7*24*time.Hour {
 		t.Errorf("InvitationTTL = %v, want 168h", cfg.Auth.InvitationTTL)
 	}
-	if cfg.OTA.Enabled {
-		t.Error("OTA.Enabled = true, want opt-in default false")
+	if cfg.Updates.Enabled {
+		t.Error("Updates.Enabled = true, want opt-in default false")
 	}
-	if cfg.OTA.Directory != "/var/lib/coop/ota" {
-		t.Errorf("OTA.Directory = %q, want /var/lib/coop/ota", cfg.OTA.Directory)
+	if cfg.Updates.ParentBundleID != "fish.nerdswhofish.coop.parent" {
+		t.Errorf("Updates.ParentBundleID = %q, want the parent bundle", cfg.Updates.ParentBundleID)
 	}
 }
 
