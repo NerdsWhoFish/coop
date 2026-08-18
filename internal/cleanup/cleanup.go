@@ -17,6 +17,7 @@ const Interval = 24 * time.Hour
 type accounts interface {
 	PurgeExpiredSessions(context.Context) (int64, error)
 	PurgeExpiredPairingCodes(context.Context) (int64, error)
+	PurgeExpiredWebDeviceLinks(context.Context) (int64, error)
 	PurgeParentInvitations(context.Context) (int64, error)
 }
 
@@ -37,6 +38,7 @@ type Stats struct {
 	Cache        int64
 	Sessions     int64
 	PairingCodes int64
+	WebLinks     int64
 	Invitations  int64
 	Quota        int64
 	Searches     int64
@@ -112,6 +114,7 @@ func (s *Service) cleanAndLog(ctx context.Context) {
 		"cache", stats.Cache,
 		"sessions", stats.Sessions,
 		"pairing_codes", stats.PairingCodes,
+		"web_links", stats.WebLinks,
 		"invitations", stats.Invitations,
 		"quota", stats.Quota,
 		"searches", stats.Searches,
@@ -147,6 +150,9 @@ func (s *Service) Clean(ctx context.Context) (Stats, error) {
 	})
 	run("pairing codes", &stats.PairingCodes, func() (int64, error) {
 		return s.accounts.PurgeExpiredPairingCodes(ctx)
+	})
+	run("web device links", &stats.WebLinks, func() (int64, error) {
+		return s.accounts.PurgeExpiredWebDeviceLinks(ctx)
 	})
 	run("parent invitations", &stats.Invitations, func() (int64, error) {
 		return s.accounts.PurgeParentInvitations(ctx)

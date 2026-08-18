@@ -5,6 +5,8 @@ import UIKit
 struct HomeView: View {
   @Bindable var model: ChildAppModel
   @State private var phoneSection = PhoneSection.recommendations
+  @State private var showingComputerScanner = false
+  @State private var computerLinked = false
 
   var body: some View {
     NavigationStack {
@@ -35,6 +37,15 @@ struct HomeView: View {
           }
           .accessibilityLabel("My requests")
           Menu {
+            Button("Link a computer", systemImage: "qrcode.viewfinder") {
+              showingComputerScanner = true
+            }
+            .disabled(
+              model.profile?.webLinkingEnabled != true || !WebDeviceLinkScanner.isSupported
+            )
+            if model.profile?.webLinkingEnabled != true {
+              Text("A parent disabled computer linking for this profile.")
+            }
             Button("Pair a different device", role: .destructive) { model.unpair() }
               .disabled(model.profile?.allowSelfUnpair != true)
             if model.profile?.allowSelfUnpair != true {
@@ -48,6 +59,35 @@ struct HomeView: View {
         }
       }
       .watchBackground()
+    }
+    .sheet(isPresented: $showingComputerScanner) {
+      NavigationStack {
+        WebDeviceLinkScanner { value in
+          Task {
+            do {
+              try await model.approveWebLink(value)
+              showingComputerScanner = false
+              computerLinked = true
+            } catch {
+              model.errorMessage = error.localizedDescription
+              showingComputerScanner = false
+            }
+          }
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .navigationTitle("Link a computer")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { showingComputerScanner = false }
+          }
+        }
+      }
+    }
+    .alert("Computer linked", isPresented: $computerLinked) {
+      Button("Done", role: .cancel) {}
+    } message: {
+      Text("This computer can now use your Coop profile.")
     }
   }
 

@@ -33,6 +33,7 @@ targets:
         CURRENT_PROJECT_VERSION: 17
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Cooper Watch
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan a Coop code to link a computer to this profile.
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: >-

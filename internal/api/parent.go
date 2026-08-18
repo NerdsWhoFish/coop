@@ -684,6 +684,7 @@ func (s *Server) handleUpdateChild(w http.ResponseWriter, r *http.Request, p aut
 		WatchPageAutoplay       *bool   `json:"watchPageAutoplay"`
 		VideoSearchTiles        *bool   `json:"videoSearchTiles"`
 		ChannelDiscoveryEnabled *bool   `json:"channelDiscoveryEnabled"`
+		WebLinkingEnabled       *bool   `json:"webLinkingEnabled"`
 		DailySearchLimit        *int    `json:"dailySearchLimit"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
@@ -697,6 +698,7 @@ func (s *Server) handleUpdateChild(w http.ResponseWriter, r *http.Request, p aut
 		WatchPageAutoplay:       body.WatchPageAutoplay,
 		VideoSearchTiles:        body.VideoSearchTiles,
 		ChannelDiscoveryEnabled: body.ChannelDiscoveryEnabled,
+		WebLinkingEnabled:       body.WebLinkingEnabled,
 		DailySearchLimit:        body.DailySearchLimit,
 	}, p.ID)
 	if err != nil {

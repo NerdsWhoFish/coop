@@ -13,6 +13,7 @@ LDFLAGS := -s -w \
 
 DEV_DB_CONTAINER := coop-postgres
 DEV_DB_DSN       := postgres://coop:coop@localhost:5433/coop?sslmode=disable
+WEB_DEPS         := web/node_modules/.package-lock.json
 
 .DEFAULT_GOAL := help
 
@@ -22,11 +23,11 @@ help: ## Show this help
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: ## Build the server binary into bin/
+build: web-build ## Build the server binary into bin/
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(OUT) ./cmd/$(BIN)
 
 .PHONY: install
-install: ## Build and install into ~/bin
+install: web-build ## Build and install into ~/bin
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(HOME)/bin/$(BIN) ./cmd/$(BIN)
 
 .PHONY: run
@@ -42,8 +43,22 @@ migrate-down: ## Roll back the most recent migration on the dev database
 	COOP_DATABASE_DSN="$(DEV_DB_DSN)" go run ./cmd/$(BIN) migrate-down
 
 .PHONY: test
-test: ## Run unit tests
+test: web-test ## Run unit tests
 	go test -race -shuffle=on ./...
+
+.PHONY: web-install
+web-install: $(WEB_DEPS) ## Install the Cooper Watch web dependencies
+
+$(WEB_DEPS): web/package.json web/package-lock.json
+	npm ci --prefix web
+
+.PHONY: web-build
+web-build: $(WEB_DEPS) ## Build the embedded Cooper Watch web app
+	npm run build --prefix web
+
+.PHONY: web-test
+web-test: $(WEB_DEPS) ## Test the Cooper Watch web app
+	npm test --prefix web
 
 .PHONY: test-integration
 test-integration: ## Run tests that need the dev database
@@ -55,8 +70,9 @@ cover: ## Run tests and open a coverage report
 	go tool cover -html=coverage.out
 
 .PHONY: lint
-lint: ## Run go vet and staticcheck
+lint: $(WEB_DEPS) ## Run go vet and staticcheck
 	go vet ./...
+	npm run lint --prefix web
 	@command -v staticcheck >/dev/null 2>&1 \
 		&& staticcheck ./... \
 		|| echo "staticcheck not installed, skipping (go install honnef.co/go/tools/cmd/staticcheck@latest)"

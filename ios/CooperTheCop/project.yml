@@ -33,6 +33,7 @@ targets:
         CURRENT_PROJECT_VERSION: 10
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Cooper The Cop
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan a Coop code to approve a child computer.
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         TARGETED_DEVICE_FAMILY: "1,2"

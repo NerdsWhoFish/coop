@@ -2,7 +2,7 @@
 
 Self-hosted, parent-curated YouTube for kids.
 
-Children get an app that looks and feels like real YouTube: a home feed, subscriptions, channel pages, search, and a vertically scrolling Shorts feed.
+Children get a native app and a full browser client that look and feel like real YouTube: a home feed, subscriptions, channel pages, search, and a vertically scrolling Shorts feed.
 Every channel they can watch was approved by a parent first.
 When they find something new, they ask, and a parent approves it from their own app.
 
@@ -49,10 +49,12 @@ Coop keeps the YouTube experience children already understand while moving appro
 ```mermaid
 graph TD
   Child[Child app<br/>Cooper Watch] -->|child token| API[Coop backend<br/>Go]
+  Browser[Child browser<br/>Cooper Watch web] -->|HttpOnly device session| API
   Parent[Parent app<br/>Cooper The Cop] -->|parent token| API
   API --> DB[(Postgres)]
   API --> YT[YouTube Data API v3<br/>your own key]
   Child -->|nocookie embed| Player[YouTube IFrame player]
+  Browser -->|nocookie embed| Player
 ```
 
 Each family runs their own backend with their own YouTube Data API key.
@@ -66,6 +68,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Request and approve loop.** A child asks, a parent approves from their phone.
 - **Negative keywords** that block individual videos inside otherwise-allowed channels, with every suppression visible to the parent and overridable in one tap.
 - **Multiple children**, each with their own subscriptions, allowlist, and settings.
+- **Computer access at the Coop hostname**, linked by scanning a short-lived QR code from either native app or by entering a parent's one-time pairing code.
 - **Multiple parents**, scoped to the children they are allowed to manage.
 - **Local subscriptions, likes, and dislikes** that never touch YouTube.
 - **No livestreams**, including finished livestream VODs.
@@ -91,12 +94,13 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `ios/CoopKit` | Generated Swift API client and shared native code |
 | `ios/CooperTheCop` | SwiftUI parent app and XcodeGen project source |
 | `ios/CooperWatch` | SwiftUI child app and XcodeGen project source |
+| `web` | React and TypeScript Cooper Watch browser client |
 | `adr/` | Architecture decision records |
 | `docs/DEPLOYMENT.md` | Production setup, device restrictions, recovery, and operations |
 | `deploy/ota` | Registered-device Ad Hoc builds and the local HTTPS install portal |
 
 The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the recommendation mixer.
-The child app (`Cooper Watch`) includes pairing, feeds, subscriptions, search, approvals, playback, reactions, sharing, and Shorts.
+The native and browser Cooper Watch clients include pairing, feeds, subscriptions, search, approvals, playback, reactions, sharing, and Shorts.
 
 Coop is ready for daily family use through its self-hosted deployment and registered-device release tooling.
 App Store publication still depends on the legal, content-rights, signing, account, metadata, and human approval gates listed in [ios/AppStore/README.md](ios/AppStore/README.md).
@@ -104,6 +108,7 @@ App Store publication still depends on the legal, content-rights, signing, accou
 ## Requirements
 
 - Go 1.26 or newer
+- Node.js 24 or newer for building the embedded browser client
 - Postgres 16 or newer
 - A Google Cloud project with the YouTube Data API v3 enabled, and an API key
 - Xcode 16 or newer and XcodeGen 2.46 or newer for the native apps

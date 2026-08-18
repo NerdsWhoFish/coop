@@ -28,6 +28,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/ota"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
+	"github.com/nerdswhofish/coop/internal/webapp"
 	"github.com/nerdswhofish/coop/internal/youtubeclient"
 )
 
@@ -259,6 +260,7 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		DB:        db,
 		Now:       time.Now,
 		Installer: installer,
+		Web:       webapp.Handler(),
 	})
 	if err != nil {
 		return err

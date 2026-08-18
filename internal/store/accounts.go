@@ -616,6 +616,7 @@ type ChildSettings struct {
 	WatchPageAutoplay       *bool
 	VideoSearchTiles        *bool
 	ChannelDiscoveryEnabled *bool
+	WebLinkingEnabled       *bool
 	DailySearchLimit        *int
 }
 
@@ -641,6 +642,9 @@ func (a *Accounts) UpdateChild(ctx context.Context, familyID, childID uuid.UUID,
 	}
 	if settings.ChannelDiscoveryEnabled != nil {
 		updates["channel_discovery_enabled"] = *settings.ChannelDiscoveryEnabled
+	}
+	if settings.WebLinkingEnabled != nil {
+		updates["web_linking_enabled"] = *settings.WebLinkingEnabled
 	}
 	if settings.DailySearchLimit != nil {
 		updates["daily_search_limit"] = *settings.DailySearchLimit
@@ -701,6 +705,7 @@ func childAuditState(child Child) map[string]any {
 		"shortsEnabled": child.ShortsEnabled, "watchPageAutoplay": child.WatchPageAutoplay,
 		"videoSearchTiles":        child.VideoSearchTiles,
 		"channelDiscoveryEnabled": child.ChannelDiscoveryEnabled,
+		"webLinkingEnabled":       child.WebLinkingEnabled,
 		"dailySearchLimit":        child.DailySearchLimit,
 	}
 }
@@ -772,6 +777,127 @@ func (a *Accounts) RedeemPairingCode(ctx context.Context, code, deviceName,
 		return Child{}, ChildDevice{}, err
 	}
 	return child, device, nil
+}
+
+// CreateWebDeviceLink stores the two halves of a browser handoff.
+func (a *Accounts) CreateWebDeviceLink(ctx context.Context, approvalHash, redemptionHash,
+	deviceName string, expiresAt time.Time) (WebDeviceLink, error) {
+
+	link := WebDeviceLink{
+		ApprovalTokenHash:   approvalHash,
+		RedemptionTokenHash: redemptionHash,
+		DeviceName:          deviceName,
+		ExpiresAt:           expiresAt,
+	}
+	if err := a.db.WithContext(ctx).Create(&link).Error; err != nil {
+		return WebDeviceLink{}, fmt.Errorf("creating web device link: %w", err)
+	}
+	return link, nil
+}
+
+// WebDeviceLinkStatus resolves the browser-only half of a link without
+// exposing which child approved it.
+func (a *Accounts) WebDeviceLinkStatus(ctx context.Context, id uuid.UUID,
+	redemptionHash string) (WebDeviceLink, error) {
+
+	var link WebDeviceLink
+	err := a.db.WithContext(ctx).First(&link,
+		"id = ? AND redemption_token_hash = ? AND expires_at > ? AND redeemed_at IS NULL",
+		id, redemptionHash, a.now()).Error
+	return link, wrap(err, "reading web device link")
+}
+
+// ApproveWebDeviceLink binds an unclaimed browser handoff to a child.
+func (a *Accounts) ApproveWebDeviceLink(ctx context.Context, id uuid.UUID, approvalHash string,
+	childID uuid.UUID, deviceID, parentID *uuid.UUID) error {
+
+	now := a.now()
+	updates := map[string]any{
+		"child_id": childID, "approved_at": now,
+		"approved_by_device_id": deviceID, "approved_by_parent_id": parentID,
+	}
+	result := a.db.WithContext(ctx).Model(&WebDeviceLink{}).
+		Where("id = ? AND approval_token_hash = ? AND expires_at > ? AND approved_at IS NULL AND redeemed_at IS NULL",
+			id, approvalHash, now).
+		Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("approving web device link: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RedeemWebDeviceLink consumes an approved handoff and registers the browser
+// as an ordinary revocable child device in the same transaction.
+func (a *Accounts) RedeemWebDeviceLink(ctx context.Context, id uuid.UUID, redemptionHash,
+	tokenHash string) (Child, ChildDevice, error) {
+
+	var child Child
+	var device ChildDevice
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := a.now()
+		var link WebDeviceLink
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&link,
+			"id = ? AND redemption_token_hash = ? AND expires_at > ? AND approved_at IS NOT NULL AND redeemed_at IS NULL",
+			id, redemptionHash, now).Error; err != nil {
+			return wrap(err, "claiming web device link")
+		}
+		if link.ChildID == nil {
+			return ErrNotFound
+		}
+		if err := tx.First(&child, "id = ?", *link.ChildID).Error; err != nil {
+			return wrap(err, "reading linked child")
+		}
+		if !child.WebLinkingEnabled {
+			return ErrNotFound
+		}
+		device = ChildDevice{ChildID: child.ID, Name: link.DeviceName, TokenHash: tokenHash}
+		if err := tx.Create(&device).Error; err != nil {
+			return fmt.Errorf("registering browser device: %w", err)
+		}
+		if err := tx.Model(&link).Update("redeemed_at", now).Error; err != nil {
+			return fmt.Errorf("consuming web device link: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: child.FamilyID, ActorParentID: link.ApprovedByParentID, ChildID: &child.ID,
+			Action: "device.web_pair", TargetType: "device", TargetID: device.ID.String(),
+			Before: map[string]any{}, After: map[string]any{"name": device.Name}, CreatedAt: now,
+		})
+	})
+	if err != nil {
+		return Child{}, ChildDevice{}, err
+	}
+	return child, device, nil
+}
+
+// RevokeOwnDevice lets a cookie-backed browser explicitly end its own session.
+func (a *Accounts) RevokeOwnDevice(ctx context.Context, deviceID uuid.UUID) error {
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var device ChildDevice
+		if err := tx.First(&device, "id = ? AND revoked_at IS NULL", deviceID).Error; err != nil {
+			return wrap(err, "reading own device before revocation")
+		}
+		familyID, err := familyIDForChild(tx, device.ChildID)
+		if err != nil {
+			return err
+		}
+		now := a.now()
+		if err := tx.Model(&device).Update("revoked_at", now).Error; err != nil {
+			return fmt.Errorf("revoking own device: %w", err)
+		}
+		if err := tx.Model(&PlaybackSession{}).Where("device_id = ?", deviceID).
+			Updates(map[string]any{"active": false, "updated_at": now}).Error; err != nil {
+			return fmt.Errorf("stopping own device playback: %w", err)
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ChildID: &device.ChildID,
+			Action: "device.self_revoke", TargetType: "device", TargetID: device.ID.String(),
+			Before: map[string]any{"active": true, "name": device.Name},
+			After:  map[string]any{"active": false, "name": device.Name}, CreatedAt: now,
+		})
+	})
 }
 
 // DeviceByToken resolves a device token to its device and child, rejecting
@@ -875,6 +1001,17 @@ func (a *Accounts) PurgeExpiredPairingCodes(ctx context.Context) (int64, error) 
 		Delete(&PairingCode{})
 	if result.Error != nil {
 		return 0, fmt.Errorf("purging pairing codes: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+// PurgeExpiredWebDeviceLinks removes consumed and expired browser handoffs.
+func (a *Accounts) PurgeExpiredWebDeviceLinks(ctx context.Context) (int64, error) {
+	result := a.db.WithContext(ctx).
+		Where("expires_at <= ? OR redeemed_at IS NOT NULL", a.now()).
+		Delete(&WebDeviceLink{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("purging web device links: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }

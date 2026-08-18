@@ -38,6 +38,7 @@ type Deps struct {
 	DB        *store.DB
 	Now       func() time.Time
 	Installer http.Handler
+	Web       http.Handler
 }
 
 // Server routes and serves the API.
@@ -90,13 +91,13 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/healthz", s.handleReadiness)
 	m.HandleFunc("GET /version", s.handleVersion)
 	if s.deps.Installer != nil {
-		m.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)
-		})
 		m.Handle("GET /install/", http.StripPrefix("/install", s.deps.Installer))
 		m.HandleFunc("GET /install", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)
 		})
+	}
+	if s.deps.Web != nil {
+		m.Handle("GET /", s.deps.Web)
 	}
 
 	// Setup and sign-in are the only unauthenticated write paths.
@@ -105,6 +106,10 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/parent/auth/login", s.handle(s.handleLogin))
 	m.HandleFunc("POST /api/v1/parent/auth/totp/verify", s.handle(s.handleVerifyTOTP))
 	m.HandleFunc("POST /api/v1/parent/auth/invitation", s.handle(s.handleAcceptParentInvitation))
+	m.HandleFunc("POST /api/v1/web/link", s.handle(s.handleCreateWebLink))
+	m.HandleFunc("GET /api/v1/web/link/{linkId}", s.handle(s.handleWebLinkStatus))
+	m.HandleFunc("POST /api/v1/web/link/{linkId}/redeem", s.handle(s.handleRedeemWebLink))
+	m.HandleFunc("POST /api/v1/web/pair", s.handle(s.handleWebPair))
 
 	parent := func(pattern string, h parentHandler) {
 		m.HandleFunc(pattern, s.handle(s.withParent(h)))
@@ -141,6 +146,7 @@ func (s *Server) routes() {
 	parent("DELETE /api/v1/parent/children/{childId}/video-blocks/{videoId}", s.handleUnblockVideo)
 
 	parent("POST /api/v1/parent/children/{childId}/pairing-code", s.handleCreatePairingCode)
+	parent("POST /api/v1/parent/children/{childId}/web-links/{linkId}/approve", s.handleApproveWebLinkAsParent)
 	parent("GET /api/v1/parent/children/{childId}/devices", s.handleListDevices)
 	parent("PATCH /api/v1/parent/devices/{deviceId}", s.handleUpdateDevice)
 	parent("DELETE /api/v1/parent/devices/{deviceId}", s.handleRevokeDevice)
@@ -190,6 +196,8 @@ func (s *Server) routes() {
 	child("PUT /api/v1/child/playback", s.handlePlaybackLease)
 	child("GET /api/v1/child/requests", s.handleChildRequests)
 	child("POST /api/v1/child/requests", s.handleRaiseRequest)
+	child("POST /api/v1/child/web-links/{linkId}/approve", s.handleApproveWebLinkAsChild)
+	child("DELETE /api/v1/child/session", s.handleWebLogout)
 
 	// Thumbnails are proxied so a child device never talks to a Google host
 	// for images, and so one fewer domain has to be allowed by a filter.

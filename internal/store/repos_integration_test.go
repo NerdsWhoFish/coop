@@ -141,6 +141,89 @@ func TestAuthThrottlePersistsLockout(t *testing.T) {
 	}
 }
 
+func TestWebDeviceLinkRequiresBothSecretsAndRedeemsOnce(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 17, 20, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Web Link Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+	child, err := accounts.CreateChild(ctx, family.ID, "River", "", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !child.WebLinkingEnabled {
+		t.Fatal("new child has web linking disabled, want enabled by default")
+	}
+	disabled := false
+	if err := accounts.UpdateChild(ctx, family.ID, child.ID,
+		ChildSettings{WebLinkingEnabled: &disabled}, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	child, err = accounts.Child(ctx, family.ID, child.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child.WebLinkingEnabled {
+		t.Fatal("updated child has web linking enabled, want disabled")
+	}
+	enabled := true
+	if err := accounts.UpdateChild(ctx, family.ID, child.ID,
+		ChildSettings{WebLinkingEnabled: &enabled}, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	approval := auth.HashToken(uuid.NewString())
+	redemption := auth.HashToken(uuid.NewString())
+	link, err := accounts.CreateWebDeviceLink(ctx, approval, redemption,
+		"Living room browser", now.Add(5*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&WebDeviceLink{}, "id = ?", link.ID) })
+	if _, err := accounts.WebDeviceLinkStatus(ctx, link.ID, auth.HashToken("wrong")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("wrong redemption secret error = %v, want ErrNotFound", err)
+	}
+	if err := accounts.ApproveWebDeviceLink(ctx, link.ID, auth.HashToken("wrong"),
+		child.ID, nil, &parent.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("wrong approval secret error = %v, want ErrNotFound", err)
+	}
+	if err := accounts.ApproveWebDeviceLink(ctx, link.ID, approval,
+		child.ID, nil, &parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := accounts.UpdateChild(ctx, family.ID, child.ID,
+		ChildSettings{WebLinkingEnabled: &disabled}, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := accounts.RedeemWebDeviceLink(ctx, link.ID, redemption,
+		auth.HashToken("disabled-browser-token")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("disabled redemption error = %v, want ErrNotFound", err)
+	}
+	if err := accounts.UpdateChild(ctx, family.ID, child.ID,
+		ChildSettings{WebLinkingEnabled: &enabled}, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	paired, device, err := accounts.RedeemWebDeviceLink(ctx, link.ID, redemption,
+		auth.HashToken("browser-token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paired.ID != child.ID || device.Name != "Living room browser" {
+		t.Fatalf("redeemed link = (%s, %q), want (%s, %q)",
+			paired.ID, device.Name, child.ID, "Living room browser")
+	}
+	if _, _, err := accounts.RedeemWebDeviceLink(ctx, link.ID, redemption,
+		auth.HashToken("second-browser-token")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second redemption error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestAuditEventsRespectParentScopeAndExcludeSecrets(t *testing.T) {
 	db := migratedDB(t)
 	ctx := context.Background()

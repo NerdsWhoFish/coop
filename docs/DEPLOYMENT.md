@@ -41,6 +41,13 @@ Create each child profile and generate a pairing code from the parent app.
 Install Cooper Watch on the child's device, enter the same server origin, and redeem that code.
 Pairing codes are single-use and short-lived.
 
+Children can also open the bare Coop hostname from a computer.
+The browser shows a short-lived QR code that can be scanned with **Link a computer** in Cooper Watch or **Scan computer code** in a child's Cooper The Cop settings.
+The scanner approves the profile, but the QR code alone is not a login credential: the originating browser must also hold its private half of the handoff.
+If a camera is unavailable, create a normal one-time pairing code in the parent app and enter it in the browser.
+Each linked browser appears as its own revocable device in Cooper The Cop and reports playback independently.
+Parents can turn off **Allow computer linking** for an individual child without disconnecting browsers that are already paired.
+
 ## 4. Restrict the child device
 
 Coop controls what its own app serves, but it cannot stop a child from opening YouTube somewhere else.

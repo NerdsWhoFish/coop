@@ -65,6 +65,7 @@ type childDTO struct {
 	WatchPageAutoplay       bool      `json:"watchPageAutoplay"`
 	VideoSearchTiles        bool      `json:"videoSearchTiles"`
 	ChannelDiscoveryEnabled bool      `json:"channelDiscoveryEnabled"`
+	WebLinkingEnabled       bool      `json:"webLinkingEnabled"`
 	DailySearchLimit        int       `json:"dailySearchLimit"`
 	DeviceCount             int       `json:"deviceCount"`
 	PendingRequests         int       `json:"pendingRequestCount"`
@@ -79,6 +80,7 @@ func newChildDTO(c store.Child, devices, pending int) childDTO {
 		WatchPageAutoplay:       c.WatchPageAutoplay,
 		VideoSearchTiles:        c.VideoSearchTiles,
 		ChannelDiscoveryEnabled: c.ChannelDiscoveryEnabled,
+		WebLinkingEnabled:       c.WebLinkingEnabled,
 		DailySearchLimit:        c.DailySearchLimit,
 		DeviceCount:             devices,
 		PendingRequests:         pending,
@@ -96,6 +98,7 @@ type childProfileDTO struct {
 	WatchPageAutoplay       bool      `json:"watchPageAutoplay"`
 	VideoSearchTiles        bool      `json:"videoSearchTiles"`
 	ChannelDiscoveryEnabled bool      `json:"channelDiscoveryEnabled"`
+	WebLinkingEnabled       bool      `json:"webLinkingEnabled"`
 	AllowSelfUnpair         bool      `json:"allowSelfUnpair"`
 }
 
@@ -108,6 +111,7 @@ func newChildProfileDTO(c store.Child, allowSelfUnpair bool) childProfileDTO {
 		WatchPageAutoplay:       c.WatchPageAutoplay,
 		VideoSearchTiles:        c.VideoSearchTiles,
 		ChannelDiscoveryEnabled: c.ChannelDiscoveryEnabled,
+		WebLinkingEnabled:       c.WebLinkingEnabled,
 		AllowSelfUnpair:         allowSelfUnpair,
 	}
 }

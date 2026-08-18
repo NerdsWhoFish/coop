@@ -58,6 +58,7 @@ final class ChildAppModel {
           watchPageAutoplay: false,
           videoSearchTiles: true,
           channelDiscoveryEnabled: true,
+          webLinkingEnabled: true,
           allowSelfUnpair: false
         )
         feed = Self.previewVideos
@@ -164,6 +165,22 @@ final class ChildAppModel {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func approveWebLink(_ scannedValue: String) async throws {
+    guard let api else { throw CoopAPIError.invalidSession }
+    let payload = try WebDeviceLinkPayload(scannedValue: scannedValue)
+    let configuredServer = try ServerURL.normalize(serverAddress)
+    guard payload.serverURL.scheme == configuredServer.scheme,
+      payload.serverURL.host == configuredServer.host,
+      payload.serverURL.port == configuredServer.port
+    else {
+      throw WebDeviceLinkError.differentServer
+    }
+    try await api.approveWebLinkAsChild(
+      linkID: payload.id,
+      approvalToken: payload.approvalToken
+    )
   }
 
   func channel(id: String) async throws -> Components.Schemas.ChannelPage? {

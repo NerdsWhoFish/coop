@@ -30,12 +30,19 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Build archive
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
+          npm ci --prefix web
+          npm run build --prefix web
           version="${GITHUB_REF_NAME#v}"
           archive="coop_${version}_${GOOS}_${GOARCH}"
           built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

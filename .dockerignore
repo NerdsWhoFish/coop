@@ -4,6 +4,8 @@
 .env.*
 bin
 dist
+.build
+**/node_modules
 deploy/compose/secrets
 ios/*/*.xcodeproj
 ios/*/.build

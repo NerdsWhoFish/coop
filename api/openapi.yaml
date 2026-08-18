@@ -571,6 +571,24 @@ paths:
               schema: { $ref: "#/components/schemas/PairingCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /parent/children/{childId}/web-links/{linkId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/ChildId"
+      - $ref: "#/components/parameters/LinkId"
+    post:
+      operationId: approveWebLinkAsParent
+      tags: [pairing]
+      summary: Approve a browser link for a child visible to this parent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebLinkApproval" }
+      responses:
+        "204": { description: Approved }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /parent/children/{childId}/devices:
     parameters:
       - $ref: "#/components/parameters/ChildId"
@@ -970,6 +988,109 @@ paths:
 
   # Child surface ------------------------------------------------------------
 
+  /web/link:
+    post:
+      operationId: createWebDeviceLink
+      tags: [child-session]
+      summary: Create a short-lived browser device handoff
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceName]
+              properties:
+                deviceName: { type: string, maxLength: 80 }
+      responses:
+        "201":
+          description: Created
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebDeviceLink" }
+        "400":
+          description: The device name is invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Too many browser links were created from this address
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /web/link/{linkId}:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+      - $ref: "#/components/parameters/WebLinkSecret"
+    get:
+      operationId: getWebDeviceLink
+      tags: [child-session]
+      summary: Poll browser link approval using the browser-only secret
+      security: []
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebDeviceLinkStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /web/link/{linkId}/redeem:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+      - $ref: "#/components/parameters/WebLinkSecret"
+    post:
+      operationId: redeemWebDeviceLink
+      tags: [child-session]
+      summary: Exchange an approved handoff for an HttpOnly browser session
+      security: []
+      responses:
+        "200":
+          description: Linked
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChildProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /web/pair:
+    post:
+      operationId: pairWebDevice
+      tags: [child-session]
+      summary: Use a parent's single-use pairing code as the browser fallback
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, deviceName]
+              properties:
+                code: { type: string }
+                deviceName: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: Paired
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChildProfile" }
+        "400":
+          description: The code is unknown, expired, or already used
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /child/pair:
     post:
       operationId: pairChildDevice
@@ -1010,12 +1131,44 @@ paths:
       summary: The paired child's profile and enabled surfaces
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ChildProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /child/web-links/{linkId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/LinkId"
+    post:
+      operationId: approveWebLinkAsChild
+      tags: [child-session]
+      summary: Approve a browser link for this paired child's profile
+      security:
+        - childToken: []
+        - webChildSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebLinkApproval" }
+      responses:
+        "204": { description: Approved }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /child/session:
+    delete:
+      operationId: endChildWebSession
+      tags: [child-session]
+      summary: Revoke the current browser device and clear its cookie
+      security:
+        - webChildSession: []
+      responses:
+        "204": { description: Signed out }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /child/feed:
@@ -1025,6 +1178,7 @@ paths:
       summary: Home feed, newest first across subscribed and allowed channels
       security:
         - childToken: []
+        - webChildSession: []
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -1047,6 +1201,7 @@ paths:
         before their channel is approved.
       security:
         - childToken: []
+        - webChildSession: []
       parameters:
         - name: limit
           in: query
@@ -1068,6 +1223,7 @@ paths:
         session and wraps rather than dead-ending when the pool is exhausted.
       security:
         - childToken: []
+        - webChildSession: []
       parameters:
         - name: session
           in: query
@@ -1094,6 +1250,7 @@ paths:
       summary: Channels this child subscribes to
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "200":
           description: OK
@@ -1112,6 +1269,7 @@ paths:
       summary: Subscribe. Local to Coop, never written to YouTube
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "204": { description: Subscribed }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1121,6 +1279,7 @@ paths:
       summary: Unsubscribe
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "204": { description: Unsubscribed }
 
@@ -1137,6 +1296,7 @@ paths:
         404, giving no signal that it exists.
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "200":
           description: OK
@@ -1156,6 +1316,7 @@ paths:
         channels never appear. Non-embeddable and live videos are omitted.
       security:
         - childToken: []
+        - webChildSession: []
       parameters:
         - name: q
           in: query
@@ -1187,6 +1348,7 @@ paths:
       summary: Watch page data, including the embed URL
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "200":
           description: OK
@@ -1204,6 +1366,7 @@ paths:
       summary: Record a local like or dislike
       security:
         - childToken: []
+        - webChildSession: []
       requestBody:
         required: true
         content:
@@ -1221,6 +1384,7 @@ paths:
       summary: Clear the reaction
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "204": { description: Cleared }
 
@@ -1234,6 +1398,7 @@ paths:
       description: Completion, not starts, is what the ranker weighs.
       security:
         - childToken: []
+        - webChildSession: []
       requestBody:
         required: true
         content:
@@ -1254,6 +1419,7 @@ paths:
       summary: Start, renew, or stop the child's current playback lease
       security:
         - childToken: []
+        - webChildSession: []
       requestBody:
         required: true
         content:
@@ -1282,6 +1448,7 @@ paths:
       summary: This child's own requests and their outcomes
       security:
         - childToken: []
+        - webChildSession: []
       responses:
         "200":
           description: OK
@@ -1299,6 +1466,7 @@ paths:
         request rather than creating a duplicate in the parent's queue.
       security:
         - childToken: []
+        - webChildSession: []
       requestBody:
         required: true
         content:
@@ -1329,6 +1497,11 @@ components:
       description: |
         A device token from pairing. Scoped to one child, read-mostly, and
         revocable from the parent app.
+    webChildSession:
+      type: apiKey
+      in: cookie
+      name: __Host-coop-child
+      description: A Secure, HttpOnly, SameSite=Strict browser device session.
 
   parameters:
     ChildId:
@@ -1356,6 +1529,16 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    LinkId:
+      name: linkId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebLinkSecret:
+      name: X-Coop-Link-Secret
+      in: header
+      required: true
+      schema: { type: string }
     Limit:
       name: limit
       in: query
@@ -1532,6 +1715,9 @@ components:
           description: |
             Whether policy-filtered videos from requestable channels may
             appear as locked discovery suggestions.
+        webLinkingEnabled:
+          type: boolean
+          description: Whether this child may link a browser as a paired device.
         dailySearchLimit:
           type: integer
           description: Zero means no per-child limit beyond the family budget.
@@ -1550,7 +1736,7 @@ components:
 
     ChildProfile:
       type: object
-      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled, allowSelfUnpair]
+      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled, webLinkingEnabled, allowSelfUnpair]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1559,6 +1745,7 @@ components:
         watchPageAutoplay: { type: boolean }
         videoSearchTiles: { type: boolean }
         channelDiscoveryEnabled: { type: boolean }
+        webLinkingEnabled: { type: boolean }
         allowSelfUnpair: { type: boolean }
 
     PairingCode:
@@ -1570,6 +1757,29 @@ components:
         pairingUrl:
           type: string
           description: Encoded into a QR code. Embeds the server's public URL.
+
+    WebDeviceLink:
+      type: object
+      required: [id, approvalToken, redemptionToken, expiresAt, qrPayload]
+      properties:
+        id: { type: string, format: uuid }
+        approvalToken: { type: string }
+        redemptionToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+        qrPayload: { type: string }
+
+    WebDeviceLinkStatus:
+      type: object
+      required: [approved, expiresAt]
+      properties:
+        approved: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+
+    WebLinkApproval:
+      type: object
+      required: [approvalToken]
+      properties:
+        approvalToken: { type: string }
 
     Device:
       type: object

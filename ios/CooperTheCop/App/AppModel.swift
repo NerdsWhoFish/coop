@@ -64,6 +64,7 @@ final class AppModel {
       watchPageAutoplay: false,
       videoSearchTiles: true,
       channelDiscoveryEnabled: true,
+      webLinkingEnabled: true,
       dailySearchLimit: 12
     )
   )
@@ -310,6 +311,23 @@ final class AppModel {
   func createPairingCode(childID: String) async throws -> Components.Schemas.PairingCode? {
     guard let api else { return nil }
     return try await api.createPairingCode(childID: childID)
+  }
+
+  func approveWebLink(_ scannedValue: String, childID: String) async throws {
+    guard let api else { throw CoopAPIError.invalidSession }
+    let payload = try WebDeviceLinkPayload(scannedValue: scannedValue)
+    let configuredServer = try ServerURL.normalize(serverAddress)
+    guard payload.serverURL.scheme == configuredServer.scheme,
+      payload.serverURL.host == configuredServer.host,
+      payload.serverURL.port == configuredServer.port
+    else {
+      throw WebDeviceLinkError.differentServer
+    }
+    try await api.approveWebLinkAsParent(
+      childID: childID,
+      linkID: payload.id,
+      approvalToken: payload.approvalToken
+    )
   }
 
   func childDevices(childID: String) async throws -> [Components.Schemas.Device] {

@@ -70,16 +70,21 @@ func TestInstallerRoutesAreOptIn(t *testing.T) {
 	}
 
 	enabled := &Server{
-		deps: Deps{Installer: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		})},
+		deps: Deps{
+			Installer: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}),
+			Web: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusAccepted)
+			}),
+		},
 		mux: http.NewServeMux(),
 	}
 	enabled.routes()
 	rootRecorder := httptest.NewRecorder()
 	enabled.mux.ServeHTTP(rootRecorder, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rootRecorder.Code != http.StatusPermanentRedirect || rootRecorder.Header().Get("Location") != "/install/" {
-		t.Fatalf("root redirect = %d %q", rootRecorder.Code, rootRecorder.Header().Get("Location"))
+	if rootRecorder.Code != http.StatusAccepted {
+		t.Fatalf("web root = %d, want %d", rootRecorder.Code, http.StatusAccepted)
 	}
 	if got := routeStatus(enabled.mux, "/install/"); got != http.StatusNoContent {
 		t.Fatalf("enabled installer status = %d, want 204", got)

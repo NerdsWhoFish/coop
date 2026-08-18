@@ -229,6 +229,26 @@ public actor CoopAPI {
     return try response.body.json
   }
 
+  public func approveWebLinkAsParent(
+    childID: String,
+    linkID: String,
+    approvalToken: String
+  ) async throws {
+    let path = Operations.ApproveWebLinkAsParent.Input.Path(
+      childId: childID,
+      linkId: linkID
+    )
+    let payload = Components.Schemas.WebLinkApproval(
+      approvalToken: approvalToken
+    )
+    guard case .noContent = try await client.approveWebLinkAsParent(
+      path: path,
+      body: .json(payload)
+    ) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func childDevices(childID: String) async throws -> [Components.Schemas.Device] {
     let path = Operations.ListChildDevices.Input.Path(childId: childID)
     let output = try await client.listChildDevices(path: path)
@@ -495,6 +515,19 @@ public actor CoopAPI {
     case .unauthorized:
       throw CoopAPIError.invalidSession
     default:
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func approveWebLinkAsChild(linkID: String, approvalToken: String) async throws {
+    let path = Operations.ApproveWebLinkAsChild.Input.Path(linkId: linkID)
+    let payload = Components.Schemas.WebLinkApproval(
+      approvalToken: approvalToken
+    )
+    guard case .noContent = try await client.approveWebLinkAsChild(
+      path: path,
+      body: .json(payload)
+    ) else {
       throw CoopAPIError.unexpectedResponse
     }
   }

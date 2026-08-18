@@ -25,6 +25,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build and test web client
+        run: |
+          npm ci --prefix web
+          npm run lint --prefix web
+          npm test --prefix web
+          npm run build --prefix web
+
       - name: Verify go.mod is tidy
         run: |
           go mod tidy
@@ -78,7 +91,7 @@ jobs:
       - name: Integration tests
         env:
           COOP_TEST_DATABASE_DSN: postgres://coop:coop@localhost:5432/coop?sslmode=disable
-        run: go test -race -tags=integration ./internal/store/...
+        run: go test -race -tags=integration ./internal/store/... ./internal/api/...
 
   lint:
     name: Lint

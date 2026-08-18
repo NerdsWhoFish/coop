@@ -133,6 +133,7 @@ type Child struct {
 	WatchPageAutoplay       bool `gorm:"not null;default:false"`
 	VideoSearchTiles        bool `gorm:"not null;default:true"`
 	ChannelDiscoveryEnabled bool `gorm:"not null;default:false"`
+	WebLinkingEnabled       bool `gorm:"not null;default:true"`
 	DailySearchLimit        int  `gorm:"not null;default:0"`
 
 	CreatedAt time.Time
@@ -158,6 +159,22 @@ type PairingCode struct {
 	ExpiresAt time.Time `gorm:"not null"`
 	UsedAt    *time.Time
 	CreatedAt time.Time
+}
+
+// WebDeviceLink is a short-lived two-secret handoff from a browser to an
+// already trusted app. Neither plain secret is persisted.
+type WebDeviceLink struct {
+	ID                  uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ApprovalTokenHash   string     `gorm:"not null;uniqueIndex"`
+	RedemptionTokenHash string     `gorm:"not null;uniqueIndex"`
+	DeviceName          string     `gorm:"not null"`
+	ChildID             *uuid.UUID `gorm:"type:uuid;index"`
+	ApprovedByDeviceID  *uuid.UUID `gorm:"type:uuid"`
+	ApprovedByParentID  *uuid.UUID `gorm:"type:uuid"`
+	ExpiresAt           time.Time  `gorm:"not null;index"`
+	ApprovedAt          *time.Time
+	RedeemedAt          *time.Time
+	CreatedAt           time.Time
 }
 
 // Channel caches YouTube channel metadata. Keyed by YouTube's own ID.

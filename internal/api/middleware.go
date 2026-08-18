@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -57,8 +58,13 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/install/") {
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		} else {
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -104,8 +110,18 @@ func (s *Server) withParent(h parentHandler) handlerFunc {
 func (s *Server) withChild(h childHandler) handlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		token := auth.BearerToken(r.Header.Get("Authorization"))
+		fromCookie := false
 		if token == "" {
-			return unauthorized()
+			cookie, err := r.Cookie(webSessionCookie)
+			if err != nil || cookie.Value == "" {
+				return unauthorized()
+			}
+			token = cookie.Value
+			fromCookie = true
+		}
+		if fromCookie && r.Method != http.MethodGet && r.Method != http.MethodHead &&
+			r.Method != http.MethodOptions && !sameOrigin(r.Header.Get("Origin"), s.deps.Config.Server.PublicURL) {
+			return forbidden("cross-origin browser request refused")
 		}
 
 		device, child, err := s.deps.Accounts.DeviceByToken(r.Context(), auth.HashToken(token))
@@ -123,6 +139,15 @@ func (s *Server) withChild(h childHandler) handlerFunc {
 			DeviceID: device.ID,
 		})
 	}
+}
+
+func sameOrigin(candidate, configured string) bool {
+	left, leftErr := url.Parse(candidate)
+	right, rightErr := url.Parse(configured)
+	if leftErr != nil || rightErr != nil || left.Scheme == "" || left.Host == "" {
+		return false
+	}
+	return strings.EqualFold(left.Scheme, right.Scheme) && strings.EqualFold(left.Host, right.Host)
 }
 
 // statusRecorder captures the status code for logging, since ResponseWriter

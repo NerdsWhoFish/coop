@@ -9,10 +9,13 @@ struct ChildSettingsView: View {
   @State private var shortsEnabled: Bool
   @State private var videoSearchTiles: Bool
   @State private var channelDiscoveryEnabled: Bool
+  @State private var webLinkingEnabled: Bool
   @State private var dailySearchLimit: Int
   @State private var pairingCode: Components.Schemas.PairingCode?
   @State private var isWorking = false
   @State private var confirmingDeletion = false
+  @State private var showingComputerScanner = false
+  @State private var computerLinked = false
   @Environment(\.dismiss) private var dismiss
 
   init(child: Components.Schemas.Child, model: AppModel) {
@@ -22,6 +25,7 @@ struct ChildSettingsView: View {
     _shortsEnabled = State(initialValue: child.value2.shortsEnabled ?? false)
     _videoSearchTiles = State(initialValue: child.value2.videoSearchTiles ?? false)
     _channelDiscoveryEnabled = State(initialValue: child.value2.channelDiscoveryEnabled ?? false)
+    _webLinkingEnabled = State(initialValue: child.value2.webLinkingEnabled ?? true)
     _dailySearchLimit = State(initialValue: child.value2.dailySearchLimit ?? 0)
   }
 
@@ -47,6 +51,11 @@ struct ChildSettingsView: View {
       }
 
       Section("Device pairing") {
+        Toggle("Allow computer linking", isOn: $webLinkingEnabled)
+        Button("Scan computer code", systemImage: "qrcode.viewfinder") {
+          showingComputerScanner = true
+        }
+        .disabled(isWorking || !webLinkingEnabled || !WebDeviceLinkScanner.isSupported)
         Button("Create one-time code") { pair() }
           .disabled(isWorking)
         if let pairingCode {
@@ -101,6 +110,35 @@ struct ChildSettingsView: View {
       Text("This permanently removes their devices, rules, requests, and activity.")
     }
     .coopBackground()
+    .sheet(isPresented: $showingComputerScanner) {
+      NavigationStack {
+        WebDeviceLinkScanner { value in
+          Task {
+            do {
+              try await model.approveWebLink(value, childID: child.value1.id)
+              showingComputerScanner = false
+              computerLinked = true
+            } catch {
+              model.errorMessage = error.localizedDescription
+              showingComputerScanner = false
+            }
+          }
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .navigationTitle("Link for \(child.value1.name)")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { showingComputerScanner = false }
+          }
+        }
+      }
+    }
+    .alert("Computer linked", isPresented: $computerLinked) {
+      Button("Done", role: .cancel) {}
+    } message: {
+      Text("The browser is now paired with \(child.value1.name)’s profile.")
+    }
   }
 
   private var searchLimitLabel: String {
@@ -115,6 +153,7 @@ struct ChildSettingsView: View {
       watchPageAutoplay: nil,
       videoSearchTiles: videoSearchTiles,
       channelDiscoveryEnabled: channelDiscoveryEnabled,
+      webLinkingEnabled: webLinkingEnabled,
       dailySearchLimit: dailySearchLimit
     )
     Task {
