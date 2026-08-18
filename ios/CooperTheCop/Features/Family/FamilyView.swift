@@ -71,6 +71,12 @@ struct FamilyView: View {
           }
         }
 
+        if model.parent?.role == .admin {
+          Section("Devices") {
+            NavigationLink("App versions", destination: AppVersionsView(model: model))
+          }
+        }
+
         Section("History") {
           NavigationLink("Policy and security activity", destination: AuditView(model: model))
         }

@@ -375,6 +375,11 @@ final class AppModel {
     return try await api.childDevices(childID: childID)
   }
 
+  func familyDevices() async throws -> [Components.Schemas.FamilyDevice] {
+    guard let api else { return [] }
+    return try await api.familyDevices()
+  }
+
   func revokeChildDevice(id: String) async throws {
     guard let api else { return }
     try await api.revokeChildDevice(id: id)

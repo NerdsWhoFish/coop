@@ -17,6 +17,7 @@
 		3F4679FF82914E69C6399374 /* CooperTheCopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013F4DC517A846EB3C0C6505 /* CooperTheCopTests.swift */; };
 		53D1D490390347B4DABB6636 /* TOTPVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9522A513AFB6C7D5CFB441 /* TOTPVerificationView.swift */; };
 		56F0F75BDF68AB827E800F34 /* APIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */; };
+		6B26C9537FEAF0691C8C31AB /* AppVersionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC64B12BB6E75C4CAC04089 /* AppVersionsView.swift */; };
 		6D7CB0C34ACE3BFE4DF131B7 /* ChildDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CFA18E6CB0B681B7DCC526 /* ChildDevicesView.swift */; };
 		80990A40CA1BB893FD3D69E7 /* CooperTheCopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */; };
 		88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */; };
@@ -72,6 +73,7 @@
 		8D1B606E767366D7D2994319 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		90017104578429EF692D6F7E /* CoopTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoopTheme.swift; sourceTree = "<group>"; };
 		9904FF9EA25490D92F4748AC /* CooperTheCopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperTheCopApp.swift; sourceTree = "<group>"; };
+		9DC64B12BB6E75C4CAC04089 /* AppVersionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionsView.swift; sourceTree = "<group>"; };
 		A511FB667116D3D81E9547D3 /* ChildSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildSettingsView.swift; sourceTree = "<group>"; };
 		A939CC28E13F6BBA929C4C08 /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesView.swift; sourceTree = "<group>"; };
 		B05230BD17F01ECEF0942BE8 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
@@ -123,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				CB2F2BD4F9CE35EFA8F0FED1 /* APIKeyView.swift */,
+				9DC64B12BB6E75C4CAC04089 /* AppVersionsView.swift */,
 				8504EC06DE6280F85032A2D6 /* FamilyView.swift */,
 				4AF554B0761682DCEF6B9E2F /* InviteParentView.swift */,
 				1A171C50E0E32474630B0101 /* ParentScopeView.swift */,
@@ -369,6 +372,7 @@
 				DAB2A4763780BECE05B8D901 /* AcceptInvitationView.swift in Sources */,
 				DC59C32474E6CA1C7DB64B10 /* AddKeywordView.swift in Sources */,
 				C95E0606DB2154C2965D95A7 /* AppModel.swift in Sources */,
+				6B26C9537FEAF0691C8C31AB /* AppVersionsView.swift in Sources */,
 				88F9EA4D70A5773F49E06716 /* AuthenticationView.swift in Sources */,
 				1220B137724741C9867CB826 /* ChannelSearchView.swift in Sources */,
 				6D7CB0C34ACE3BFE4DF131B7 /* ChildDevicesView.swift in Sources */,
@@ -601,7 +605,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CooperTheCop.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 10800;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a Coop code to approve a child computer.";
@@ -611,7 +615,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fish.nerdswhofish.coop.parent;
 				PRODUCT_NAME = CooperTheCop;
 				SDKROOT = iphoneos;
@@ -625,7 +629,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CooperTheCop.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 10800;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a Coop code to approve a child computer.";
@@ -635,7 +639,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fish.nerdswhofish.coop.parent;
 				PRODUCT_NAME = CooperTheCop;
 				SDKROOT = iphoneos;
