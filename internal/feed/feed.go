@@ -109,11 +109,13 @@ func (s *Service) Search(ctx context.Context, familyID, childID uuid.UUID,
 	return out, nil
 }
 
-// Home returns a locally ranked, diverse page from approved channels.
+// Home returns a locally ranked, diverse page from approved channels. Each
+// fresh visit draws a new exploration seed, so the order varies between
+// visits while one scroll stays coherent through the cursor.
 func (s *Service) Home(ctx context.Context, familyID, childID uuid.UUID,
 	limit int, cursor string) (Page, error) {
 
-	page, err := s.Recommendations(ctx, familyID, childID, limit, cursor)
+	page, err := s.recommendations(ctx, familyID, childID, limit, cursor, uuid.NewString())
 	if err != nil {
 		return Page{}, err
 	}
@@ -126,12 +128,28 @@ func (s *Service) Home(ctx context.Context, familyID, childID uuid.UUID,
 }
 
 // Recommendations ranks a bounded local catalog pool and exposes why each
-// video landed where it did. It never calls YouTube.
+// video landed where it did. It never calls YouTube, and it applies no
+// exploration jitter, so parents tune against reproducible scores.
 func (s *Service) Recommendations(ctx context.Context, familyID, childID uuid.UUID,
 	limit int, cursor string) (RecommendationPage, error) {
 
+	return s.recommendations(ctx, familyID, childID, limit, cursor, "")
+}
+
+func (s *Service) recommendations(ctx context.Context, familyID, childID uuid.UUID,
+	limit int, cursor, seed string) (RecommendationPage, error) {
+
 	if limit <= 0 || limit > 100 {
 		limit = 30
+	}
+	cursorVideoID := ""
+	if cursor != "" {
+		// The cursor's seed wins so every page of one scroll shares one order.
+		cursorSeed, videoID, err := decodeRecommendationCursor(cursor)
+		if err != nil {
+			return RecommendationPage{}, err
+		}
+		seed, cursorVideoID = cursorSeed, videoID
 	}
 	channelIDs, evaluator, err := s.watchableChannels(ctx, familyID, childID, false)
 	if err != nil {
@@ -184,8 +202,9 @@ func (s *Service) Recommendations(ctx context.Context, familyID, childID uuid.UU
 		ChannelWeights:     weights,
 		Now:                now,
 		PageSize:           limit,
+		Seed:               seed,
 	})
-	start, err := recommendationStart(ranked, cursor)
+	start, err := recommendationStart(ranked, cursorVideoID)
 	if err != nil {
 		return RecommendationPage{}, err
 	}
@@ -205,7 +224,7 @@ func (s *Service) Recommendations(ctx context.Context, familyID, childID uuid.UU
 		})
 	}
 	if end < len(ranked) {
-		page.NextCursor = encodeRecommendationCursor(ranked[end-1].Candidate.ID)
+		page.NextCursor = encodeRecommendationCursor(seed, ranked[end-1].Candidate.ID)
 	}
 	return page, nil
 }
@@ -266,13 +285,9 @@ func stringSet(values []string) map[string]bool {
 	return out
 }
 
-func recommendationStart(ranked []rank.Recommendation, cursor string) (int, error) {
-	if cursor == "" {
+func recommendationStart(ranked []rank.Recommendation, videoID string) (int, error) {
+	if videoID == "" {
 		return 0, nil
-	}
-	videoID, err := decodeRecommendationCursor(cursor)
-	if err != nil {
-		return 0, err
 	}
 	index := slices.IndexFunc(ranked, func(item rank.Recommendation) bool {
 		return item.Candidate.ID == videoID
@@ -283,20 +298,29 @@ func recommendationStart(ranked []rank.Recommendation, cursor string) (int, erro
 	return index + 1, nil
 }
 
-func encodeRecommendationCursor(videoID string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte("recommendation:" + videoID))
+func encodeRecommendationCursor(seed, videoID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte("recommendation:" + seed + ":" + videoID))
 }
 
-func decodeRecommendationCursor(cursor string) (string, error) {
+// decodeRecommendationCursor also accepts the seedless form written before
+// exploration existed, so a scroll in flight across a deploy keeps working.
+func decodeRecommendationCursor(cursor string) (seed, videoID string, err error) {
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", fmt.Errorf("malformed recommendation cursor: %w", err)
+		return "", "", fmt.Errorf("malformed recommendation cursor: %w", err)
 	}
-	videoID, found := strings.CutPrefix(string(raw), "recommendation:")
-	if !found || videoID == "" {
-		return "", fmt.Errorf("malformed recommendation cursor")
+	rest, found := strings.CutPrefix(string(raw), "recommendation:")
+	if !found || rest == "" {
+		return "", "", fmt.Errorf("malformed recommendation cursor")
 	}
-	return videoID, nil
+	seed, videoID, seeded := strings.Cut(rest, ":")
+	if !seeded {
+		return "", rest, nil
+	}
+	if videoID == "" {
+		return "", "", fmt.Errorf("malformed recommendation cursor")
+	}
+	return seed, videoID, nil
 }
 
 // Shorts returns a shuffled, looping feed of short videos. It pages by offset

@@ -4,6 +4,7 @@ package rank
 
 import (
 	"cmp"
+	"hash/fnv"
 	"slices"
 	"strconv"
 	"time"
@@ -15,6 +16,10 @@ const (
 	defaultPageSize       = 30
 	defaultMaxConsecutive = 2
 	defaultForgottenAfter = 14 * 24 * time.Hour
+
+	// explorationJitter reorders the plateau of near-tied unwatched videos but
+	// stays below one parent weight step (7), so explicit signals survive it.
+	explorationJitter = 3.0
 )
 
 // ReasonKind lets clients pair a stable visual treatment with an explanation.
@@ -65,6 +70,10 @@ type Input struct {
 	PageSize           int
 	MaxConsecutive     int
 	ForgottenAfter     time.Duration
+
+	// Seed varies exploration jitter between browsing sessions. Empty means no
+	// jitter, which reproduces the canonical deterministic order.
+	Seed string
 }
 
 // Recommendation carries the order, score, and parent-facing explanation.
@@ -180,6 +189,10 @@ func score(candidate Candidate, video videoHistory, channel channelHistory,
 		}
 	}
 
+	if input.Seed != "" {
+		score += explorationJitter * jitter(input.Seed, candidate.ID)
+	}
+
 	kind, reason := explanation(reaction, weight, video, averageCompletion, channel,
 		subscribed, candidate, input.Now)
 	return Recommendation{
@@ -225,6 +238,17 @@ func completedReason(count int) string {
 		return "They finished a video from this channel this week."
 	}
 	return "They finished " + strconv.Itoa(count) + " videos from this channel this week."
+}
+
+// jitter returns a uniform value in [0, 1) fixed for one seed and video pair,
+// so one session keeps a stable order while sessions differ.
+func jitter(seed, videoID string) float64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(seed))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(videoID))
+	// The top 53 bits are exactly the precision a float64 mantissa holds.
+	return float64(h.Sum64()>>11) / (1 << 53)
 }
 
 func compareRecommendations(a, b Recommendation) int {

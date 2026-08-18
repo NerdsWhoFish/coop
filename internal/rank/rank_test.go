@@ -1,6 +1,7 @@
 package rank
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -123,6 +124,57 @@ func TestEachPageReservesUnwatchedAndForgottenContent(t *testing.T) {
 	if !firstPage["never"] || !firstPage["forgotten"] {
 		t.Fatalf("first page IDs = %v, want never and forgotten reserved", firstPage)
 	}
+}
+
+func TestExplorationJitterIsStablePerSeedAndVariesAcrossSeeds(t *testing.T) {
+	candidates := make([]Candidate, 0, 20)
+	for _, id := range []string{
+		"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+		"k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+	} {
+		candidates = append(candidates, candidate(id, "channel-"+id, time.Hour))
+	}
+	input := Input{Now: testNow, Candidates: candidates, Seed: "morning"}
+
+	first := ids(Videos(input))
+	second := ids(Videos(input))
+	if !slices.Equal(first, second) {
+		t.Fatalf("one seed produced two orders: %v then %v", first, second)
+	}
+
+	input.Seed = "afternoon"
+	if slices.Equal(first, ids(Videos(input))) {
+		t.Fatal("two seeds produced the same order across a 20-way tie")
+	}
+}
+
+func TestExplorationJitterCannotOverrideExplicitSignals(t *testing.T) {
+	input := Input{
+		Now: testNow,
+		Candidates: []Candidate{
+			candidate("liked", "one", 20*24*time.Hour),
+			candidate("boosted", "two", 20*24*time.Hour),
+			candidate("plain", "three", 20*24*time.Hour),
+		},
+		Reactions:      []Reaction{{VideoID: "liked", Kind: domain.ReactionLike}},
+		ChannelWeights: map[string]int{"two": 1},
+	}
+
+	for _, seed := range []string{"one", "two", "three", "four", "five"} {
+		input.Seed = seed
+		got := ids(Videos(input))
+		if got[0] != "liked" || got[1] != "boosted" {
+			t.Fatalf("seed %q ranked %v, want liked then boosted", seed, got)
+		}
+	}
+}
+
+func ids(recommendations []Recommendation) []string {
+	out := make([]string, len(recommendations))
+	for i, recommendation := range recommendations {
+		out[i] = recommendation.Candidate.ID
+	}
+	return out
 }
 
 func TestTieBreaksAreDeterministic(t *testing.T) {

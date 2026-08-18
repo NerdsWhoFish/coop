@@ -1175,7 +1175,11 @@ paths:
     get:
       operationId: getChildFeed
       tags: [child-browse]
-      summary: Home feed, newest first across subscribed and allowed channels
+      summary: Ranked home feed across subscribed and allowed channels
+      description: |
+        Locally ranked with seeded exploration, so the order varies between
+        visits. The cursor continues its own visit's order, and each fresh
+        first page draws a new one.
       security:
         - childToken: []
         - webChildSession: []

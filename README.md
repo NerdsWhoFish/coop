@@ -75,7 +75,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Child search across channels and videos**, with blocked results hidden and requestable videos locked behind approval.
 - **Opt-in new-channel discovery**, mixed conservatively into Home and Watch Next with explanations and the same approval boundary as search.
 - **A shuffled, looping Shorts feed** that mounts only the visible player and never includes locked channels.
-- **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data.
+- **Parent-tunable recommendations** over the approved pool, ranked entirely from cached data, with seeded exploration so Home and Watch Next stay fresh between visits.
 
 ## Components
 
