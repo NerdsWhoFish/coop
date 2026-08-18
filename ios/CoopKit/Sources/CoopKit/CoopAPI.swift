@@ -690,6 +690,27 @@ public actor CoopAPI {
     return try response.body.json.items
   }
 
+  public func registerParentPushToken(_ token: String) async throws {
+    let payload = Components.Schemas.PushTokenBody(token: token)
+    guard case .noContent = try await client.saveParentPushToken(body: .json(payload)) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func unregisterParentPushToken(_ token: String) async throws {
+    let path = Operations.DeleteParentPushToken.Input.Path(token: token)
+    guard case .noContent = try await client.deleteParentPushToken(path: path) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
+  public func registerChildPushToken(_ token: String) async throws {
+    let payload = Components.Schemas.PushTokenBody(token: token)
+    guard case .noContent = try await client.saveChildPushToken(body: .json(payload)) else {
+      throw CoopAPIError.unexpectedResponse
+    }
+  }
+
   public func approveRequest(id: String, globally: Bool) async throws {
     let path = Operations.ApproveRequest.Input.Path(requestId: id)
     let payload = Operations.ApproveRequest.Input.Body.JsonPayload(
