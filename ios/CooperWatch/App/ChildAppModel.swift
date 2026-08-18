@@ -165,6 +165,8 @@ final class ChildAppModel {
     } catch {
       errorMessage = error.localizedDescription
     }
+    enablePushNotificationsIfNeeded()
+    startRequestWatcher()
   }
 
   func approveWebLink(_ scannedValue: String) async throws {
@@ -324,6 +326,100 @@ final class ChildAppModel {
     try await api?.childRequests() ?? []
   }
 
+  // MARK: - Live refresh
+
+  // A decided request should just appear, but a feed that reorders while a
+  // video or Short is playing reads as the app glitching. Playback surfaces
+  // count themselves in and out, and refreshes wait for calm.
+  private var activePlaybackCount = 0
+  private var pendingLibraryRefresh = false
+  private var pushRegistrationRequested = false
+  private var requestStatuses: [String: Components.Schemas.RequestStatus] = [:]
+  private var requestWatcher: Task<Void, Never>?
+  private var leftForegroundAt: Date?
+
+  private static let requestPollInterval: Duration = .seconds(20)
+  private static let staleForegroundAge: TimeInterval = 5 * 60
+
+  func playbackDidStart() {
+    activePlaybackCount += 1
+  }
+
+  func playbackDidStop() {
+    activePlaybackCount = max(0, activePlaybackCount - 1)
+    guard activePlaybackCount == 0, pendingLibraryRefresh else { return }
+    pendingLibraryRefresh = false
+    Task { await loadLibrary() }
+  }
+
+  func refreshLibraryWhenCalm() {
+    if activePlaybackCount > 0 {
+      pendingLibraryRefresh = true
+    } else {
+      Task { await loadLibrary() }
+    }
+  }
+
+  func sceneBecameActive() async {
+    await checkForRequiredUpdate()
+    guard destination == .watch else { return }
+    enablePushNotificationsIfNeeded()
+    startRequestWatcher()
+
+    // A quick app switch keeps the feed put; a real absence earns a fresh one.
+    let wasAwayLong = leftForegroundAt.map {
+      Date.now.timeIntervalSince($0) > Self.staleForegroundAge
+    } ?? false
+    leftForegroundAt = nil
+    await checkRequests(refreshLibraryAnyway: wasAwayLong)
+  }
+
+  func sceneWentInactive() {
+    leftForegroundAt = .now
+    requestWatcher?.cancel()
+    requestWatcher = nil
+  }
+
+  func enablePushNotificationsIfNeeded() {
+    guard !isPreviewMode, !pushRegistrationRequested, api != nil else { return }
+    pushRegistrationRequested = true
+    PushRegistration.onToken = { [weak self] token in
+      guard let api = self?.api else { return }
+      Task { try? await api.registerChildPushToken(token) }
+    }
+    PushRegistration.onNotification = { [weak self] in
+      Task { await self?.checkRequests(refreshLibraryAnyway: true) }
+    }
+    PushRegistration.register()
+  }
+
+  private func startRequestWatcher() {
+    guard requestWatcher == nil, !isPreviewMode else { return }
+    requestWatcher = Task { [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(for: Self.requestPollInterval)
+        guard !Task.isCancelled else { return }
+        await self?.checkRequests(refreshLibraryAnyway: false)
+      }
+    }
+  }
+
+  private func checkRequests(refreshLibraryAnyway: Bool) async {
+    guard api != nil else { return }
+    guard let current = try? await requests() else { return }
+
+    let previous = requestStatuses
+    requestStatuses = Dictionary(
+      uniqueKeysWithValues: current.map { ($0.id, $0.status) }
+    )
+    let decided = current.contains { request in
+      previous[request.id] == .pending && request.status != .pending
+    }
+    if decided || refreshLibraryAnyway {
+      refreshLibraryWhenCalm()
+    }
+  }
+
   func unpair() {
     tokenStore.delete()
     api = nil
@@ -332,6 +428,12 @@ final class ChildAppModel {
     discoveries = []
     subscriptions = []
     destination = .pairing
+    requestWatcher?.cancel()
+    requestWatcher = nil
+    requestStatuses = [:]
+    pendingLibraryRefresh = false
+    // The server-side push registration dies with the device pairing row.
+    pushRegistrationRequested = false
   }
 
   private func perform(_ operation: () async throws -> Void) async {

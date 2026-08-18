@@ -43,7 +43,10 @@ struct WatchPageView: View {
     .navigationBarTitleDisplayMode(.inline)
     .task { await load() }
     .task(id: playbackTaskID) { await maintainPlaybackLease() }
-    .onAppear { syncPlaybackVisibility() }
+    .onAppear {
+      syncPlaybackVisibility()
+      model.playbackDidStart()
+    }
     .onChange(of: playbackSurfaceActive) { _, _ in syncPlaybackVisibility() }
     .onChange(of: scenePhase) { _, _ in syncPlaybackVisibility() }
     .onDisappear {
@@ -51,6 +54,7 @@ struct WatchPageView: View {
       playerSession.stop()
       Task { _ = await model.updatePlayback(videoID: videoID, state: .stopped) }
       recordWatch()
+      model.playbackDidStop()
     }
     .watchBackground()
   }

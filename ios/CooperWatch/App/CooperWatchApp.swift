@@ -1,9 +1,34 @@
+import CoopKit
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @MainActor
 final class CooperWatchOrientationDelegate: NSObject, UIApplicationDelegate {
   private static var supportedOrientations: UIInterfaceOrientationMask = .portrait
+  private let notificationDelegate = PushNotificationDelegate()
+
+  func application(
+    _: UIApplication,
+    didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    UNUserNotificationCenter.current().delegate = notificationDelegate
+    return true
+  }
+
+  func application(
+    _: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    PushRegistration.onToken?(PushRegistration.hexToken(from: deviceToken))
+  }
+
+  func application(
+    _: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError _: any Error
+  ) {
+    // Push is an optional layer; a simulator or a denied capability is fine.
+  }
 
   func application(
     _: UIApplication,
@@ -39,8 +64,11 @@ struct CooperWatchApp: App {
           await model.launch()
         }
         .onChange(of: scenePhase) { _, phase in
-          guard phase == .active else { return }
-          Task { await model.checkForRequiredUpdate() }
+          if phase == .active {
+            Task { await model.sceneBecameActive() }
+          } else {
+            model.sceneWentInactive()
+          }
         }
     }
   }

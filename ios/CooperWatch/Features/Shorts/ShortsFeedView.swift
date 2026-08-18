@@ -40,6 +40,8 @@ struct ShortsFeedView: View {
       .watchBackground()
     }
     .task { await loadNextPage() }
+    .onAppear { model.playbackDidStart() }
+    .onDisappear { model.playbackDidStop() }
   }
 
   private var feed: some View {
