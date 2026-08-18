@@ -14,6 +14,7 @@ struct ShortPageView: View {
   @State private var loadError: String?
   @State private var startedAt: Date?
   @State private var playerIsReady = false
+  @State private var tappedVideo: TappedVideo?
 
   private var accent: Color {
     let colors = [WatchTheme.cyan, WatchTheme.pink, WatchTheme.purple, WatchTheme.green]
@@ -55,7 +56,21 @@ struct ShortPageView: View {
       stopPlaybackLease()
       recordWatch()
     }
+    .navigationDestination(item: $tappedVideo) { tapped in
+      WatchPageView(videoID: tapped.id, model: model)
+    }
     .animation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0.12), value: isActive)
+  }
+
+  private func openTappedVideo(_ id: String) {
+    guard id != video.id else { return }
+    Task {
+      if (try? await model.video(id: id)) != nil {
+        tappedVideo = TappedVideo(id: id)
+      } else {
+        loadError = "That video isn't in your Coop yet. Try searching for it to ask!"
+      }
+    }
   }
 
   private var player: some View {
@@ -77,12 +92,17 @@ struct ShortPageView: View {
             accessibilityIdentifier: "short-video-loading"
           )
         }
-      } else if isActive, let playerURL {
-        YouTubeEmbeddedPlayer(url: playerURL) {
-          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
-            playerIsReady = true
+      } else if isActive, let playerURL, let origin = model.playbackOrigin {
+        YouTubeEmbeddedPlayer(
+          url: playerURL,
+          origin: origin,
+          onVideoLink: { openTappedVideo($0) },
+          onReady: {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+              playerIsReady = true
+            }
           }
-        }
+        )
         .transition(.opacity)
 
         if !playerIsReady {

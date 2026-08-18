@@ -2,13 +2,12 @@ import SwiftUI
 import WebKit
 
 enum YouTubeEmbedRequest {
-  static func make(url: URL, bundleIdentifier: String?) -> URLRequest? {
+  /// The playback URL for the embed iframe, forced to autoplay inline.
+  static func playbackURL(for url: URL) -> URL? {
     guard
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
       components.scheme == "https",
-      components.host == "www.youtube-nocookie.com",
-      let bundleIdentifier,
-      !bundleIdentifier.isEmpty
+      components.host == "www.youtube-nocookie.com"
     else { return nil }
 
     let playbackItems = [
@@ -19,11 +18,29 @@ enum YouTubeEmbedRequest {
     components.queryItems =
       (components.queryItems ?? []).filter { !playbackNames.contains($0.name) }
       + playbackItems
-    guard let playbackURL = components.url else { return nil }
+    return components.url
+  }
 
-    var request = URLRequest(url: playbackURL)
-    request.setValue("https://\(bundleIdentifier.lowercased())", forHTTPHeaderField: "Referer")
-    return request
+  /// Wraps the embed in an iframe because YouTube rejects referer-less embeds
+  /// with error 153, and WebKit ignores a hand-set Referer on top-level loads.
+  /// Framing from the family's real Coop origin sends that referrer natively.
+  static func wrapperHTML(for playbackURL: URL) -> String {
+    """
+    <!doctype html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      iframe { width: 100%; height: 100%; border: 0; display: block; }
+    </style>
+    </head>
+    <body>
+    <iframe src="\(playbackURL.absoluteString)"
+      allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    </body>
+    </html>
+    """
   }
 }
 
@@ -53,7 +70,8 @@ final class PlayerReadinessObserver: NSObject, WKScriptMessageHandler {
       })();
       """,
     injectionTime: .atDocumentEnd,
-    forMainFrameOnly: true
+    // The video element lives inside the embed iframe, not the wrapper page.
+    forMainFrameOnly: false
   )
 
   // A kid staring at a spinner experiences the old 45 second failsafe as
@@ -118,6 +136,73 @@ final class PlayerReadinessObserver: NSObject, WKScriptMessageHandler {
   }
 }
 
+/// Decides where the embed may navigate, for the web view's whole life. The
+/// player's own frames pass, a tapped video link is handed back to the app,
+/// and everything else is refused, so the player can never leave Coop.
+@MainActor
+final class PlayerLinkRouter: NSObject, WKNavigationDelegate, WKUIDelegate {
+  var onVideoLink: ((String) -> Void)?
+  var wrapperOrigin: URL?
+
+  static func install(on webView: WKWebView) -> PlayerLinkRouter {
+    let router = PlayerLinkRouter()
+    webView.navigationDelegate = router
+    webView.uiDelegate = router
+    return router
+  }
+
+  /// The video a YouTube link points at: watch pages, shorts, and short links.
+  static func videoID(from url: URL) -> String? {
+    guard let host = url.host()?.lowercased() else { return nil }
+    let path = url.pathComponents.filter { $0 != "/" }
+    if host == "youtu.be" {
+      return path.first
+    }
+    guard host == "youtube.com" || host.hasSuffix(".youtube.com") else { return nil }
+    if path.first == "watch" {
+      return URLComponents(url: url, resolvingAgainstBaseURL: false)?
+        .queryItems?.first(where: { $0.name == "v" })?.value
+    }
+    if path.first == "shorts", path.count > 1 {
+      return path[1]
+    }
+    return nil
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction
+  ) async -> WKNavigationActionPolicy {
+    let url = navigationAction.request.url
+    let host = url?.host()?.lowercased() ?? ""
+    let isPlayerHost = host == "www.youtube-nocookie.com" || host.hasSuffix(".youtube-nocookie.com")
+
+    if navigationAction.targetFrame?.isMainFrame ?? false {
+      if url == nil || url?.scheme == "about" { return .allow }
+      if let origin = wrapperOrigin, host == origin.host()?.lowercased() { return .allow }
+    } else if isPlayerHost || url?.scheme == "about" {
+      return .allow
+    }
+
+    if let url, let id = Self.videoID(from: url) {
+      onVideoLink?(id)
+    }
+    return .cancel
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction,
+    windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    if let url = navigationAction.request.url, let id = Self.videoID(from: url) {
+      onVideoLink?(id)
+    }
+    return nil
+  }
+}
+
 // WKUserContentController retains its message handlers, so registering the
 // observer directly would cycle through the web view's configuration.
 private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
@@ -139,11 +224,13 @@ private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
 final class YouTubeEmbeddedPlayerSession {
   let webView: WKWebView
   let readiness: PlayerReadinessObserver
+  let linkRouter: PlayerLinkRouter
   fileprivate var loadedURL: URL?
 
   init() {
     webView = YouTubeEmbeddedPlayer.makeWebView()
     readiness = PlayerReadinessObserver.install(on: webView)
+    linkRouter = PlayerLinkRouter.install(on: webView)
   }
 
   func stop() {
@@ -156,16 +243,22 @@ final class YouTubeEmbeddedPlayerSession {
 
 struct YouTubeEmbeddedPlayer: UIViewRepresentable {
   let url: URL
+  let origin: URL
   var session: YouTubeEmbeddedPlayerSession?
+  var onVideoLink: (String) -> Void
   var onReady: () -> Void
 
   init(
     url: URL,
+    origin: URL,
     session: YouTubeEmbeddedPlayerSession? = nil,
+    onVideoLink: @escaping (String) -> Void = { _ in },
     onReady: @escaping () -> Void = {}
   ) {
     self.url = url
+    self.origin = origin
     self.session = session
+    self.onVideoLink = onVideoLink
     self.onReady = onReady
   }
 
@@ -178,9 +271,11 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     if let session {
       view = session.webView
       context.coordinator.readiness = session.readiness
+      context.coordinator.linkRouter = session.linkRouter
     } else {
       view = Self.makeWebView()
       context.coordinator.readiness = PlayerReadinessObserver.install(on: view)
+      context.coordinator.linkRouter = PlayerLinkRouter.install(on: view)
     }
     load(url, in: view, coordinator: context.coordinator)
     return view
@@ -219,13 +314,12 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
 
   private func load(_ url: URL, in view: WKWebView, coordinator: Coordinator) {
     coordinator.readiness?.expectReady(onReady)
+    coordinator.linkRouter?.onVideoLink = onVideoLink
+    coordinator.linkRouter?.wrapperOrigin = origin
     let loadedURL = session?.loadedURL ?? coordinator.loadedURL
     guard
       loadedURL != url,
-      let request = YouTubeEmbedRequest.make(
-        url: url,
-        bundleIdentifier: Bundle.main.bundleIdentifier
-      )
+      let playbackURL = YouTubeEmbedRequest.playbackURL(for: url)
     else { return }
     if let session {
       session.loadedURL = url
@@ -234,7 +328,7 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     } else {
       coordinator.loadedURL = url
     }
-    view.load(request)
+    view.loadHTMLString(YouTubeEmbedRequest.wrapperHTML(for: playbackURL), baseURL: origin)
   }
 
   @MainActor
@@ -242,6 +336,7 @@ struct YouTubeEmbeddedPlayer: UIViewRepresentable {
     let preservesPlayback: Bool
     var loadedURL: URL?
     var readiness: PlayerReadinessObserver?
+    var linkRouter: PlayerLinkRouter?
 
     init(preservesPlayback: Bool) {
       self.preservesPlayback = preservesPlayback

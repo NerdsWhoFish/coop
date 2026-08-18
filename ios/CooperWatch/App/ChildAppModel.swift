@@ -235,6 +235,12 @@ final class ChildAppModel {
     )
   }
 
+  // The embed wrapper anchors at this origin so YouTube receives a real
+  // referrer; see YouTubeEmbedRequest.wrapperHTML.
+  var playbackOrigin: URL? {
+    try? ServerURL.normalize(serverAddress)
+  }
+
   func video(id: String) async throws -> Components.Schemas.WatchPage? {
     #if DEBUG
       if isPreviewMode,

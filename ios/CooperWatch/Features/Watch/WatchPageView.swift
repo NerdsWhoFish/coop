@@ -10,6 +10,7 @@ struct WatchPageView: View {
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
   @State private var watchNext: [Components.Schemas.Video] = []
+  @State private var tappedVideo: TappedVideo?
   @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
@@ -41,6 +42,9 @@ struct WatchPageView: View {
     }
     .navigationTitle("Now watching")
     .navigationBarTitleDisplayMode(.inline)
+    .navigationDestination(item: $tappedVideo) { tapped in
+      WatchPageView(videoID: tapped.id, model: model)
+    }
     .task { await load() }
     .task(id: playbackTaskID) { await maintainPlaybackLease() }
     .onAppear {
@@ -228,13 +232,19 @@ struct WatchPageView: View {
           )
         }
       }
-    } else if let url = URL(string: page.embedUrl) {
+    } else if let url = URL(string: page.embedUrl), let origin = model.playbackOrigin {
       ZStack {
-        YouTubeEmbeddedPlayer(url: url, session: playerSession) {
-          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
-            playerIsReady = true
+        YouTubeEmbeddedPlayer(
+          url: url,
+          origin: origin,
+          session: playerSession,
+          onVideoLink: { openTappedVideo($0) },
+          onReady: {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+              playerIsReady = true
+            }
           }
-        }
+        )
 
         if !playerIsReady {
           VideoLoadingPlaceholder(
@@ -245,6 +255,19 @@ struct WatchPageView: View {
         }
       }
       .accessibilityIdentifier("regular-video-player")
+    }
+  }
+
+  // A tap inside the player only navigates when Coop would serve the video;
+  // everything else gets a gentle nudge toward the ask flow.
+  private func openTappedVideo(_ id: String) {
+    guard id != videoID else { return }
+    Task {
+      if (try? await model.video(id: id)) != nil {
+        tappedVideo = TappedVideo(id: id)
+      } else {
+        model.errorMessage = "That video isn't in your Coop yet. Try searching for it to ask!"
+      }
     }
   }
 
@@ -380,7 +403,9 @@ struct WatchPageView: View {
   }
 
   private var isPlaybackActive: Bool {
-    playbackSurfaceActive && scenePhase == .active
+    // Inactive is not background: Control Center or a notification pulled over
+    // the app must not stop and restart the video.
+    playbackSurfaceActive && scenePhase != .background
   }
 
   private var playbackTaskID: String {
@@ -397,4 +422,9 @@ struct WatchPageView: View {
     Task { _ = await model.updatePlayback(videoID: videoID, state: .stopped) }
     recordWatch()
   }
+}
+
+/// A video the child tapped inside the embedded player.
+struct TappedVideo: Identifiable, Hashable {
+  let id: String
 }

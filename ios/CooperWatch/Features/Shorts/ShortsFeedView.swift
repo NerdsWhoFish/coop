@@ -51,7 +51,9 @@ struct ShortsFeedView: View {
           ForEach(items) { item in
             ShortPageView(
               video: item.video,
-              isActive: playbackSurfaceActive && scenePhase == .active && currentID == item.id,
+              // Inactive is not background: Control Center over the feed must
+              // not unmount and restart the playing Short.
+              isActive: playbackSurfaceActive && scenePhase != .background && currentID == item.id,
               model: model,
               onBlocked: { removeBlocked(item) }
             )

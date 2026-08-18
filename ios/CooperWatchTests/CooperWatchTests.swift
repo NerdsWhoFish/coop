@@ -54,44 +54,62 @@ func shortPlaybackRejectsUnexpectedHost() {
   #expect(url == nil)
 }
 
-@Test("YouTube embeds identify the app and always autoplay inline")
-func youtubeEmbedRequest() throws {
-  let request = try #require(
-    YouTubeEmbedRequest.make(
-      url: URL(
+@Test("YouTube embeds always autoplay inline")
+func youtubeEmbedPlaybackURL() throws {
+  let playbackURL = try #require(
+    YouTubeEmbedRequest.playbackURL(
+      for: URL(
         string: "https://www.youtube-nocookie.com/embed/abc123?rel=0&autoplay=0&playsinline=0"
-      )!,
-      bundleIdentifier: "fish.NerdsWhoFish.Coop.Child"
+      )!
     )
   )
   let components = try #require(
-    URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+    URLComponents(url: playbackURL, resolvingAgainstBaseURL: false)
   )
   let query = Dictionary(
     uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
 
-  #expect(request.value(forHTTPHeaderField: "Referer") == "https://fish.nerdswhofish.coop.child")
   #expect(query["rel"] == "0")
   #expect(query["autoplay"] == "1")
   #expect(query["playsinline"] == "1")
 }
 
 @Test("YouTube embeds reject untrusted player URLs")
-func youtubeEmbedRequestRejectsUnexpectedURLs() {
-  let bundleIdentifier = "fish.nerdswhofish.coop.child"
+func youtubeEmbedRejectsUnexpectedURLs() {
+  #expect(
+    YouTubeEmbedRequest.playbackURL(
+      for: URL(string: "http://www.youtube-nocookie.com/embed/abc123")!
+    ) == nil
+  )
+  #expect(
+    YouTubeEmbedRequest.playbackURL(
+      for: URL(string: "https://www.youtube.com/embed/abc123")!
+    ) == nil
+  )
+}
 
-  #expect(
-    YouTubeEmbedRequest.make(
-      url: URL(string: "http://www.youtube-nocookie.com/embed/abc123")!,
-      bundleIdentifier: bundleIdentifier
-    ) == nil
+@Test("The embed wrapper frames the player for a real referrer")
+func youtubeEmbedWrapper() {
+  let html = YouTubeEmbedRequest.wrapperHTML(
+    for: URL(string: "https://www.youtube-nocookie.com/embed/abc123?autoplay=1")!
   )
-  #expect(
-    YouTubeEmbedRequest.make(
-      url: URL(string: "https://www.youtube.com/embed/abc123")!,
-      bundleIdentifier: bundleIdentifier
-    ) == nil
-  )
+  #expect(html.contains("<iframe src=\"https://www.youtube-nocookie.com/embed/abc123?autoplay=1\""))
+  #expect(html.contains("allow=\"autoplay"))
+}
+
+@MainActor
+@Test("Player link routing recognizes only real video destinations")
+func playerLinkVideoIDs() {
+  func id(_ raw: String) -> String? {
+    PlayerLinkRouter.videoID(from: URL(string: raw)!)
+  }
+  #expect(id("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ")
+  #expect(id("https://m.youtube.com/watch?v=abc&t=4s") == "abc")
+  #expect(id("https://youtu.be/xyz789") == "xyz789")
+  #expect(id("https://www.youtube.com/shorts/short123") == "short123")
+  #expect(id("https://www.youtube-nocookie.com/embed/abc123") == nil)
+  #expect(id("https://example.com/watch?v=abc") == nil)
+  #expect(id("https://www.youtube.com/@somechannel") == nil)
 }
 
 private func video(id: String, isShort: Bool = false) -> Components.Schemas.Video {
