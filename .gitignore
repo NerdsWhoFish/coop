@@ -27,3 +27,6 @@ xcuserdata/
 DerivedData/
 .swiftpm/
 .build/
+
+# Local migration working notes; never in a public repo.
+PLAN.md
