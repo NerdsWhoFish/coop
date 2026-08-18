@@ -48,6 +48,19 @@ If a camera is unavailable, create a normal one-time pairing code in the parent 
 Each linked browser appears as its own revocable device in Cooper The Cop and reports playback independently.
 Parents can turn off **Allow computer linking** for an individual child without disconnecting browsers that are already paired.
 
+### Optional: push notifications
+
+With push enabled, parents are notified of channel requests and children of decisions, even with the apps closed.
+It needs one-time Apple work with the same developer team that signs your builds:
+
+1. On [developer.apple.com](https://developer.apple.com/account) under **Keys**, create a key with **Apple Push Notifications service (APNs)** checked and download the `.p8` file once. Note the key ID and your team ID.
+2. Under **Identifiers**, enable the **Push Notifications** capability on both app IDs and save. Do not create push SSL certificates; the `.p8` key replaces them.
+3. Give the server the key: set `apns.enabled`, `apns.keyID`, and `apns.teamID` in the Helm values with the PEM contents in your existing secret under `apns-key`, or set `COOP_APNS_ENABLED`, `COOP_APNS_KEY_ID`, `COOP_APNS_TEAM_ID`, and `COOP_APNS_KEY` for Compose.
+4. Rebuild and republish both apps so the push entitlement lands in their provisioning profiles.
+
+The backend only ever connects outbound to Apple, so no additional inbound exposure is needed.
+Notifications are best effort: with push left disabled the apps behave exactly as before, and the child app still refreshes itself while open.
+
 ## 4. Restrict the child device
 
 Coop controls what its own app serves, but it cannot stop a child from opening YouTube somewhere else.

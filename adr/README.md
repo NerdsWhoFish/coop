@@ -29,3 +29,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0017](0017-show-a-noninteractive-thumbnail-until-player-media-is-ready.md) | Show a noninteractive thumbnail until player media is ready | accepted | 2026-08-17 |
 | [0018](0018-browser-child-client-and-device-linking.md) | Serve Cooper Watch as a linked browser device | accepted | 2026-08-17 |
 | [0019](0019-seeded-exploration-jitter-over-deterministic-ranking.md) | Vary child feeds with seeded exploration jitter over the deterministic ranking | accepted | 2026-08-18 |
+| [0020](0020-per-family-apns-push-with-graceful-degradation.md) | Deliver request notifications through per-family APNs keys, degrading gracefully | accepted | 2026-08-18 |

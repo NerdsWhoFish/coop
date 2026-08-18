@@ -66,6 +66,7 @@ Playback uses YouTube's official embedded player, so creators receive real views
 - **Channel-level allowlists**, global across the family or per child.
 - **Three channel states**: allowed, requestable (visible, asks first), and blocked (invisible).
 - **Request and approve loop.** A child asks, a parent approves from their phone.
+- **Optional push notifications** with your own APNs key: requests reach parents and decisions reach children, and while the child app is open, an approval simply appears without disturbing playback.
 - **Negative keywords** that block individual videos inside otherwise-allowed channels, with every suppression visible to the parent and overridable in one tap.
 - **Multiple children**, each with their own subscriptions, allowlist, and settings.
 - **Computer access at the Coop hostname**, linked by scanning a short-lived QR code from either native app or by entering a parent's one-time pairing code.
