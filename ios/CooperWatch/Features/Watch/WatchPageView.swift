@@ -9,6 +9,7 @@ struct WatchPageView: View {
   let videoID: String
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
+  @State private var watchNext: [Components.Schemas.Video] = []
   @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
@@ -136,7 +137,7 @@ struct WatchPageView: View {
                 .font(.title3.bold())
                 .accessibilityIdentifier("landscape-watch-next-heading")
               VideoGrid(
-                videos: model.watchNext(excluding: page.video.id),
+                videos: watchNext,
                 model: model,
                 accessibilityPrefix: "landscape-watch-next",
                 style: .list
@@ -171,15 +172,14 @@ struct WatchPageView: View {
           channelLink(for: page)
           reactionControls(for: page)
 
-          let recommendations = model.watchNext(excluding: page.video.id)
-          if !recommendations.isEmpty {
+          if !watchNext.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
               Text("Watch next")
                 .font(.title2.bold())
                 .accessibilityIdentifier("watch-next-heading")
 
               VideoGrid(
-                videos: recommendations,
+                videos: watchNext,
                 model: model,
                 accessibilityPrefix: "watch-next",
                 style: .list
@@ -253,6 +253,7 @@ struct WatchPageView: View {
         startedAt = .now
       }
     } catch { model.errorMessage = error.localizedDescription }
+    watchNext = await model.watchNext(excluding: videoID)
   }
 
   private func reactionButton(_ value: ChildReaction, label: String, symbol: String) -> some View {

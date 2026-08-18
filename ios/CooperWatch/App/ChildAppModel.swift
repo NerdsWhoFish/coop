@@ -249,8 +249,21 @@ final class ChildAppModel {
     return try await api?.childVideo(id: id)
   }
 
-  func watchNext(excluding videoID: String, limit: Int = 12) -> [Components.Schemas.Video] {
-    Array(feed.lazy.filter { $0.id != videoID && !$0.isShort }.prefix(limit))
+  func watchNext(excluding videoID: String, limit: Int = 12) async -> [Components.Schemas.Video] {
+    // A fresh fetch draws a new exploration seed on the server, so each watch
+    // page offers a different mix instead of the launch-time feed's top rows.
+    if let api, let fresh = try? await api.childFeed(limit: limit + 1) {
+      return watchNextSlice(from: fresh, excluding: videoID, limit: limit)
+    }
+    return watchNextSlice(from: feed, excluding: videoID, limit: limit)
+  }
+
+  private func watchNextSlice(
+    from videos: [Components.Schemas.Video],
+    excluding videoID: String,
+    limit: Int
+  ) -> [Components.Schemas.Video] {
+    Array(videos.lazy.filter { $0.id != videoID && !$0.isShort }.prefix(limit))
   }
 
   func discoverNext(excluding videoID: String, limit: Int = 4) -> [Components.Schemas.Discovery] {

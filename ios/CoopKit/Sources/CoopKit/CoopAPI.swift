@@ -532,8 +532,9 @@ public actor CoopAPI {
     }
   }
 
-  public func childFeed() async throws -> [Components.Schemas.Video] {
-    let output = try await client.getChildFeed()
+  public func childFeed(limit: Int? = nil) async throws -> [Components.Schemas.Video] {
+    let query = Operations.GetChildFeed.Input.Query(limit: limit)
+    let output = try await client.getChildFeed(query: query)
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
     return try response.body.json.items
   }

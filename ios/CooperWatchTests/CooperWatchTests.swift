@@ -13,7 +13,7 @@ func startsAtSplash() {
 
 @MainActor
 @Test("watch-next keeps ranked regular videos and removes the current video")
-func watchNextFiltersCurrentVideoAndShorts() {
+func watchNextFiltersCurrentVideoAndShorts() async {
   let model = ChildAppModel()
   model.feed = [
     video(id: "current"),
@@ -22,7 +22,8 @@ func watchNextFiltersCurrentVideoAndShorts() {
     video(id: "second"),
   ]
 
-  #expect(model.watchNext(excluding: "current").map(\.id) == ["first", "second"])
+  let next = await model.watchNext(excluding: "current")
+  #expect(next.map(\.id) == ["first", "second"])
 }
 
 @Test("Short playback enables inline autoplay and YouTube's loop contract")
