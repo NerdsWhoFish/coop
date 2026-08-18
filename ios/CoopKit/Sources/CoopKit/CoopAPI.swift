@@ -7,11 +7,9 @@ public actor CoopAPI {
   private let client: Client
 
   public init(serverURL: URL, token: String? = nil) {
-    let middlewares: [any ClientMiddleware]
+    var middlewares: [any ClientMiddleware] = [ClientVersionMiddleware()]
     if let token {
-      middlewares = [BearerAuthorizationMiddleware(token: token)]
-    } else {
-      middlewares = []
+      middlewares.append(BearerAuthorizationMiddleware(token: token))
     }
     client = Client(
       serverURL: serverURL,
@@ -21,12 +19,18 @@ public actor CoopAPI {
     )
   }
 
-  public func setupStatus() async throws -> Bool {
+  public func setupStatus() async throws -> Components.Schemas.SetupStatus {
     let output = try await client.getSetupStatus()
     guard case .ok(let response) = output else {
       throw CoopAPIError.unexpectedResponse
     }
-    return try response.body.json.needsSetup
+    return try response.body.json
+  }
+
+  public func familyDevices() async throws -> [Components.Schemas.FamilyDevice] {
+    let output = try await client.listFamilyDevices()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
   }
 
   public func setUpFamily(
@@ -786,6 +790,32 @@ public enum PlaybackLeaseState: Sendable {
   case started
   case heartbeat
   case stopped
+}
+
+/// Reports what this build is on every request, so a parent can see which
+/// family devices are still running an old application.
+private struct ClientVersionMiddleware: ClientMiddleware {
+  private static let build = Bundle.main.object(
+    forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+  private static let version = Bundle.main.object(
+    forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
+  func intercept(
+    _ request: HTTPRequest,
+    body: HTTPBody?,
+    baseURL: URL,
+    operationID: String,
+    next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    var request = request
+    if let name = HTTPField.Name("X-Coop-Client-Build"), !Self.build.isEmpty {
+      request.headerFields[name] = Self.build
+    }
+    if let name = HTTPField.Name("X-Coop-Client-Version"), !Self.version.isEmpty {
+      request.headerFields[name] = Self.version
+    }
+    return try await next(request, body, baseURL)
+  }
 }
 
 private struct BearerAuthorizationMiddleware: ClientMiddleware {

@@ -93,11 +93,12 @@ final class AppModel {
     serverAddress = defaults.string(forKey: Self.serverKey) ?? ""
     if Self.showsUpdatePreview {
       requiredUpdate = AppRelease(
-        app: "parent",
-        title: "Cooper The Cop",
-        build: "10",
-        installUrl: "itms-services://?action=download-manifest&url=https://coop.example/install/parent.plist",
-        installerUrl: "https://coop.example/install/"
+        bundleId: "fish.nerdswhofish.coop.parent",
+        name: "Cooper The Cop",
+        version: "1.8.0",
+        build: "10800",
+        buildId: "570fdeca6768",
+        installPageUrl: "https://fledge.example/a/fish.nerdswhofish.coop.parent"
       )
     } else if Self.showsFamilyPreview {
       parent = Self.familyPreviewParent
@@ -148,7 +149,9 @@ final class AppModel {
     await connect(usingStoredSession: true)
   }
 
-  func checkForRequiredUpdate() async {
+  /// Coop names the server that publishes releases, so `status` is read first.
+  /// A caller that already has it passes it rather than asking twice.
+  func checkForRequiredUpdate(status: Components.Schemas.SetupStatus? = nil) async {
     #if DEBUG
       if Self.showsUpdatePreview { return }
     #endif
@@ -157,10 +160,24 @@ final class AppModel {
       return
     }
     do {
-      requiredUpdate = try await AppUpdate.requiredRelease(
-        serverAddress: serverAddress,
-        app: .parent
-      )
+      let serverURL = try ServerURL.normalize(serverAddress)
+      let resolved: Components.Schemas.SetupStatus
+      if let status {
+        resolved = status
+      } else {
+        resolved = try await CoopAPI(serverURL: serverURL).setupStatus()
+      }
+      guard let updates = resolved.updates,
+        let source = UpdateSource(
+          baseURL: updates.baseUrl,
+          parentBundleID: updates.parentBundleId,
+          childBundleID: updates.childBundleId
+        )
+      else {
+        requiredUpdate = nil
+        return
+      }
+      requiredUpdate = try await AppUpdate.requiredRelease(source: source, app: .parent)
     } catch {
       // Update metadata is allowed to fail open so a network outage cannot lock a family out.
     }
@@ -170,11 +187,13 @@ final class AppModel {
     await perform {
       let serverURL = try ServerURL.normalize(serverAddress)
       defaults.set(serverAddress, forKey: Self.serverKey)
-      await checkForRequiredUpdate()
-      guard requiredUpdate == nil else { return }
 
       let publicAPI = CoopAPI(serverURL: serverURL)
-      let needsSetup = try await publicAPI.setupStatus()
+      let status = try await publicAPI.setupStatus()
+      await checkForRequiredUpdate(status: status)
+      guard requiredUpdate == nil else { return }
+
+      let needsSetup = status.needsSetup
       if usingStoredSession, let token = credentials.load() {
         let authenticatedAPI = CoopAPI(serverURL: serverURL, token: token)
         do {

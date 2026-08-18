@@ -5,49 +5,95 @@ public enum CoopApp: String, Sendable {
   case child
 }
 
-public struct AppRelease: Codable, Equatable, Sendable {
-  public let app: String
-  public let title: String
-  public let build: String
-  public let installUrl: String
-  public let installerUrl: String
+/// Where over-the-air releases live. Coop hands this over rather than the apps
+/// hardcoding it, so the distribution server can move without rebuilding the
+/// applications that would have to carry the news.
+public struct UpdateSource: Sendable, Equatable {
+  public let baseURL: URL
+  public let parentBundleID: String
+  public let childBundleID: String
 
-  public init(
-    app: String,
-    title: String,
-    build: String,
-    installUrl: String,
-    installerUrl: String
-  ) {
-    self.app = app
-    self.title = title
-    self.build = build
-    self.installUrl = installUrl
-    self.installerUrl = installerUrl
+  public init?(baseURL: String, parentBundleID: String, childBundleID: String) {
+    guard let url = URL(string: baseURL), url.scheme == "https", url.host() != nil,
+      !parentBundleID.isEmpty, !childBundleID.isEmpty
+    else { return nil }
+    self.baseURL = url
+    self.parentBundleID = parentBundleID
+    self.childBundleID = childBundleID
   }
 
-  public var installURL: URL? { URL(string: installUrl) }
-  public var installerURL: URL? { URL(string: installerUrl) }
+  public func bundleID(for app: CoopApp) -> String {
+    switch app {
+    case .parent: parentBundleID
+    case .child: childBundleID
+    }
+  }
+}
+
+public struct AppReleaseNote: Codable, Equatable, Sendable {
+  public let version: String
+  public let build: String
+  public let notes: String?
+
+  public init(version: String, build: String, notes: String? = nil) {
+    self.version = version
+    self.build = build
+    self.notes = notes
+  }
+}
+
+public struct AppRelease: Codable, Equatable, Sendable {
+  public let bundleId: String
+  public let name: String
+  public let version: String
+  public let build: String
+  public let buildId: String
+  public let installPageUrl: String
+  public let expired: Bool
+  public let changelog: [AppReleaseNote]
+
+  public init(
+    bundleId: String,
+    name: String,
+    version: String,
+    build: String,
+    buildId: String,
+    installPageUrl: String,
+    expired: Bool = false,
+    changelog: [AppReleaseNote] = []
+  ) {
+    self.bundleId = bundleId
+    self.name = name
+    self.version = version
+    self.build = build
+    self.buildId = buildId
+    self.installPageUrl = installPageUrl
+    self.expired = expired
+    self.changelog = changelog
+  }
+
+  /// The page to send a person to. Deliberately not an `itms-services://` URL:
+  /// only Safari handles that scheme, and an embedded browser swallows it with
+  /// no dialog, which reads as the build being broken.
+  public var installPageURL: URL? { URL(string: installPageUrl) }
 }
 
 public enum AppUpdate {
+  /// The published release, when it is newer than what is running. The server's
+  /// own update flag is ignored because it is string inequality against the
+  /// newest upload, so a re-published older archive would read as an update.
   public static func requiredRelease(
-    serverAddress: String,
+    source: UpdateSource,
     app: CoopApp,
     currentBuild: String = Bundle.main.object(
       forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
   ) async throws -> AppRelease? {
-    let apiURL = try ServerURL.normalize(serverAddress)
-    guard var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false) else {
+    let endpoint = source.baseURL
+      .appending(path: "api/v1/apps/\(source.bundleID(for: app))/latest")
+    guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
       throw ServerURL.ValidationError.invalidURL
     }
-    let apiSuffix = "/api/v1"
-    guard components.path.hasSuffix(apiSuffix) else {
-      throw ServerURL.ValidationError.invalidURL
-    }
-    components.path.removeLast(apiSuffix.count)
-    components.path += "/install/releases/\(app.rawValue).json"
-    components.query = nil
+    components.queryItems = [URLQueryItem(name: "build", value: currentBuild)]
     guard let releaseURL = components.url else {
       throw ServerURL.ValidationError.invalidURL
     }
@@ -56,7 +102,9 @@ public enum AppUpdate {
     guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
       return nil
     }
-    let release = try JSONDecoder().decode(AppRelease.self, from: data)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let release = try decoder.decode(AppRelease.self, from: data)
     return compareBuilds(currentBuild, release.build) == .orderedAscending ? release : nil
   }
 

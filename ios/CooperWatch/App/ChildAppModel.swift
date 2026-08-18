@@ -67,12 +67,12 @@ final class ChildAppModel {
         destination = .watch
         if ProcessInfo.processInfo.environment["COOP_UI_UPDATE_REQUIRED"] == "1" {
           requiredUpdate = AppRelease(
-            app: "child",
-            title: "Cooper Watch",
-            build: "13",
-            installUrl:
-              "itms-services://?action=download-manifest&url=https://coop.example/install/child.plist",
-            installerUrl: "https://coop.example/install/"
+            bundleId: "fish.nerdswhofish.coop.child",
+            name: "Cooper Watch",
+            version: "1.8.0",
+            build: "10800",
+            buildId: "e8fba2b4c97b",
+            installPageUrl: "https://fledge.example/a/fish.nerdswhofish.coop.child"
           )
         }
         return
@@ -115,7 +115,9 @@ final class ChildAppModel {
     }
   }
 
-  func checkForRequiredUpdate() async {
+  /// Coop names the server that publishes releases, so `status` is read first.
+  /// A caller that already has it passes it rather than asking twice.
+  func checkForRequiredUpdate(status: Components.Schemas.SetupStatus? = nil) async {
     #if DEBUG
       if isPreviewMode { return }
     #endif
@@ -124,10 +126,24 @@ final class ChildAppModel {
       return
     }
     do {
-      requiredUpdate = try await AppUpdate.requiredRelease(
-        serverAddress: serverAddress,
-        app: .child
-      )
+      let serverURL = try ServerURL.normalize(serverAddress)
+      let resolved: Components.Schemas.SetupStatus
+      if let status {
+        resolved = status
+      } else {
+        resolved = try await CoopAPI(serverURL: serverURL).setupStatus()
+      }
+      guard let updates = resolved.updates,
+        let source = UpdateSource(
+          baseURL: updates.baseUrl,
+          parentBundleID: updates.parentBundleId,
+          childBundleID: updates.childBundleId
+        )
+      else {
+        requiredUpdate = nil
+        return
+      }
+      requiredUpdate = try await AppUpdate.requiredRelease(source: source, app: .child)
     } catch {
       // Update metadata is allowed to fail open so a network outage cannot lock a child out.
     }

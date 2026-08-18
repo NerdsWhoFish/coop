@@ -55,6 +55,10 @@ public struct RequiredUpdateView: View {
           .accessibilityIdentifier("required-update-install")
           .accessibilityLabel(buttonTitle)
 
+          Text(buttonNote)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.55))
+
           Button("I installed it — check again") {
             Task { await retry() }
           }
@@ -130,18 +134,19 @@ public struct RequiredUpdateView: View {
     audience == .child ? "Get the update" : "Update Coop"
   }
 
+  private var buttonNote: String {
+    "Opens in Safari"
+  }
+
   private var currentBuild: String {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
   }
 
+  /// Opens the install page rather than the installation URL directly. Only
+  /// Safari handles `itms-services://`, and an embedded browser swallows it
+  /// with no dialog at all, which reads as the build being broken.
   private func install() {
-    guard let installURL = release.installURL else {
-      if let installerURL = release.installerURL { openURL(installerURL) }
-      return
-    }
-    openURL(installURL) { accepted in
-      guard !accepted, let installerURL = release.installerURL else { return }
-      openURL(installerURL)
-    }
+    guard let pageURL = release.installPageURL else { return }
+    openURL(pageURL)
   }
 }
