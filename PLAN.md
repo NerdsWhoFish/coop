@@ -97,6 +97,21 @@ Build values must stay dot-separated integers.
 
 ## Phase 2: The bridge release
 
+**Built and committed, not deployed.**
+Five commits, each building and testing green on its own.
+`internal/fledge` reads the release API, `internal/legacyinstall` maps it onto the old shape, and the OTA package, PVC template, volume, `scripts/ota.sh` and `deploy/ota/` are gone.
+
+Verified against the live Fledge rather than a fixture: both endpoints return 200 with the legacy five keys, `no-store`, builds 14 and 22, and the composed manifest URLs fetch real plists.
+
+**A bug this caught, worth keeping:** `ManifestURL` originally composed from Coop's configured base URL, while `installerUrl` came from Fledge's own `install_page_url`.
+Configure Coop with the internal name, which the Fledge runbook says you must from inside the network, and the itms manifest link points somewhere a device on cellular cannot resolve.
+That is the exact failure this migration exists to remove, reintroduced by accident.
+The manifest now hangs off the install page Fledge publishes, and a test pins it.
+
+**Before deploying:** the flux HelmRelease at `clusters/mini-2/coop/hr.yaml` still sets `ota.enabled: true`.
+That key no longer exists in the chart schema, and the schema refuses unknown properties, so the release fails validation until it is replaced with the `updates` block.
+Flux pins the chart to a Coop commit, so nothing breaks until that pin moves.
+
 This is the release that makes the PVC deletable while keeping every existing device reachable.
 
 Coop keeps `GET /install/releases/{parent,child}.json` at the exact same path with the exact same response shape, but stops reading disk and starts asking Fledge.
