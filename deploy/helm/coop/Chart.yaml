@@ -2,8 +2,8 @@ apiVersion: v2
 name: coop
 description: A self-hosted, parent-governed YouTube experience for children
 type: application
-version: 1.6.1
-appVersion: "1.6.1"
+version: 1.7.0
+appVersion: "1.7.0"
 kubeVersion: ">=1.28.0-0"
 home: https://github.com/NerdsWhoFish/coop
 sources:
