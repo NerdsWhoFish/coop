@@ -62,6 +62,18 @@
         }
       }
     },
+    "apns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "keyID": { "type": "string" },
+        "teamID": { "type": "string" },
+        "environment": { "enum": ["production", "development"] },
+        "keySecretKey": { "type": "string", "minLength": 1 }
+      }
+    },
     "resources": { "type": "object" },
     "networkPolicy": { "type": "object" },
     "nodeSelector": { "type": "object" },

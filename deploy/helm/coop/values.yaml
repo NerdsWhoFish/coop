@@ -56,6 +56,15 @@ config:
   databaseDSNKey: database-dsn
   authEncryptionKeyKey: auth-encryption-key
 
+apns:
+  enabled: false
+  # Identifiers from developer.apple.com; the .p8 key itself lives in
+  # config.existingSecret under keySecretKey.
+  keyID: ""
+  teamID: ""
+  environment: production
+  keySecretKey: apns-key
+
 ota:
   enabled: false
   mountPath: /var/lib/coop/ota

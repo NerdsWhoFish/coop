@@ -63,6 +63,21 @@ spec:
             - name: COOP_OTA_DIRECTORY
               value: {{ .Values.ota.mountPath | quote }}
             {{- end }}
+            {{- if .Values.apns.enabled }}
+            - name: COOP_APNS_ENABLED
+              value: "true"
+            - name: COOP_APNS_KEY_ID
+              value: {{ .Values.apns.keyID | quote }}
+            - name: COOP_APNS_TEAM_ID
+              value: {{ .Values.apns.teamID | quote }}
+            - name: COOP_APNS_ENVIRONMENT
+              value: {{ .Values.apns.environment | quote }}
+            - name: COOP_APNS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.existingSecret }}
+                  key: {{ .Values.apns.keySecretKey }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
