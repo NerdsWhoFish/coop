@@ -13,6 +13,7 @@ struct ChildSettingsView: View {
   @State private var dailySearchLimit: Int
   @State private var pairingCode: Components.Schemas.PairingCode?
   @State private var isWorking = false
+  @State private var pendingSave: Task<Void, Never>?
   @State private var confirmingDeletion = false
   @State private var showingComputerScanner = false
   @State private var computerLinked = false
@@ -94,12 +95,17 @@ struct ChildSettingsView: View {
     .navigationTitle(child.value1.name)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      ToolbarItem(placement: .confirmationAction) {
-        Button("Save") { save() }
-          .fontWeight(.bold)
-          .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking)
+      if isWorking {
+        ToolbarItem(placement: .confirmationAction) { ProgressView() }
       }
     }
+    .onChange(of: name) { _, _ in scheduleSave() }
+    .onChange(of: shortsEnabled) { _, _ in scheduleSave() }
+    .onChange(of: videoSearchTiles) { _, _ in scheduleSave() }
+    .onChange(of: channelDiscoveryEnabled) { _, _ in scheduleSave() }
+    .onChange(of: webLinkingEnabled) { _, _ in scheduleSave() }
+    .onChange(of: dailySearchLimit) { _, _ in scheduleSave() }
+    .onDisappear { pendingSave?.cancel() }
     .confirmationDialog(
       "Delete \(child.value1.name)?",
       isPresented: $confirmingDeletion,
@@ -145,7 +151,19 @@ struct ChildSettingsView: View {
     dailySearchLimit == 0 ? "Family budget" : "\(dailySearchLimit)"
   }
 
+  // Every change saves itself after a short debounce, so a held stepper or
+  // mid-word name edit lands as one write instead of a burst.
+  private func scheduleSave() {
+    pendingSave?.cancel()
+    pendingSave = Task {
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled else { return }
+      save()
+    }
+  }
+
   private func save() {
+    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     isWorking = true
     let settings = Components.Schemas.ChildSettings(
       name: name.trimmingCharacters(in: .whitespacesAndNewlines),
