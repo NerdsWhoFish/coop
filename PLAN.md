@@ -175,6 +175,19 @@ Worth settling properly, but it is not a blocker and I am not guessing at it in 
 
 ## Phase 3: Fledge-native clients
 
+**Built, not released.**
+
+`AppUpdate` now takes an `UpdateSource` instead of deriving a URL from the server address, and reads Fledge's release API directly.
+Coop hands that source over on `GET /api/v1/setup`, which is unauthenticated and already the first call a client makes, so a device is still configured with exactly one address and Fledge can move without rebuilding two applications.
+Fledge's own `update_available` is ignored in favour of the existing numeric comparison, for the reason recorded in Phase 1.
+
+The update screen now opens the install **page** rather than the `itms-services://` URL, and says "Opens in Safari".
+Only Safari handles that scheme; an embedded browser swallows it with no dialog at all, which reads as the build being broken.
+
+Both applications build, and CoopKit's tests cover source validation, release decoding, and the build-number trap.
+
+## Phase 3 as originally planned
+
 `AppUpdate.requiredRelease` currently derives the release URL by stripping `/api/v1` off the configured server address (`AppUpdate.swift:40-53`).
 That trick dies the moment the release lives on a different origin, and it is the only real coupling in the iOS codebase: one function, one file, two call sites.
 
@@ -204,6 +217,20 @@ Fledge has no per-audience or required-build concept, and neither did Coop, beca
 Not a regression, but nobody should think Fledge added it.
 
 ## Phase 4: Version roster in the parent app
+
+**Built, not released.**
+
+Clients report `X-Coop-Client-Build` and `X-Coop-Client-Version` from a CoopKit middleware on every request, and the existing last-seen update records them, so there is no new endpoint and no heartbeat.
+Header values are pattern-bounded on the way in, because they are attacker-controlled text headed for storage and then another parent's screen.
+A client that reports nothing never erases a build already recorded, so a browser session cannot make a native device look unmigrated.
+
+`GET /api/v1/parent/devices` returns the whole family, parent sessions and child devices together, admin only, with the caller's own row flagged.
+The parent app shows it under Family, App versions.
+
+**A known simplification:** the screen treats the newest build anyone reports as current, rather than asking Fledge what is published.
+That is exactly right for this migration, where the question is "has everything moved off the pre-Fledge build" and an absent build is the answer, but it would not notice a family where every device is equally one release behind.
+
+## Phase 4 as originally planned
 
 Independent of the migration, but it is the thing that makes Phase 5 safe instead of a guess.
 
