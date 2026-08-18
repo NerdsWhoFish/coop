@@ -97,7 +97,13 @@ Build values must stay dot-separated integers.
 
 ## Phase 2: The bridge release
 
-**Built and committed, not deployed.**
+**Done and deployed as v1.7.1.**
+Chart 1.7.1 on image `sha256:d230cb02`, Helm pruned `coop-coop-ota`, and the live server returns the legacy shape for both applications with builds 14 and 22 unchanged, so no device sees an update.
+The removed package routes 404 and `/install/` redirects to Fledge.
+
+Server-only patch rather than the unified `v1.8.0`, because the applications cannot join a shared version until they are built in CI, and claiming one before that would be false on day one.
+
+⚠️ **Rolling back to v1.7.0 is not free.** That image serves `/install/` from a volume the chart no longer creates, so packages would 404 and every client would quietly stop seeing updates. Recovering means recreating the claim and copying both archives back out of Fledge.
 Five commits, each building and testing green on its own.
 `internal/fledge` reads the release API, `internal/legacyinstall` maps it onto the old shape, and the OTA package, PVC template, volume, `scripts/ota.sh` and `deploy/ota/` are gone.
 
