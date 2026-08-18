@@ -234,6 +234,27 @@ final class AppModel {
     async let requestLoad: Void = loadRequests()
     async let childLoad: Void = loadChildren()
     _ = await (requestLoad, childLoad)
+    enablePushNotificationsIfNeeded()
+  }
+
+  // MARK: - Push notifications
+
+  private static let pushTokenKey = "coop.parent.push.token"
+  private var pushRegistrationRequested = false
+
+  func enablePushNotificationsIfNeeded() {
+    guard !Self.isUIPreview, !pushRegistrationRequested, api != nil else { return }
+    pushRegistrationRequested = true
+    PushRegistration.onToken = { [weak self] token in
+      guard let self, let api = self.api else { return }
+      // Remembered so sign-out can unregister exactly what was registered.
+      self.defaults.set(token, forKey: Self.pushTokenKey)
+      Task { try? await api.registerParentPushToken(token) }
+    }
+    PushRegistration.onNotification = { [weak self] in
+      Task { await self?.loadRequests() }
+    }
+    PushRegistration.register()
   }
 
   func loadRequests() async {
@@ -547,6 +568,12 @@ final class AppModel {
   }
 
   func logOut() {
+    if let api, let token = defaults.string(forKey: Self.pushTokenKey) {
+      // Best effort: a signed-out phone must stop receiving family requests.
+      Task { try? await api.unregisterParentPushToken(token) }
+      defaults.removeObject(forKey: Self.pushTokenKey)
+    }
+    pushRegistrationRequested = false
     credentials.delete()
     api = nil
     parent = nil

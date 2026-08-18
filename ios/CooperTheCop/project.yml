@@ -23,6 +23,12 @@ targets:
       - DesignSystem
       - Features
       - Resources
+    # Development here is correct for every build: distribution signing
+    # rewrites aps-environment to production from the provisioning profile.
+    entitlements:
+      path: CooperTheCop.entitlements
+      properties:
+        aps-environment: development
     dependencies:
       - package: CoopKit
     settings:
