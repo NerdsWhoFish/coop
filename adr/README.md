@@ -22,7 +22,7 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0010](0010-serve-ad-hoc-builds-from-a-local-ota-portal.md) | Serve Ad Hoc builds from a local OTA portal | accepted | 2026-08-16 |
 | [0011](0011-autoplay-watch-pages-with-a-persistent-player.md) | Autoplay watch pages with one persistent player | accepted | 2026-08-16 |
 | [0012](0012-model-current-playback-as-renewable-leases.md) | Model current playback as renewable leases | accepted | 2026-08-16 |
-| [0013](0013-serve-ota-packages-from-coop.md) | Serve OTA packages from Coop | accepted | 2026-08-16 |
+| [0013](0013-serve-ota-packages-from-coop.md) | Serve OTA packages from Coop | superseded by [0021](0021-delegate-package-hosting-to-fledge.md) | 2026-08-16 |
 | [0014](0014-opt-in-requestable-channel-discovery.md) | Add opt-in discovery without weakening channel approval | accepted | 2026-08-16 |
 | [0015](0015-key-playback-leases-by-device.md) | Key playback leases by paired device | accepted | 2026-08-17 |
 | [0016](0016-require-the-latest-published-ota-build.md) | Require the latest published OTA build | accepted | 2026-08-17 |
@@ -30,3 +30,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0018](0018-browser-child-client-and-device-linking.md) | Serve Cooper Watch as a linked browser device | accepted | 2026-08-17 |
 | [0019](0019-seeded-exploration-jitter-over-deterministic-ranking.md) | Vary child feeds with seeded exploration jitter over the deterministic ranking | accepted | 2026-08-18 |
 | [0020](0020-per-family-apns-push-with-graceful-degradation.md) | Deliver request notifications through per-family APNs keys, degrading gracefully | accepted | 2026-08-18 |
+| [0021](0021-delegate-package-hosting-to-fledge.md) | Delegate package hosting to Fledge | accepted | 2026-08-18 |
