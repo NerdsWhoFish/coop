@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"math/rand/v2"
 	"net/http"
 	"time"
 
@@ -152,6 +153,11 @@ func (s *Server) handleChildDiscovery(w http.ResponseWriter, r *http.Request, c 
 	if limit <= 0 || limit > 12 {
 		limit = 4
 	}
+	// The day's cached search returns more safe candidates than one shelf
+	// shows. Shuffling per request rotates the shelf at no quota cost.
+	rand.Shuffle(len(filtered), func(i, j int) {
+		filtered[i], filtered[j] = filtered[j], filtered[i]
+	})
 	discovered := make([]store.Video, 0, min(limit, len(filtered)))
 	seenChannels := make(map[string]struct{}, len(filtered))
 	for _, candidate := range filtered {
