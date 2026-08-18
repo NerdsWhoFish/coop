@@ -19,15 +19,23 @@ struct AppUpdateTests {
   }
 
   /// Comparison is positional over dot-separated integers, so a device on build
-  /// 22 reads "1.8.0" as older than itself and never updates again. Builds are
-  /// encoded as major * 10000 + minor * 100 + patch to stay ahead and ordered.
+  /// 22 reads "1.8.0" as older than itself and never updates again. Builds come
+  /// from scripts/release-version.sh, which keeps them numeric and increasing.
   @Test("a marketing version used as a build number strands installed devices")
   func marketingVersionIsNotABuildNumber() {
     #expect(AppUpdate.compareBuilds("22", "1.8.0") == .orderedDescending)
-    #expect(AppUpdate.compareBuilds("22", "10800") == .orderedAscending)
-    #expect(AppUpdate.compareBuilds("14", "10800") == .orderedAscending)
-    #expect(AppUpdate.compareBuilds("10800", "10801") == .orderedAscending)
-    #expect(AppUpdate.compareBuilds("10800", "20000") == .orderedAscending)
+    #expect(AppUpdate.compareBuilds("22", "1080099") == .orderedAscending)
+    #expect(AppUpdate.compareBuilds("14", "1080099") == .orderedAscending)
+  }
+
+  /// Candidates sort below their own release and above the previous one, so
+  /// installing rc.2 over rc.1 is an update rather than a silent no-op.
+  @Test("release candidates stay ordered against each other and the release")
+  func candidatesAreOrdered() {
+    #expect(AppUpdate.compareBuilds("1080001", "1080002") == .orderedAscending)
+    #expect(AppUpdate.compareBuilds("1080002", "1080099") == .orderedAscending)
+    #expect(AppUpdate.compareBuilds("1080099", "1080101") == .orderedAscending)
+    #expect(AppUpdate.compareBuilds("1080199", "2000099") == .orderedAscending)
   }
 
   @Test("an update source needs a usable HTTPS origin and both bundles")

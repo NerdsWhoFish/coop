@@ -1,0 +1,179 @@
+name: Cut release
+
+# Picks the next version, writes it into the chart and both applications,
+# proves they archive and sign, tags, and publishes the two iOS builds.
+# Tagging then triggers release.yml, which builds the server and its image.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: What to cut
+        type: choice
+        default: Release
+        options: [Release, Release Candidate]
+      bump:
+        description: Which part of the version to bump
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+      dry-run:
+        description: Build and sign everything, publish nothing
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  release:
+    name: Cut and publish
+    # Xcode 26 is this image's default, which the iOS 26 deployment target
+    # needs. Selecting an Xcode path by version breaks when the image moves.
+    runs-on: macos-26
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Quill reads the tag list to work out the next version, and the
+          # default shallow checkout carries no tags at all.
+          fetch-depth: 0
+
+      - name: Plan the version
+        id: plan
+        uses: TheOutdoorProgrammer/quill@v1
+        with:
+          bump: ${{ inputs.bump }}
+          scope: ${{ inputs.scope }}
+          dry-run: true
+          publish: none
+
+      - name: Write the version into the chart and both applications
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          eval "$(scripts/release-version.sh "$VERSION")"
+          echo "Cutting $VERSION as $MARKETING_VERSION ($CURRENT_PROJECT_VERSION)"
+
+          /usr/bin/sed -i '' \
+            -e "s/^version: .*/version: $MARKETING_VERSION/" \
+            -e "s/^appVersion: .*/appVersion: \"$MARKETING_VERSION\"/" \
+            deploy/helm/coop/Chart.yaml
+
+          for spec in ios/CooperTheCop/project.yml ios/CooperWatch/project.yml; do
+            /usr/bin/sed -i '' \
+              -e "s/^\( *MARKETING_VERSION: \).*/\1$MARKETING_VERSION/" \
+              -e "s/^\( *CURRENT_PROJECT_VERSION: \).*/\1$CURRENT_PROJECT_VERSION/" \
+              "$spec"
+          done
+
+          echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
+          echo "CURRENT_PROJECT_VERSION=$CURRENT_PROJECT_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the projects
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec ios/CooperTheCop/project.yml
+          xcodegen generate --spec ios/CooperWatch/project.yml
+
+      - name: Write the App Store Connect key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          chmod 600 "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+
+      - name: Archive and export both applications
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          # Never read the team from the Keychain: the certificate's team is not
+          # necessarily the active one, and the mismatch reports as
+          # "No Account for Team", which reads as Xcode being signed out.
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          auth=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+            -authenticationKeyID "$ASC_KEY_ID"
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          )
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0"><dict>
+            <key>method</key><string>release-testing</string>
+            <key>teamID</key><string>$DEVELOPMENT_TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+
+          for app in CooperTheCop CooperWatch; do
+            # The authentication flags are needed on the export as well as the
+            # archive. Missing them there fails after a clean archive.
+            xcodebuild archive \
+              -project "ios/$app/$app.xcodeproj" \
+              -scheme "$app" \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/archives/$app.xcarchive" \
+              -skipPackagePluginValidation -skipMacroValidation \
+              DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+              "${auth[@]}"
+
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/archives/$app.xcarchive" \
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+              -exportPath "$RUNNER_TEMP/export/$app" \
+              "${auth[@]}"
+          done
+
+      - name: Commit the release version
+        if: inputs.dry-run != true
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add deploy/helm/coop/Chart.yaml ios/*/project.yml ios/*/*.xcodeproj
+          # Flux reports the chart version from the tagged commit, so the bump
+          # has to be in the commit the tag points at.
+          git commit -m "chore(release): prepare $VERSION"
+          git push
+
+      - name: Tag and publish the parent application
+        id: release
+        uses: TheOutdoorProgrammer/quill@v1
+        with:
+          bump: ${{ inputs.bump }}
+          scope: ${{ inputs.scope }}
+          dry-run: ${{ inputs.dry-run }}
+          publish: fledge
+          fledge-server: ${{ secrets.FLEDGE_URL }}
+          # Passed rather than left to fledge.yaml so quill checks the archive
+          # exists before cutting a tag. A path it never sees fails after the
+          # tag, and a burnt version number does not come back.
+          fledge-ipa: ${{ runner.temp }}/export/CooperTheCop/*.ipa
+          fledge-fail-on-development-signing: "true"
+          fledge-secure: "true"
+
+      - name: Publish the child application
+        if: inputs.dry-run != true
+        uses: TheOutdoorProgrammer/fledge/actions/publish@v1
+        with:
+          server: ${{ secrets.FLEDGE_URL }}
+          ipa: ${{ runner.temp }}/export/CooperWatch/*.ipa
+          notes: ${{ steps.plan.outputs.version }}
+          fail-on-development-signing: "true"
+          secure: "true"

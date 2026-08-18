@@ -605,7 +605,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CooperTheCop.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 10800;
+				CURRENT_PROJECT_VERSION = 1080099;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a Coop code to approve a child computer.";
@@ -629,7 +629,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CooperTheCop.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 10800;
+				CURRENT_PROJECT_VERSION = 1080099;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cooper The Cop";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a Coop code to approve a child computer.";
