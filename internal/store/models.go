@@ -212,6 +212,7 @@ type Video struct {
 
 	LiveState   domain.LiveState `gorm:"type:text;not null;default:'none';index"`
 	MadeForKids bool             `gorm:"not null;default:false"`
+	Embeddable  bool             `gorm:"not null;default:true"`
 
 	FetchedAt time.Time `gorm:"index"`
 	CreatedAt time.Time

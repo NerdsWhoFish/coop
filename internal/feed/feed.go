@@ -599,6 +599,7 @@ func toPolicyVideo(v store.Video) policy.Video {
 		Description: v.Description,
 		Tags:        v.Tags,
 		LiveState:   v.LiveState,
+		Embeddable:  v.Embeddable,
 	}
 }
 

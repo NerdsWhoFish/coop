@@ -67,6 +67,10 @@ type Video struct {
 	Description string
 	Tags        []string
 	LiveState   domain.LiveState
+
+	// Embeddable is whether the official player may embed it at all. A video
+	// that cannot embed is a dead tile no ranking signal should resurrect.
+	Embeddable bool
 }
 
 // Keyword suppresses individual videos inside an otherwise-allowed channel.
@@ -109,6 +113,7 @@ const (
 	VerdictHidden            Verdict = "hidden"
 	VerdictLocked            Verdict = "locked"
 	VerdictLive              Verdict = "live"
+	VerdictUnplayable        Verdict = "unplayable"
 	VerdictSuppressed        Verdict = "suppressed"
 	VerdictVideoBlocked      Verdict = "video_blocked"
 )
@@ -226,6 +231,9 @@ func (e *Evaluator) Video(v Video) Decision {
 	if v.LiveState.IsLive() {
 		return Decision{Verdict: VerdictLive}
 	}
+	if !v.Embeddable {
+		return Decision{Verdict: VerdictUnplayable}
+	}
 	if e.overrides.Has(v.ID) {
 		return Decision{Verdict: VerdictServe}
 	}
@@ -249,6 +257,9 @@ func (e *Evaluator) SearchVideo(v Video) Decision {
 	}
 	if v.LiveState.IsLive() {
 		return Decision{Verdict: VerdictLive}
+	}
+	if !v.Embeddable {
+		return Decision{Verdict: VerdictUnplayable}
 	}
 	if !e.overrides.Has(v.ID) {
 		if match := e.matcher.Match(v); match != nil {

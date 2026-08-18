@@ -97,6 +97,7 @@ func (c *Catalog) UpsertVideos(ctx context.Context, videos []youtube.Video) erro
 			ShortSource:     shortSource,
 			LiveState:       liveState,
 			MadeForKids:     v.MadeForKids,
+			Embeddable:      v.Embeddable,
 			FetchedAt:       now,
 		}
 	}
@@ -106,7 +107,7 @@ func (c *Catalog) UpsertVideos(ctx context.Context, videos []youtube.Video) erro
 		DoUpdates: clause.AssignmentColumns([]string{
 			"channel_id", "title", "description", "tags", "duration_seconds",
 			"published_at", "thumbnail_url", "live_state", "made_for_kids",
-			"fetched_at", "updated_at",
+			"embeddable", "fetched_at", "updated_at",
 		}),
 	}).Create(&rows).Error
 	return wrap(err, "upserting videos")

@@ -193,6 +193,8 @@ func TestEvaluatorVideo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := NewEvaluator(allowedRules(), tt.keywords, tt.overrides, tt.blocks)
+			// Fixtures are embeddable unless a case is about embeddability.
+			tt.video.Embeddable = true
 			got := e.Video(tt.video)
 
 			if got.Verdict != tt.want {
@@ -277,10 +279,26 @@ func TestEvaluatorSearchVideo(t *testing.T) {
 				blocks = []string{tt.video.ID}
 			}
 			evaluator := NewEvaluator(tt.rules, []Keyword{keyword}, nil, blocks)
+			// Fixtures are embeddable unless a case is about embeddability.
+			tt.video.Embeddable = true
 			if got := evaluator.SearchVideo(tt.video).Verdict; got != tt.want {
 				t.Errorf("Verdict = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A video the official player cannot embed is unplayable everywhere: no
+// ranking signal, override, or approval state may surface a dead tile.
+func TestUnplayableVideoIsHiddenEverywhere(t *testing.T) {
+	dead := Video{ID: "v1", ChannelID: chAllowed, Title: "birdhouse"}
+	e := NewEvaluator(allowedRules(), nil, []string{dead.ID}, nil)
+
+	if got := e.Video(dead).Verdict; got != VerdictUnplayable {
+		t.Fatalf("Video() verdict = %q, want unplayable despite an override", got)
+	}
+	if got := e.SearchVideo(dead).Verdict; got != VerdictUnplayable {
+		t.Fatalf("SearchVideo() verdict = %q, want unplayable", got)
 	}
 }
 
@@ -293,7 +311,7 @@ func TestSuppressionCarriesKeywordIdentity(t *testing.T) {
 	}
 	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil, nil)
 
-	d := e.Video(Video{ID: "v1", ChannelID: chAllowed, Title: "a SCARY thing"})
+	d := e.Video(Video{ID: "v1", ChannelID: chAllowed, Title: "a SCARY thing", Embeddable: true})
 	if d.Verdict != VerdictSuppressed {
 		t.Fatalf("Verdict = %q, want suppressed", d.Verdict)
 	}
@@ -445,11 +463,12 @@ func TestFilter(t *testing.T) {
 	e := NewEvaluator(allowedRules(), []Keyword{kw}, nil, nil)
 
 	served, suppressed := e.Filter([]Video{
-		{ID: "keep1", ChannelID: chAllowed, Title: "birdhouse"},
-		{ID: "drop-channel", ChannelID: chOther, Title: "birdhouse"},
-		{ID: "drop-live", ChannelID: chAllowed, Title: "birdhouse", LiveState: domain.LiveLive},
-		{ID: "drop-keyword", ChannelID: chAllowed, Title: "a scary story"},
-		{ID: "keep2", ChannelID: chAllowed, Title: "another birdhouse"},
+		{ID: "keep1", ChannelID: chAllowed, Title: "birdhouse", Embeddable: true},
+		{ID: "drop-channel", ChannelID: chOther, Title: "birdhouse", Embeddable: true},
+		{ID: "drop-live", ChannelID: chAllowed, Title: "birdhouse", LiveState: domain.LiveLive, Embeddable: true},
+		{ID: "drop-unplayable", ChannelID: chAllowed, Title: "birdhouse"},
+		{ID: "drop-keyword", ChannelID: chAllowed, Title: "a scary story", Embeddable: true},
+		{ID: "keep2", ChannelID: chAllowed, Title: "another birdhouse", Embeddable: true},
 	})
 
 	if len(served) != 2 || served[0].ID != "keep1" || served[1].ID != "keep2" {
