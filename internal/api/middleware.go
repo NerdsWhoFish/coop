@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/nerdswhofish/coop/internal/auth"
+	"github.com/nerdswhofish/coop/internal/store"
 )
 
 func (s *Server) clientAddress(r *http.Request) string {
@@ -54,6 +56,31 @@ type parentHandler func(http.ResponseWriter, *http.Request, auth.Parent) error
 // childHandler runs with an authenticated child device.
 type childHandler func(http.ResponseWriter, *http.Request, auth.Child) error
 
+// Headers a client uses to report what it is running, so a parent can see
+// which devices are on which build.
+const (
+	clientBuildHeader   = "X-Coop-Client-Build"
+	clientVersionHeader = "X-Coop-Client-Version"
+)
+
+// clientAppPattern bounds an attacker-controlled string on its way to storage
+// and back out to another parent's screen.
+var clientAppPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$`)
+
+func clientApp(r *http.Request) store.ClientApp {
+	client := store.ClientApp{
+		Build:   strings.TrimSpace(r.Header.Get(clientBuildHeader)),
+		Version: strings.TrimSpace(r.Header.Get(clientVersionHeader)),
+	}
+	if !clientAppPattern.MatchString(client.Build) {
+		return store.ClientApp{}
+	}
+	if !clientAppPattern.MatchString(client.Version) {
+		client.Version = ""
+	}
+	return client
+}
+
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
@@ -85,9 +112,10 @@ func (s *Server) withParent(h parentHandler) handlerFunc {
 		}
 
 		principal := auth.Parent{
-			ID:       parent.ID,
-			FamilyID: parent.FamilyID,
-			Role:     parent.Role,
+			ID:        parent.ID,
+			FamilyID:  parent.FamilyID,
+			Role:      parent.Role,
+			SessionID: session.ID,
 		}
 		if !principal.IsAdmin() {
 			scoped, err := s.deps.Accounts.ScopedChildIDs(r.Context(), parent.ID)
@@ -98,7 +126,7 @@ func (s *Server) withParent(h parentHandler) handlerFunc {
 		}
 
 		// Best effort: a failure to record last-seen must not fail the request.
-		if err := s.deps.Accounts.TouchSession(r.Context(), session.ID); err != nil {
+		if err := s.deps.Accounts.TouchSession(r.Context(), session.ID, clientApp(r)); err != nil {
 			s.deps.Logger.Debug("touching session", "error", err)
 		}
 
@@ -129,7 +157,7 @@ func (s *Server) withChild(h childHandler) handlerFunc {
 			return unauthorized()
 		}
 
-		if err := s.deps.Accounts.TouchDevice(r.Context(), device.ID); err != nil {
+		if err := s.deps.Accounts.TouchDevice(r.Context(), device.ID, clientApp(r)); err != nil {
 			s.deps.Logger.Debug("touching device", "error", err)
 		}
 

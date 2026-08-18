@@ -605,6 +605,21 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Device" }
 
+  /parent/devices:
+    get:
+      operationId: listFamilyDevices
+      tags: [pairing]
+      summary: List every installed client in the family and the build it reports
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FamilyDevice" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /parent/devices/{deviceId}:
     parameters:
       - name: deviceId
@@ -1693,6 +1708,21 @@ components:
       required: [needsSetup]
       properties:
         needsSetup: { type: boolean }
+        updates:
+          $ref: "#/components/schemas/UpdateSource"
+
+    UpdateSource:
+      type: object
+      description: >
+        Where over-the-air releases live. Absent when the server publishes none,
+        which a client reads as "do not check" rather than as an error. Supplied
+        by the server so a client needs only one address, and so the
+        distribution server can move without rebuilding the applications.
+      required: [baseUrl, parentBundleId, childBundleId]
+      properties:
+        baseUrl: { type: string }
+        parentBundleId: { type: string }
+        childBundleId: { type: string }
 
     SetupRequest:
       type: object
@@ -1878,6 +1908,32 @@ components:
         createdAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time }
         allowSelfUnpair: { type: boolean }
+        appBuild: { type: string }
+        appVersion: { type: string }
+
+    FamilyDevice:
+      type: object
+      description: >
+        One installed client, either a signed-in parent session or a paired
+        child device. An absent appBuild means the client predates version
+        reporting, which is how a device still awaiting an update is spotted.
+      required: [id, audience, owner, createdAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        audience: { type: string, enum: [parent, child] }
+        owner:
+          type: string
+          description: The parent's email address, or the child's name.
+        name:
+          type: string
+          description: The device name. Absent for parent sessions, which have none.
+        appBuild: { type: string }
+        appVersion: { type: string }
+        lastSeenAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        current:
+          type: boolean
+          description: True for the session this request arrived on.
 
     Channel:
       type: object

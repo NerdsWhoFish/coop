@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -531,12 +532,32 @@ func (a *Accounts) SessionByToken(ctx context.Context, tokenHash string) (Parent
 	return session, parent, nil
 }
 
+// ClientApp is what a caller reports it is running. Empty when the client
+// predates version reporting, which is exactly what a migration needs to see.
+type ClientApp struct {
+	Build   string
+	Version string
+}
+
+// Reported says whether the client named a build.
+func (c ClientApp) Reported() bool { return c.Build != "" }
+
+// touch builds the column set for a last-seen update. A client that reports
+// nothing must not erase a build another client already recorded for the row.
+func (c ClientApp) touch(now time.Time) map[string]any {
+	columns := map[string]any{"last_seen_at": now}
+	if c.Reported() {
+		columns["app_build"] = c.Build
+		columns["app_version"] = c.Version
+	}
+	return columns
+}
+
 // TouchSession records that a session was used, best effort.
-func (a *Accounts) TouchSession(ctx context.Context, sessionID uuid.UUID) error {
-	now := a.now()
+func (a *Accounts) TouchSession(ctx context.Context, sessionID uuid.UUID, client ClientApp) error {
 	return wrap(a.db.WithContext(ctx).Model(&ParentSession{}).
 		Where("id = ?", sessionID).
-		Update("last_seen_at", now).Error, "touching session")
+		Updates(client.touch(a.now())).Error, "touching session")
 }
 
 // DeleteSession signs one device out.
@@ -918,11 +939,73 @@ func (a *Accounts) DeviceByToken(ctx context.Context, tokenHash string) (ChildDe
 }
 
 // TouchDevice records that a device was seen, best effort.
-func (a *Accounts) TouchDevice(ctx context.Context, deviceID uuid.UUID) error {
-	now := a.now()
+func (a *Accounts) TouchDevice(ctx context.Context, deviceID uuid.UUID, client ClientApp) error {
 	return wrap(a.db.WithContext(ctx).Model(&ChildDevice{}).
 		Where("id = ?", deviceID).
-		Update("last_seen_at", now).Error, "touching device")
+		Updates(client.touch(a.now())).Error, "touching device")
+}
+
+// FamilyDevice is one installed client: a signed-in parent session or a paired
+// child device, flattened so a parent can see every build in the family.
+type FamilyDevice struct {
+	ID         uuid.UUID
+	Audience   string
+	Owner      string
+	Name       string
+	AppBuild   string
+	AppVersion string
+	LastSeenAt *time.Time
+	CreatedAt  time.Time
+}
+
+// FamilyDevices lists every live client in a family, most recently seen first.
+// Parent rows are sessions rather than devices: signing in twice on one phone
+// is two sessions, and there is nothing else to tell them apart by.
+func (a *Accounts) FamilyDevices(ctx context.Context, familyID uuid.UUID) ([]FamilyDevice, error) {
+	var sessions []FamilyDevice
+	err := a.db.WithContext(ctx).Model(&ParentSession{}).
+		Select(`parent_session.id, 'parent' AS audience, parent.email AS owner, '' AS name,
+			parent_session.app_build, parent_session.app_version,
+			parent_session.last_seen_at, parent_session.created_at`).
+		Joins("JOIN parent ON parent.id = parent_session.parent_id").
+		Where("parent.family_id = ? AND parent_session.expires_at > ?", familyID, a.now()).
+		Scan(&sessions).Error
+	if err != nil {
+		return nil, wrap(err, "listing parent sessions")
+	}
+
+	var devices []FamilyDevice
+	err = a.db.WithContext(ctx).Model(&ChildDevice{}).
+		Select(`child_device.id, 'child' AS audience, child.name AS owner, child_device.name,
+			child_device.app_build, child_device.app_version,
+			child_device.last_seen_at, child_device.created_at`).
+		Joins("JOIN child ON child.id = child_device.child_id").
+		Where("child.family_id = ? AND child_device.revoked_at IS NULL", familyID).
+		Scan(&devices).Error
+	if err != nil {
+		return nil, wrap(err, "listing child devices")
+	}
+
+	all := append(sessions, devices...)
+	slices.SortFunc(all, func(x, y FamilyDevice) int {
+		return compareLastSeen(y, x)
+	})
+	return all, nil
+}
+
+// compareLastSeen orders by last contact, treating a client that has never
+// been seen as older than any that has.
+func compareLastSeen(x, y FamilyDevice) int {
+	switch {
+	case x.LastSeenAt == nil && y.LastSeenAt == nil:
+		return x.CreatedAt.Compare(y.CreatedAt)
+	case x.LastSeenAt == nil:
+		return -1
+	case y.LastSeenAt == nil:
+		return 1
+	default:
+		return x.LastSeenAt.Compare(*y.LastSeenAt)
+	}
 }
 
 // Devices lists a child's paired devices, most recent first.

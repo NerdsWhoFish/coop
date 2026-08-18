@@ -152,6 +152,7 @@ func (s *Server) routes() {
 	parent("POST /api/v1/parent/children/{childId}/pairing-code", s.handleCreatePairingCode)
 	parent("POST /api/v1/parent/children/{childId}/web-links/{linkId}/approve", s.handleApproveWebLinkAsParent)
 	parent("GET /api/v1/parent/children/{childId}/devices", s.handleListDevices)
+	parent("GET /api/v1/parent/devices", s.handleFamilyDevices)
 	parent("PATCH /api/v1/parent/devices/{deviceId}", s.handleUpdateDevice)
 	parent("DELETE /api/v1/parent/devices/{deviceId}", s.handleRevokeDevice)
 

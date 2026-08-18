@@ -277,6 +277,8 @@ type deviceDTO struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 	LastSeenAt      *time.Time `json:"lastSeenAt,omitempty"`
 	AllowSelfUnpair bool       `json:"allowSelfUnpair"`
+	AppBuild        string     `json:"appBuild,omitempty"`
+	AppVersion      string     `json:"appVersion,omitempty"`
 }
 
 func newDeviceDTO(d store.ChildDevice) deviceDTO {
@@ -286,6 +288,51 @@ func newDeviceDTO(d store.ChildDevice) deviceDTO {
 		CreatedAt:       d.CreatedAt,
 		LastSeenAt:      d.LastSeenAt,
 		AllowSelfUnpair: d.AllowSelfUnpair,
+		AppBuild:        d.AppBuild,
+		AppVersion:      d.AppVersion,
+	}
+}
+
+// setupStatusDTO answers the first call a client makes against a server.
+// Updates is absent when the server publishes no releases, which clients read
+// as "do not check" rather than as an error.
+type setupStatusDTO struct {
+	NeedsSetup bool        `json:"needsSetup"`
+	Updates    *updatesDTO `json:"updates,omitempty"`
+}
+
+type updatesDTO struct {
+	BaseURL        string `json:"baseUrl"`
+	ParentBundleID string `json:"parentBundleId"`
+	ChildBundleID  string `json:"childBundleId"`
+}
+
+// familyDeviceDTO is one row of the family's installed clients. An absent
+// appBuild means the client is too old to report one, which is the signal that
+// a device still has a migration ahead of it.
+type familyDeviceDTO struct {
+	ID         uuid.UUID  `json:"id"`
+	Audience   string     `json:"audience"`
+	Owner      string     `json:"owner"`
+	Name       string     `json:"name,omitempty"`
+	AppBuild   string     `json:"appBuild,omitempty"`
+	AppVersion string     `json:"appVersion,omitempty"`
+	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	Current    bool       `json:"current"`
+}
+
+func newFamilyDeviceDTO(d store.FamilyDevice, current bool) familyDeviceDTO {
+	return familyDeviceDTO{
+		ID:         d.ID,
+		Audience:   d.Audience,
+		Owner:      d.Owner,
+		Name:       d.Name,
+		AppBuild:   d.AppBuild,
+		AppVersion: d.AppVersion,
+		LastSeenAt: d.LastSeenAt,
+		CreatedAt:  d.CreatedAt,
+		Current:    current,
 	}
 }
 

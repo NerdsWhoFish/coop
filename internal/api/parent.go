@@ -20,7 +20,20 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]bool{"needsSetup": count == 0})
+
+	status := setupStatusDTO{NeedsSetup: count == 0}
+	// Clients learn where releases live from the one server they are
+	// configured with, so moving the distribution server never requires
+	// rebuilding and redistributing the applications that would carry the news.
+	if updates := s.deps.Config.Updates; updates.Enabled {
+		status.Updates = &updatesDTO{
+			BaseURL:        updates.BaseURL,
+			ParentBundleID: updates.ParentBundleID,
+			ChildBundleID:  updates.ChildBundleID,
+		}
+	}
+
+	writeJSON(w, s.deps.Logger, http.StatusOK, status)
 	return nil
 }
 
@@ -445,6 +458,28 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request, p auth.Pare
 			Budget:   budgets[purpose],
 			ResetsAt: youtube.NextQuotaReset(now),
 		})
+	}
+
+	writeJSON(w, s.deps.Logger, http.StatusOK, out)
+	return nil
+}
+
+// handleFamilyDevices lists every installed client in the family with the build
+// it last reported, which is how a parent tells a device still running an old
+// application from one that has updated.
+func (s *Server) handleFamilyDevices(w http.ResponseWriter, r *http.Request, p auth.Parent) error {
+	if err := p.RequireAdmin(); err != nil {
+		return err
+	}
+
+	devices, err := s.deps.Accounts.FamilyDevices(r.Context(), p.FamilyID)
+	if err != nil {
+		return err
+	}
+
+	out := make([]familyDeviceDTO, 0, len(devices))
+	for _, device := range devices {
+		out = append(out, newFamilyDeviceDTO(device, device.ID == p.SessionID))
 	}
 
 	writeJSON(w, s.deps.Logger, http.StatusOK, out)

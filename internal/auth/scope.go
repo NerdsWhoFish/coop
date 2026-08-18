@@ -23,6 +23,10 @@ type Parent struct {
 	FamilyID uuid.UUID
 	Role     domain.ParentRole
 
+	// SessionID is the sign-in this request arrived on, so a listing can say
+	// which row is the caller's own device.
+	SessionID uuid.UUID
+
 	// ScopedChildIDs lists the children a non-admin may act on. It is ignored
 	// for admins, who see the whole family.
 	ScopedChildIDs []uuid.UUID

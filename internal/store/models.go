@@ -90,6 +90,8 @@ type ParentSession struct {
 	TokenHash  string    `gorm:"not null;uniqueIndex"`
 	ExpiresAt  time.Time `gorm:"not null;index"`
 	LastSeenAt *time.Time
+	AppBuild   string
+	AppVersion string
 	CreatedAt  time.Time
 }
 
@@ -148,6 +150,8 @@ type ChildDevice struct {
 	TokenHash       string    `gorm:"not null;uniqueIndex"`
 	AllowSelfUnpair bool      `gorm:"not null;default:false"`
 	LastSeenAt      *time.Time
+	AppBuild        string
+	AppVersion      string
 	RevokedAt       *time.Time
 	CreatedAt       time.Time
 }
