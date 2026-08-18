@@ -38,28 +38,15 @@
         "authEncryptionKeyKey": { "type": "string", "minLength": 1 }
       }
     },
-    "ota": {
+    "updates": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "mountPath", "persistence"],
+      "required": ["enabled", "baseURL", "parentBundleID", "childBundleID"],
       "properties": {
         "enabled": { "type": "boolean" },
-        "mountPath": { "type": "string", "pattern": "^/" },
-        "persistence": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["existingClaim", "storageClassName", "accessModes", "size"],
-          "properties": {
-            "existingClaim": { "type": "string" },
-            "storageClassName": { "type": "string" },
-            "accessModes": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"] }
-            },
-            "size": { "type": "string", "pattern": "^[1-9][0-9]*(Ei|Pi|Ti|Gi|Mi|Ki)$" }
-          }
-        }
+        "baseURL": { "type": "string", "pattern": "^(https://.+)?$" },
+        "parentBundleID": { "type": "string" },
+        "childBundleID": { "type": "string" }
       }
     },
     "apns": {
@@ -80,5 +67,5 @@
     "tolerations": { "type": "array" },
     "affinity": { "type": "object" }
   },
-  "required": ["replicaCount", "image", "config", "ota"]
+  "required": ["replicaCount", "image", "config", "updates"]
 }

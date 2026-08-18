@@ -51,6 +51,17 @@ uploads_refresh_interval = "6h"
 # channel has never been ingested or its uploads refresh interval has elapsed.
 ingest_poll_interval = "1m"
 
+[updates]
+# Over-the-air iOS releases, hosted by a Fledge server:
+# https://github.com/TheOutdoorProgrammer/fledge
+#
+# Coop stores no packages and never uploads. It reads the published build so
+# clients learn about updates from the server they already talk to.
+enabled = false
+base_url = "https://fledge.example"
+parent_bundle_id = "fish.nerdswhofish.coop.parent"
+child_bundle_id = "fish.nerdswhofish.coop.child"
+
 [apns]
 # Optional push notifications for channel requests and decisions, using your
 # own APNs auth key: developer.apple.com > Keys > add a key with the Apple

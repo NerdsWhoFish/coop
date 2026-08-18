@@ -28,12 +28,13 @@ helm upgrade --install coop ./deploy/helm/coop \
 Configure ingress and TLS through a values file rather than a long command line.
 The values schema rejects unsupported replica counts and malformed configuration before Kubernetes sees it.
 
-## Optional iOS installer
+## Optional iOS updates
 
-Set `ota.enabled: true` to expose the registered-device installer at `/install/` and mount persistent package storage.
-The chart creates a 2 GiB `ReadWriteOnce` claim by default, or `ota.persistence.existingClaim` can select an operator-managed claim.
-Copy the IPAs and `.version` sidecars produced by `scripts/ota.sh build` into the claim root.
-Leave the feature disabled to register no installer routes and create no OTA claim or mount.
+Set `updates.enabled: true` and point `updates.baseURL` at a [Fledge](https://github.com/TheOutdoorProgrammer/fledge) server to report which build it publishes.
+
+The chart creates no storage for this.
+Earlier versions mounted a package claim so Coop could serve IPAs itself; packages now live on Fledge, and Coop only reads release metadata.
+Leave the feature disabled to report no releases.
 
 ## Upgrade and rollback
 

@@ -65,15 +65,13 @@ apns:
   environment: production
   keySecretKey: apns-key
 
-ota:
+# Over-the-air application releases, read from a Fledge server. Coop hosts no
+# packages itself, so this needs no storage.
+updates:
   enabled: false
-  mountPath: /var/lib/coop/ota
-  persistence:
-    existingClaim: ""
-    storageClassName: ""
-    accessModes:
-      - ReadWriteOnce
-    size: 2Gi
+  baseURL: ""
+  parentBundleID: fish.nerdswhofish.coop.parent
+  childBundleID: fish.nerdswhofish.coop.child
 
 resources:
   requests:

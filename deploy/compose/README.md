@@ -44,10 +44,13 @@ curl --fail --silent --show-error https://your-coop-host.example/readyz
 Caddy obtains and renews the certificate automatically.
 The Coop container is read-only, drops Linux capabilities, runs as a non-root user, and becomes healthy only after PostgreSQL answers its readiness check.
 
-## Optional iOS installer
+## Optional iOS updates
 
-Set `COOP_OTA_ENABLED=true` in `.env` and copy the output of `scripts/ota.sh build` into the `coop-ota` volume to expose the installer at `/install/`.
-The feature defaults to false, and a disabled server registers no installer routes even though Compose retains the package volume across upgrades.
+Set `COOP_UPDATES_ENABLED=true` and `COOP_UPDATES_BASE_URL` to a [Fledge](https://github.com/TheOutdoorProgrammer/fledge) server in `.env`.
+Coop then reports which build that server publishes, so clients learn about updates without being configured with a second address.
+
+Coop stores no packages and needs no volume for this: publishing an application is an operator or CI action against Fledge, and Coop only ever reads.
+The feature defaults to false, and a disabled server reports no releases.
 
 ## Upgrade
 

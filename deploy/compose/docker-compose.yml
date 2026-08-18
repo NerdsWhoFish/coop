@@ -37,8 +37,8 @@ services:
       COOP_PUBLIC_URL: https://${COOP_HOSTNAME:?set COOP_HOSTNAME in .env}
       COOP_AUTH_ENCRYPTION_KEY_FILE: /run/secrets/auth-encryption-key
       COOP_LOG_FORMAT: json
-      COOP_OTA_ENABLED: ${COOP_OTA_ENABLED:-false}
-      COOP_OTA_DIRECTORY: /var/lib/coop/ota
+      COOP_UPDATES_ENABLED: ${COOP_UPDATES_ENABLED:-false}
+      COOP_UPDATES_BASE_URL: ${COOP_UPDATES_BASE_URL:-}
     secrets:
       - database-dsn
       - auth-encryption-key
@@ -50,8 +50,6 @@ services:
       start_period: 30s
     networks:
       - backend
-    volumes:
-      - coop-ota:/var/lib/coop/ota
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -108,4 +106,3 @@ volumes:
   coop-data:
   caddy-data:
   caddy-config:
-  coop-ota:

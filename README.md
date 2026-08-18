@@ -98,7 +98,6 @@ Playback uses YouTube's official embedded player, so creators receive real views
 | `web` | React and TypeScript Cooper Watch browser client |
 | `adr/` | Architecture decision records |
 | `docs/DEPLOYMENT.md` | Production setup, device restrictions, recovery, and operations |
-| `deploy/ota` | Registered-device Ad Hoc builds and the local HTTPS install portal |
 
 The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the recommendation mixer.
 The native and browser Cooper Watch clients include pairing, feeds, subscriptions, search, approvals, playback, reactions, sharing, and Shorts.
@@ -147,8 +146,8 @@ xcodebuild -skipPackagePluginValidation \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-Build both registered-device Ad Hoc packages with `scripts/ota.sh build` after configuring `deploy/ota/.env`.
-The server's optional `/install/` portal and persistent package storage are documented in [deploy/ota/README.md](deploy/ota/README.md).
+Registered-device Ad Hoc packages are published to [Fledge](https://github.com/TheOutdoorProgrammer/fledge), which hosts the archives and serves the install pages.
+Point `updates.base_url` at that server and Coop reports the published build to clients, so a device needs one server address rather than two.
 
 ## Contributing
 
