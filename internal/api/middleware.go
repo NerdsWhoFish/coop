@@ -85,7 +85,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/install/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Referrer-Policy", "no-referrer")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		} else {

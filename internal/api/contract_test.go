@@ -59,41 +59,29 @@ func isHTTPMethod(value string) bool {
 	}
 }
 
-func TestInstallerRoutesAreOptIn(t *testing.T) {
-	disabled := &Server{mux: http.NewServeMux()}
-	disabled.routes()
-	if got := routeStatus(disabled.mux, "/"); got != http.StatusNotFound {
-		t.Fatalf("disabled root status = %d, want 404", got)
-	}
-	if got := routeStatus(disabled.mux, "/install/"); got != http.StatusNotFound {
-		t.Fatalf("disabled installer status = %d, want 404", got)
+// Coop no longer serves packages, so nothing may claim /install/. The web
+// handler answers it instead, and refuses it there; a route registered here
+// would quietly resurrect an endpoint every client has already moved off.
+func TestNothingServesTheRetiredInstaller(t *testing.T) {
+	bare := &Server{mux: http.NewServeMux()}
+	bare.routes()
+	for _, path := range []string{"/install/", "/install", "/install/releases/parent.json"} {
+		if got := routeStatus(bare.mux, path); got != http.StatusNotFound {
+			t.Errorf("%s = %d with no web handler, want 404", path, got)
+		}
 	}
 
-	enabled := &Server{
+	withWeb := &Server{
 		deps: Deps{
-			Installer: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusNoContent)
-			}),
 			Web: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusAccepted)
 			}),
 		},
 		mux: http.NewServeMux(),
 	}
-	enabled.routes()
-	rootRecorder := httptest.NewRecorder()
-	enabled.mux.ServeHTTP(rootRecorder, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rootRecorder.Code != http.StatusAccepted {
-		t.Fatalf("web root = %d, want %d", rootRecorder.Code, http.StatusAccepted)
-	}
-	if got := routeStatus(enabled.mux, "/install/"); got != http.StatusNoContent {
-		t.Fatalf("enabled installer status = %d, want 204", got)
-	}
-
-	recorder := httptest.NewRecorder()
-	enabled.mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/install", nil))
-	if recorder.Code != http.StatusPermanentRedirect || recorder.Header().Get("Location") != "/install/" {
-		t.Fatalf("installer redirect = %d %q", recorder.Code, recorder.Header().Get("Location"))
+	withWeb.routes()
+	if got := routeStatus(withWeb.mux, "/install/"); got != http.StatusAccepted {
+		t.Errorf("/install/ = %d, want it to reach the web handler", got)
 	}
 }
 

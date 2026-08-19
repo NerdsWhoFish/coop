@@ -24,9 +24,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/crypto"
 	"github.com/nerdswhofish/coop/internal/feed"
-	"github.com/nerdswhofish/coop/internal/fledge"
 	"github.com/nerdswhofish/coop/internal/ingest"
-	"github.com/nerdswhofish/coop/internal/legacyinstall"
 	"github.com/nerdswhofish/coop/internal/push"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/version"
@@ -238,18 +236,8 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	if err != nil {
 		return err
 	}
-	var installer http.Handler
 	if cfg.Updates.Enabled {
-		releases, err := fledge.New(cfg.Updates.BaseURL)
-		if err != nil {
-			return err
-		}
-		installer, err = legacyinstall.New(releases,
-			cfg.Updates.ParentBundleID, cfg.Updates.ChildBundleID, logger, time.Now)
-		if err != nil {
-			return err
-		}
-		logger.Info("update metadata enabled", "fledge", cfg.Updates.BaseURL)
+		logger.Info("update source advertised to clients", "fledge", cfg.Updates.BaseURL)
 	}
 
 	var pusher *push.Service
@@ -278,7 +266,6 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 		YouTube:   youtubeClients,
 		DB:        db,
 		Now:       time.Now,
-		Installer: installer,
 		Web:       webapp.Handler(),
 		Push:      pusher,
 	})

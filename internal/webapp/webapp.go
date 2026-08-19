@@ -22,6 +22,8 @@ func Handler() http.Handler {
 	}
 	files := http.FileServer(http.FS(root))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// `/install/` is retired but still excluded, or the catch-all below
+		// would answer a bookmark of it with the application and a 200.
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/install/") {
 			http.NotFound(w, r)
 			return

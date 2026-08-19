@@ -38,7 +38,6 @@ type Deps struct {
 	YouTube   *youtubeclient.Factory
 	DB        *store.DB
 	Now       func() time.Time
-	Installer http.Handler
 	Web       http.Handler
 
 	// Push is optional; a nil service delivers nothing.
@@ -94,12 +93,6 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /healthz", s.handleReadiness)
 	m.HandleFunc("GET /api/v1/healthz", s.handleReadiness)
 	m.HandleFunc("GET /version", s.handleVersion)
-	if s.deps.Installer != nil {
-		m.Handle("GET /install/", http.StripPrefix("/install", s.deps.Installer))
-		m.HandleFunc("GET /install", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/install/", http.StatusPermanentRedirect)
-		})
-	}
 	if s.deps.Web != nil {
 		m.Handle("GET /", s.deps.Web)
 	}
