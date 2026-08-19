@@ -1,0 +1,53 @@
+version: 2
+
+project_name: coop
+
+before:
+  hooks:
+    # The Cooper Watch browser client is embedded in the binary, so it has to
+    # exist before any build runs.
+    - npm ci --prefix web
+    - npm run build --prefix web
+
+builds:
+  - id: coopd
+    main: ./cmd/coopd
+    binary: coopd
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ignore:
+      # Coop only ever runs on Linux servers and Apple Silicon desktops.
+      - goos: darwin
+        goarch: amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/nerdswhofish/coop/internal/version.Version={{ .Version }}
+      - -X github.com/nerdswhofish/coop/internal/version.Commit={{ .FullCommit }}
+      - -X github.com/nerdswhofish/coop/internal/version.Date={{ .Date }}
+
+archives:
+  - id: coopd
+    ids: [coopd]
+    name_template: "coop_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: SHA256SUMS
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+release:
+  github:
+    owner: NerdsWhoFish
+    name: coop
+  extra_files:
+    - glob: dist/coop-*.tgz

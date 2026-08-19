@@ -1,8 +1,8 @@
 name: Cut release
 
-# Picks the next version, writes it into the chart and both applications,
-# proves they archive and sign, tags, and publishes the two iOS builds.
-# Tagging then triggers release.yml, which builds the server and its image.
+# The only way to cut a release. Three jobs because GitHub's macOS runners have
+# no Docker: iOS archives on macOS, the image builds on Linux, and the tag is
+# cut last so a signing failure never burns a version number.
 
 on:
   workflow_dispatch:
@@ -25,15 +25,14 @@ on:
 permissions: {}
 
 jobs:
-  release:
-    name: Cut and publish
-    # Xcode 26 is this image's default, which the iOS 26 deployment target
-    # needs. Selecting an Xcode path by version breaks when the image moves.
-    runs-on: macos-26
+  prepare:
+    name: Pick the version
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
-
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -50,28 +49,70 @@ jobs:
           dry-run: true
           publish: none
 
-      - name: Write the version into the chart and both applications
+      - name: Write the version everywhere and commit it
+        id: commit
         env:
           VERSION: ${{ steps.plan.outputs.version }}
+          DRY_RUN: ${{ inputs.dry-run }}
         run: |
           set -euo pipefail
           eval "$(scripts/release-version.sh "$VERSION")"
           echo "Cutting $VERSION as $MARKETING_VERSION ($CURRENT_PROJECT_VERSION)"
 
-          /usr/bin/sed -i '' \
+          sed -i \
             -e "s/^version: .*/version: $MARKETING_VERSION/" \
             -e "s/^appVersion: .*/appVersion: \"$MARKETING_VERSION\"/" \
             deploy/helm/coop/Chart.yaml
 
+          for spec in ios/CooperTheCop/project.yml ios/CooperWatch/project.yml; do
+            sed -i \
+              -e "s/^\( *MARKETING_VERSION: \).*/\1$MARKETING_VERSION/" \
+              -e "s/^\( *CURRENT_PROJECT_VERSION: \).*/\1$CURRENT_PROJECT_VERSION/" \
+              "$spec"
+          done
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add deploy/helm/coop/Chart.yaml ios/CooperTheCop/project.yml \
+            ios/CooperWatch/project.yml
+          # Flux reports the chart version from the tagged commit, so the bump
+          # has to be in the commit the tag points at. It may already be there,
+          # from a prepared version or a re-run, and that is not a failure.
+          if git diff --cached --quiet; then
+            echo "Already at $VERSION; nothing to prepare."
+          elif [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run; leaving the version uncommitted."
+          else
+            git commit -m "chore(release): prepare $VERSION"
+            git push
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  apps:
+    name: Archive the applications
+    needs: prepare
+    # Xcode 26 is this image's default, which the iOS 26 deployment target
+    # needs. Selecting an Xcode path by version breaks when the image moves.
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Write the version into both applications
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          eval "$(scripts/release-version.sh "$VERSION")"
           for spec in ios/CooperTheCop/project.yml ios/CooperWatch/project.yml; do
             /usr/bin/sed -i '' \
               -e "s/^\( *MARKETING_VERSION: \).*/\1$MARKETING_VERSION/" \
               -e "s/^\( *CURRENT_PROJECT_VERSION: \).*/\1$CURRENT_PROJECT_VERSION/" \
               "$spec"
           done
-
-          echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
-          echo "CURRENT_PROJECT_VERSION=$CURRENT_PROJECT_VERSION" >> "$GITHUB_ENV"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -136,49 +177,91 @@ jobs:
               -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
               -exportPath "$RUNNER_TEMP/export/$app" \
               "${auth[@]}"
+
+            # Named exactly, because `fledge upload` opens the path it is given
+            # and does not expand a glob, whatever the archive came out called.
+            found=$(find "$RUNNER_TEMP/export/$app" -name '*.ipa' -maxdepth 1)
+            [ "$(printf '%s\n' "$found" | grep -c .)" -eq 1 ] || {
+              echo "expected exactly one archive for $app, got: $found" >&2
+              exit 1
+            }
+            mv "$found" "$RUNNER_TEMP/export/$app.ipa"
           done
 
-      - name: Commit the release version
-        if: inputs.dry-run != true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipas
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+
+  publish:
+    name: Tag and publish
+    needs: [prepare, apps]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: ipas
+          path: ${{ runner.temp }}/export
+
+      - name: Package the Helm chart
         env:
-          VERSION: ${{ steps.plan.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add deploy/helm/coop/Chart.yaml ios/*/project.yml ios/*/*.xcodeproj
-          # Flux reports the chart version from the tagged commit, so the bump
-          # has to be in the commit the tag points at. It may already be there,
-          # from a prepared version or a re-run, and that is not a failure.
-          if git diff --cached --quiet; then
-            echo "Already at $VERSION; nothing to prepare."
-          else
-            git commit -m "chore(release): prepare $VERSION"
-            git push
-          fi
+          mkdir -p dist
+          helm package deploy/helm/coop --destination dist \
+            --app-version "${VERSION#v}" --version "${VERSION#v}"
 
-      - name: Tag and publish the parent application
-        id: release
+      - name: Tag and publish everything
         uses: TheOutdoorProgrammer/quill@v1
         with:
           bump: ${{ inputs.bump }}
           scope: ${{ inputs.scope }}
           dry-run: ${{ inputs.dry-run }}
-          publish: fledge
+          publish: goreleaser, fledge, docker
+          docker-file: deploy/Dockerfile
+          docker-sbom: "true"
+          docker-provenance: mode=max
+          docker-sign: "true"
+          docker-attest: "true"
+          attest-paths: dist/*
           fledge-server: ${{ secrets.FLEDGE_URL }}
           # Passed rather than left to fledge.yaml so quill checks the archive
           # exists before cutting a tag. A path it never sees fails after the
           # tag, and a burnt version number does not come back.
-          fledge-ipa: ${{ runner.temp }}/export/CooperTheCop/*.ipa
+          fledge-ipa: ${{ runner.temp }}/export/CooperTheCop.ipa
           fledge-fail-on-development-signing: "true"
           fledge-secure: "true"
 
+      # Fledge takes exactly one archive per publish, so the second application
+      # goes straight to it rather than through quill.
       - name: Publish the child application
         if: inputs.dry-run != true
         uses: TheOutdoorProgrammer/fledge/actions/publish@v1
         with:
           server: ${{ secrets.FLEDGE_URL }}
-          ipa: ${{ runner.temp }}/export/CooperWatch/*.ipa
-          notes: ${{ steps.plan.outputs.version }}
+          ipa: ${{ runner.temp }}/export/CooperWatch.ipa
+          notes: ${{ needs.prepare.outputs.version }}
           fail-on-development-signing: "true"
           secure: "true"
