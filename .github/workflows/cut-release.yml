@@ -148,9 +148,14 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add deploy/helm/coop/Chart.yaml ios/*/project.yml ios/*/*.xcodeproj
           # Flux reports the chart version from the tagged commit, so the bump
-          # has to be in the commit the tag points at.
-          git commit -m "chore(release): prepare $VERSION"
-          git push
+          # has to be in the commit the tag points at. It may already be there,
+          # from a prepared version or a re-run, and that is not a failure.
+          if git diff --cached --quiet; then
+            echo "Already at $VERSION; nothing to prepare."
+          else
+            git commit -m "chore(release): prepare $VERSION"
+            git push
+          fi
 
       - name: Tag and publish the parent application
         id: release
