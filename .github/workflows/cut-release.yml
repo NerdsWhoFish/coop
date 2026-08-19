@@ -219,6 +219,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # GoReleaser shells out to syft for the archive bill of materials and
+      # does not install it.
+      - uses: anchore/sbom-action/download-syft@v0
+
       - uses: actions/download-artifact@v5
         with:
           name: ipas
