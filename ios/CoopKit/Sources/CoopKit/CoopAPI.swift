@@ -11,6 +11,9 @@ public actor CoopAPI {
     if let token {
       middlewares.append(BearerAuthorizationMiddleware(token: token))
     }
+    // Last means closest to the transport, so a retry repeats the finished
+    // request rather than rebuilding its headers.
+    middlewares.append(RetryingMiddleware())
     client = Client(
       serverURL: serverURL,
       configuration: .init(dateTranscoder: FlexibleISO8601DateTranscoder()),
