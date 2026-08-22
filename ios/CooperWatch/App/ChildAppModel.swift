@@ -26,6 +26,7 @@ final class ChildAppModel {
   var subscriptions: [Components.Schemas.Channel] = []
   var isWorking = false
   var errorMessage: String?
+  var libraryFailure: CoopConnectionProblem?
   var requiredUpdate: AppRelease?
   var channelSearchRequest: ChannelSearchRequest?
   private(set) var isPreviewMode = false
@@ -61,9 +62,13 @@ final class ChildAppModel {
           webLinkingEnabled: true,
           allowSelfUnpair: false
         )
-        feed = Self.previewVideos
-        discoveries = Self.previewDiscoveries
-        subscriptions = Self.previewChannels
+        if ProcessInfo.processInfo.environment["COOP_UI_LOAD_FAILURE"] == "1" {
+          libraryFailure = .unreachable
+        } else {
+          feed = Self.previewVideos
+          discoveries = Self.previewDiscoveries
+          subscriptions = Self.previewChannels
+        }
         destination = .watch
         if ProcessInfo.processInfo.environment["COOP_UI_UPDATE_REQUIRED"] == "1" {
           requiredUpdate = AppRelease(
@@ -87,6 +92,7 @@ final class ChildAppModel {
     #endif
     destination = .launching
     errorMessage = nil
+    libraryFailure = nil
     await checkForRequiredUpdate()
     guard requiredUpdate == nil else { return }
     await restore()
@@ -178,8 +184,11 @@ final class ChildAppModel {
       (feed, subscriptions) = try await (feedLoad, subscriptionLoad)
       discoveries = (try? await discoveryLoad) ?? []
       profile = try await profileLoad
+      libraryFailure = nil
     } catch {
-      errorMessage = error.localizedDescription
+      // The home shelf carries this inline. An alert over a background refresh
+      // would interrupt whatever the child is already watching.
+      libraryFailure = CoopConnectionProblem(error)
     }
     enablePushNotificationsIfNeeded()
     startRequestWatcher()
@@ -463,6 +472,12 @@ final class ChildAppModel {
     pushRegistrationRequested = false
   }
 
+  /// Surfaces a failed action as something a child can read. Loads should set
+  /// their own `LoadingOrFailure` instead, so the page they wanted survives.
+  func report(_ error: any Error) {
+    errorMessage = CoopConnectionProblem(error).childMessage
+  }
+
   private func perform(_ operation: () async throws -> Void) async {
     isWorking = true
     errorMessage = nil
@@ -470,7 +485,7 @@ final class ChildAppModel {
     do {
       try await operation()
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = CoopConnectionProblem(error).childMessage
     }
   }
 

@@ -4,6 +4,7 @@ import SwiftUI
 struct ChildRequestsView: View {
   @Bindable var model: ChildAppModel
   @State private var requests: [Components.Schemas.Request] = []
+  @State private var loadFailure: CoopConnectionProblem?
 
   var body: some View {
     List(requests, id: \.id) { request in
@@ -23,7 +24,9 @@ struct ChildRequestsView: View {
     }
     .scrollContentBackground(.hidden)
     .overlay {
-      if requests.isEmpty {
+      if requests.isEmpty, let loadFailure {
+        LoadFailureView(problem: loadFailure, retry: load)
+      } else if requests.isEmpty {
         ContentUnavailableView(
           "No asks yet",
           systemImage: "bell",
@@ -33,14 +36,18 @@ struct ChildRequestsView: View {
       }
     }
     .refreshable { await load() }
+    .reloadOnReconnect(if: loadFailure != nil) { await load() }
     .navigationTitle("My asks")
     .task { await load() }
     .watchBackground()
   }
 
   private func load() async {
-    do { requests = try await model.requests() } catch {
-      model.errorMessage = error.localizedDescription
+    do {
+      requests = try await model.requests()
+      loadFailure = nil
+    } catch {
+      loadFailure = CoopConnectionProblem(error)
     }
   }
 

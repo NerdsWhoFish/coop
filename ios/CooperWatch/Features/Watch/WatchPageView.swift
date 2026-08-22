@@ -9,6 +9,7 @@ struct WatchPageView: View {
   let videoID: String
   @Bindable var model: ChildAppModel
   @State private var page: Components.Schemas.WatchPage?
+  @State private var loadFailure: CoopConnectionProblem?
   @State private var watchNext: [Components.Schemas.Video] = []
   @State private var tappedVideo: TappedVideo?
   @State private var tappedChannel: TappedChannel?
@@ -80,7 +81,7 @@ struct WatchPageView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .ignoresSafeArea()
       } else {
-        ProgressView()
+        LoadingOrFailure(failure: loadFailure, retry: load)
       }
       VStack {
         Spacer()
@@ -173,7 +174,7 @@ struct WatchPageView: View {
         .padding(18)
         .padding(.bottom, 60)
       } else {
-        ProgressView().padding(.top, 40)
+        LoadingOrFailure(failure: loadFailure, retry: load).padding(.top, 40)
       }
     }
     .accessibilityIdentifier("landscape-browse-view")
@@ -217,7 +218,7 @@ struct WatchPageView: View {
         .padding()
         .padding(.bottom, 84)
       } else {
-        ProgressView().padding(.top, 80)
+        LoadingOrFailure(failure: loadFailure, retry: load).padding(.top, 80)
       }
     }
     .refreshable { await load() }
@@ -292,7 +293,12 @@ struct WatchPageView: View {
         channelSubscribed = model.isSubscribed(to: page.video.channelId)
         startedAt = .now
       }
-    } catch { model.errorMessage = error.localizedDescription }
+      loadFailure = nil
+    } catch {
+      // Stays on this page: an alert plus a dead spinner loses the video the
+      // child picked, and they have no way back to it.
+      loadFailure = CoopConnectionProblem(error)
+    }
     watchNext = await model.watchNext(excluding: videoID)
   }
 
@@ -302,7 +308,7 @@ struct WatchPageView: View {
       reaction = newValue
       Task {
         do { try await model.setReaction(newValue, videoID: videoID) } catch {
-          model.errorMessage = error.localizedDescription
+          model.report(error)
         }
       }
     } label: {
@@ -377,7 +383,7 @@ struct WatchPageView: View {
         try await model.setSubscribed(subscribed, channelID: channelID)
       } catch {
         channelSubscribed.toggle()
-        model.errorMessage = error.localizedDescription
+        model.report(error)
       }
       subscriptionIsWorking = false
     }

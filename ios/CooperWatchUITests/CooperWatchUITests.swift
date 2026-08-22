@@ -345,6 +345,29 @@ final class CooperWatchUITests: XCTestCase {
   }
 
   @MainActor
+  func testAFailedLibraryOffersRetryInsteadOfAnEmptyShelf() throws {
+    let app = previewApp()
+    app.launchEnvironment["COOP_UI_LOAD_FAILURE"] = "1"
+    app.launch()
+
+    let failure = app.descendants(matching: .any)["load-failure-view"]
+    XCTAssertTrue(failure.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Try again"].isHittable)
+
+    // The bug this replaces: an empty shelf claiming everything is fine, and a
+    // raw CFNetwork dump in an alert.
+    XCTAssertFalse(app.staticTexts["Your shelf is ready"].exists)
+    for text in app.staticTexts.allElementsBoundByIndex {
+      XCTAssertFalse(text.label.contains("NSURLErrorDomain"))
+    }
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Child library load failure"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testShortsTabIsAbsentWhenDisabled() throws {
     let app = previewApp()
     app.launchEnvironment["COOP_UI_SHORTS_DISABLED"] = "1"

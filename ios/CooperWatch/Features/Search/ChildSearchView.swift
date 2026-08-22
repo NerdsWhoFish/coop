@@ -176,7 +176,7 @@ struct ChildSearchView: View {
     isSearching = true
     defer { isSearching = false }
     do { results = try await model.search(query: term, channelID: channelScope?.id) } catch {
-      model.errorMessage = error.localizedDescription
+      model.report(error)
     }
   }
 
@@ -187,7 +187,7 @@ struct ChildSearchView: View {
         _ = withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) {
           askedChannels.insert(video.channelId)
         }
-      } catch { model.errorMessage = error.localizedDescription }
+      } catch { model.report(error) }
     }
   }
 }

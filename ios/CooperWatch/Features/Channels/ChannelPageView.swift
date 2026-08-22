@@ -7,6 +7,7 @@ struct ChannelPageView: View {
   @Bindable var model: ChildAppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var page: Components.Schemas.ChannelPage?
+  @State private var loadFailure: CoopConnectionProblem?
   @State private var isWorking = false
   @State private var asked = false
 
@@ -94,7 +95,7 @@ struct ChannelPageView: View {
         }
         .padding()
       } else {
-        ProgressView().padding(.top, 80)
+        LoadingOrFailure(failure: loadFailure, retry: load).padding(.top, 80)
       }
     }
     .navigationTitle(page?.channel.title ?? "Channel")
@@ -105,8 +106,11 @@ struct ChannelPageView: View {
   }
 
   private func load() async {
-    do { page = try await model.channel(id: channelID) } catch {
-      model.errorMessage = error.localizedDescription
+    do {
+      page = try await model.channel(id: channelID)
+      loadFailure = nil
+    } catch {
+      loadFailure = CoopConnectionProblem(error)
     }
   }
 
@@ -116,7 +120,7 @@ struct ChannelPageView: View {
       do {
         try await model.setSubscribed(subscribed, channelID: channelID)
         await load()
-      } catch { model.errorMessage = error.localizedDescription }
+      } catch { model.report(error) }
       isWorking = false
     }
   }
@@ -127,7 +131,7 @@ struct ChannelPageView: View {
       do {
         try await model.requestChannel(channelID: channelID, videoID: promptedByVideoID)
         withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) { asked = true }
-      } catch { model.errorMessage = error.localizedDescription }
+      } catch { model.report(error) }
       isWorking = false
     }
   }

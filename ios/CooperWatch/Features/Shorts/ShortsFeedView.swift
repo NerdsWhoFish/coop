@@ -16,7 +16,7 @@ struct ShortsFeedView: View {
   @State private var currentID: ShortOccurrence.ID?
   @State private var nextOffset = 0
   @State private var isLoading = false
-  @State private var loadError: String?
+  @State private var loadError: CoopConnectionProblem?
 
   private let pageSize = 8
 
@@ -69,12 +69,13 @@ struct ShortsFeedView: View {
       .scrollPosition(id: $currentID)
       .scrollTargetBehavior(.paging)
       .refreshable { await reshuffle() }
+      .reloadOnReconnect(if: loadError != nil) { await loadNextPage() }
       .sensoryFeedback(.selection, trigger: currentID)
       .overlay(alignment: .top) {
         if let loadError {
           HStack(spacing: 10) {
-            Image(systemName: "wifi.exclamationmark")
-            Text(loadError).lineLimit(2)
+            Image(systemName: loadError.symbolName)
+            Text(loadError.childMessage).lineLimit(2)
             Button("Retry") { Task { await loadNextPage() } }
               .fontWeight(.bold)
           }
@@ -96,7 +97,10 @@ struct ShortsFeedView: View {
     ContentUnavailableView {
       Label("No Shorts yet", systemImage: "bolt.slash.fill")
     } description: {
-      Text(loadError ?? "Approved Shorts will appear here after your channels refresh.")
+      Text(
+        loadError?.childMessage
+          ?? "Approved Shorts will appear here after your channels refresh."
+      )
     } actions: {
       Button("Try again") {
         Task { await reshuffle() }
@@ -152,7 +156,7 @@ struct ShortsFeedView: View {
         currentID = newItems.first?.id
       }
     } catch {
-      loadError = error.localizedDescription
+      loadError = CoopConnectionProblem(error)
     }
   }
 }

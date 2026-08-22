@@ -12,12 +12,8 @@ struct HomeView: View {
     NavigationStack {
       ScrollView {
         if model.feed.isEmpty && model.discoveries.isEmpty {
-          ContentUnavailableView(
-            "Your shelf is ready",
-            systemImage: "sparkles.tv",
-            description: Text("New videos from your approved channels will show up here.")
-          )
-          .containerRelativeFrame(.vertical, alignment: .center)
+          emptyShelf
+            .containerRelativeFrame(.vertical, alignment: .center)
         } else {
           if UIDevice.current.userInterfaceIdiom == .pad {
             padSections
@@ -27,6 +23,7 @@ struct HomeView: View {
         }
       }
       .refreshable { await model.loadLibrary() }
+      .reloadOnReconnect(if: model.libraryFailure != nil) { await model.loadLibrary() }
       .navigationTitle("Hey, \(model.profile?.name ?? "there")!")
       .toolbar {
         ToolbarItemGroup(placement: .topBarTrailing) {
@@ -69,7 +66,7 @@ struct HomeView: View {
               showingComputerScanner = false
               computerLinked = true
             } catch {
-              model.errorMessage = error.localizedDescription
+              model.report(error)
               showingComputerScanner = false
             }
           }
@@ -88,6 +85,21 @@ struct HomeView: View {
       Button("Done", role: .cancel) {}
     } message: {
       Text("This computer can now use your Coop profile.")
+    }
+  }
+
+  /// An empty shelf reads as "nothing is approved yet", which is a lie when the
+  /// library simply never loaded.
+  @ViewBuilder
+  private var emptyShelf: some View {
+    if let failure = model.libraryFailure {
+      LoadFailureView(problem: failure) { await model.loadLibrary() }
+    } else {
+      ContentUnavailableView(
+        "Your shelf is ready",
+        systemImage: "sparkles.tv",
+        description: Text("New videos from your approved channels will show up here.")
+      )
     }
   }
 

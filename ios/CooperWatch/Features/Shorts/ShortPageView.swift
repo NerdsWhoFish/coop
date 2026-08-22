@@ -131,11 +131,15 @@ struct ShortPageView: View {
           .background(.black.opacity(0.7), in: .circle)
       }
 
-      if isActive, loadError != nil {
+      if isActive, let loadError {
         VStack(spacing: 12) {
           Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
             .font(.largeTitle)
           Text("This one got tangled").font(.headline)
+          Text(loadError)
+            .font(.footnote)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.white.opacity(0.75))
           Button("Try again") { Task { await retryPlayback() } }
             .buttonStyle(.borderedProminent)
             .tint(accent)
@@ -244,7 +248,7 @@ struct ShortPageView: View {
       }
     } catch {
       guard !Task.isCancelled else { return }
-      loadError = error.localizedDescription
+      loadError = CoopConnectionProblem(error).childMessage
     }
   }
 
@@ -304,7 +308,7 @@ struct ShortPageView: View {
         try await model.setReaction(updated, videoID: video.id)
       } catch {
         reaction = previous
-        model.errorMessage = error.localizedDescription
+        model.report(error)
       }
       isUpdatingReaction = false
     }

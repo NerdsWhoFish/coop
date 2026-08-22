@@ -10,6 +10,7 @@
 		08C8405AF3AEFB1DE7AD6C26 /* ChildRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E37811CB8A7D9409E7C9D9 /* ChildRequestsView.swift */; };
 		0A92FBDF6E77A7FDC66B90D6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9654E746A4F5B63910469124 /* PrivacyInfo.xcprivacy */; };
 		10CB1FCF3BC1926399AE987D /* YouTubeEmbeddedPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA40CE3285DE22EF609BE418 /* YouTubeEmbeddedPlayer.swift */; };
+		2146D556F08F135863167D2A /* LoadingOrFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEE294A794C4910A9C888C39 /* LoadingOrFailure.swift */; };
 		2D3A3ECCCA1C9D2369CEA03B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33119F8E83ACDE41586BDB34 /* Assets.xcassets */; };
 		2DCDFE7B84C789BBD453E07C /* CoopKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9882B426CAE32DA811C3ED99 /* CoopKit */; };
 		2F062356F712AFB09B4641E7 /* ChildRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E33F4CB246B3DB86A07F49 /* ChildRootView.swift */; };
@@ -73,6 +74,7 @@
 		B17DB97E074DC486B076F205 /* ChildAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildAppModel.swift; sourceTree = "<group>"; };
 		B1E86E9A4AC4B3415C166CFC /* CooperWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperWatchApp.swift; sourceTree = "<group>"; };
 		B8574B65886590196410E6CB /* CooperWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CooperWatchTests.swift; sourceTree = "<group>"; };
+		BEE294A794C4910A9C888C39 /* LoadingOrFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingOrFailure.swift; sourceTree = "<group>"; };
 		C1915E402A4C72CBAF358DAD /* CooperWatchTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CooperWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA40CE3285DE22EF609BE418 /* YouTubeEmbeddedPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeEmbeddedPlayer.swift; sourceTree = "<group>"; };
 		DDB7E4D2DB80084A81A969AF /* ShortEmbeddedPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortEmbeddedPlayer.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				55FDBE0A55E3B1CA9948DBB3 /* DiscoveryShelf.swift */,
+				BEE294A794C4910A9C888C39 /* LoadingOrFailure.swift */,
 				55E4B135EDDA821C30106CEA /* VideoCard.swift */,
 				29514969D80043E4D6EAC950 /* VideoLoadingPlaceholder.swift */,
 				CA40CE3285DE22EF609BE418 /* YouTubeEmbeddedPlayer.swift */,
@@ -393,6 +396,7 @@
 				63B08D2E7E98D520AA5270D7 /* CooperWatchApp.swift in Sources */,
 				7D3DDF61CC36DA08E6A0E5A7 /* DiscoveryShelf.swift in Sources */,
 				9AE6858FBDF50AF24C85239F /* HomeView.swift in Sources */,
+				2146D556F08F135863167D2A /* LoadingOrFailure.swift in Sources */,
 				7B77FF825FA0E449D84BC319 /* PairingView.swift in Sources */,
 				FD5D03EA6F1AC6577346105E /* PlaybackVisibility.swift in Sources */,
 				572BF383DE30E9ECC676D7EB /* ShortEmbeddedPlayer.swift in Sources */,
