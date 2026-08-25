@@ -36,8 +36,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.child
         PRODUCT_NAME: CooperWatch
         # Both are written by scripts/release-version.sh; do not hand-edit.
-        MARKETING_VERSION: 1.8.1
-        CURRENT_PROJECT_VERSION: 1080199
+        MARKETING_VERSION: 1.8.2
+        CURRENT_PROJECT_VERSION: 1080299
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Cooper Watch
         INFOPLIST_KEY_NSCameraUsageDescription: Scan a Coop code to link a computer to this profile.
