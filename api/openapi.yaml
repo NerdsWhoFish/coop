@@ -1854,7 +1854,14 @@ components:
 
     ChildProfile:
       type: object
-      required: [id, name, shortsEnabled, watchPageAutoplay, channelDiscoveryEnabled, webLinkingEnabled, allowSelfUnpair]
+      required:
+        - id
+        - name
+        - shortsEnabled
+        - watchPageAutoplay
+        - channelDiscoveryEnabled
+        - webLinkingEnabled
+        - allowSelfUnpair
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
