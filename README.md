@@ -148,6 +148,8 @@ xcodebuild -skipPackagePluginValidation \
 
 Registered-device Ad Hoc packages are published to [Fledge](https://github.com/TheOutdoorProgrammer/fledge), which hosts the archives and serves the install pages.
 Point `updates.base_url` at that server and Coop reports the published build to clients, so a device needs one server address rather than two.
+The release workflow uses Quill's optional Apple signing action with the persistent Distribution identity in `APPSTORE_CERTIFICATES_FILE_BASE64` and `APPSTORE_CERTIFICATES_PASSWORD` rather than asking Xcode to create a certificate on each runner.
+The parent and child applications receive separate certificate-, device-, and capability-bound Ad Hoc profiles through the existing `ASC_ISSUER_ID`, `ASC_KEY_ID`, and `ASC_KEY_P8` credentials.
 
 ## Contributing
 
