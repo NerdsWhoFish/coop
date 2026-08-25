@@ -25,20 +25,20 @@ import (
 // Deps is everything the HTTP layer needs. Assembled by the composition root
 // so this package constructs nothing it does not own.
 type Deps struct {
-	Config    *config.Config
-	Logger    *slog.Logger
-	Accounts  *store.Accounts
-	Rules     *store.Rules
-	Catalog   *store.Catalog
-	Activity  *store.Activity
-	Audit     *store.Audit
-	Feed      *feed.Service
-	Quota     *store.QuotaStore
-	Sealer    *crypto.Sealer
-	YouTube   *youtubeclient.Factory
-	DB        *store.DB
-	Now       func() time.Time
-	Web       http.Handler
+	Config   *config.Config
+	Logger   *slog.Logger
+	Accounts *store.Accounts
+	Rules    *store.Rules
+	Catalog  *store.Catalog
+	Activity *store.Activity
+	Audit    *store.Audit
+	Feed     *feed.Service
+	Quota    *store.QuotaStore
+	Sealer   *crypto.Sealer
+	YouTube  *youtubeclient.Factory
+	DB       *store.DB
+	Now      func() time.Time
+	Web      http.Handler
 
 	// Push is optional; a nil service delivers nothing.
 	Push *push.Service

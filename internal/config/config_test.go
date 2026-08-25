@@ -131,8 +131,8 @@ func TestValidate(t *testing.T) {
 			wantErr: "updates.base_url",
 		},
 		{
-			name: "updates enabled without a URL",
-			mutate: func(c *Config) { c.Updates.Enabled = true },
+			name:    "updates enabled without a URL",
+			mutate:  func(c *Config) { c.Updates.Enabled = true },
 			wantErr: "updates.base_url",
 		},
 		{
