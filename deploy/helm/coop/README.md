@@ -51,3 +51,4 @@ Alert on repeated readiness failures, restarts, HTTP 5xx responses, rejected mig
 
 The container filesystem is read-only, capabilities are dropped, privilege escalation is disabled, and the process runs as a non-root user.
 Keep PostgreSQL inaccessible from the public network and restrict egress where practical to DNS, PostgreSQL, YouTube APIs, thumbnail hosts, and required certificate infrastructure.
+When the chart's NetworkPolicy and OTLP export are both enabled, the policy also permits TCP egress on `networkPolicy.otlpPort` so the application can reach its collector.

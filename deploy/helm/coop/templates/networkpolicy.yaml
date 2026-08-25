@@ -30,4 +30,8 @@ spec:
           port: 443
         - protocol: TCP
           port: {{ .Values.networkPolicy.postgresPort }}
+        {{- if .Values.observability.otlpEndpoint }}
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.otlpPort }}
+        {{- end }}
 {{- end }}

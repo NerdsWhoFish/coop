@@ -88,6 +88,7 @@ networkPolicy:
   enabled: false
   ingressNamespaceSelector: {}
   postgresPort: 5432
+  otlpPort: 4318
 
 nodeSelector: {}
 tolerations: []
