@@ -36,8 +36,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: fish.nerdswhofish.coop.parent
         PRODUCT_NAME: CooperTheCop
         # Both are written by scripts/release-version.sh; do not hand-edit.
-        MARKETING_VERSION: 1.8.2
-        CURRENT_PROJECT_VERSION: 1080299
+        MARKETING_VERSION: 1.8.3
+        CURRENT_PROJECT_VERSION: 1080399
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: Cooper The Cop
         INFOPLIST_KEY_NSCameraUsageDescription: Scan a Coop code to approve a child computer.
