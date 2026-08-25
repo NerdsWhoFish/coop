@@ -154,18 +154,22 @@ jobs:
             esac
             profile_name="$(jq -er --arg bundle "$bundle_id" '.[$bundle].name' <<< "$PROFILES")"
             profile_uuid="$(jq -er --arg bundle "$bundle_id" '.[$bundle].uuid' <<< "$PROFILES")"
+            signing_config="$RUNNER_TEMP/signing-$app.xcconfig"
+            {
+              echo "DEVELOPMENT_TEAM[sdk=iphoneos*] = $DEVELOPMENT_TEAM"
+              echo "CODE_SIGN_STYLE[sdk=iphoneos*] = Manual"
+              echo "CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution"
+              echo "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $profile_name"
+              echo "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*] = --keychain $SIGNING_KEYCHAIN"
+            } > "$signing_config"
 
             xcodebuild archive \
               -project "ios/$app/$app.xcodeproj" \
               -scheme "$app" \
               -destination 'generic/platform=iOS' \
               -archivePath "$RUNNER_TEMP/archives/$app.xcarchive" \
-              -skipPackagePluginValidation -skipMacroValidation \
-              "DEVELOPMENT_TEAM[sdk=iphoneos*]=$DEVELOPMENT_TEAM" \
-              "CODE_SIGN_STYLE[sdk=iphoneos*]=Manual" \
-              "CODE_SIGN_IDENTITY[sdk=iphoneos*]=Apple Distribution" \
-              "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]=$profile_name" \
-              "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*]=--keychain $SIGNING_KEYCHAIN"
+              -xcconfig "$signing_config" \
+              -skipPackagePluginValidation -skipMacroValidation
 
             cat > "$RUNNER_TEMP/ExportOptions-$app.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
