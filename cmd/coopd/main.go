@@ -27,6 +27,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/ingest"
 	"github.com/nerdswhofish/coop/internal/push"
 	"github.com/nerdswhofish/coop/internal/store"
+	"github.com/nerdswhofish/coop/internal/telemetry"
 	"github.com/nerdswhofish/coop/internal/version"
 	"github.com/nerdswhofish/coop/internal/webapp"
 	"github.com/nerdswhofish/coop/internal/youtubeclient"
@@ -87,11 +88,23 @@ func run() error {
 	}
 
 	logger := newLogger(cfg.Log)
+	logger = slog.New(telemetry.LogHandler(logger.Handler()))
 	slog.SetDefault(logger)
 
 	// Signals cancel this context, which unwinds every command below.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	shutdownTelemetry, err := telemetry.Start(ctx, "coop", version.Version, logger)
+	if err != nil {
+		return fmt.Errorf("start telemetry: %w", err)
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(flushCtx); err != nil {
+			logger.Error("flush telemetry", "error", err)
+		}
+	}()
 
 	db, err := store.Open(ctx, cfg.Database, false)
 	if err != nil {
@@ -253,21 +266,21 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 	}
 
 	api, err := api.NewServer(api.Deps{
-		Config:    cfg,
-		Logger:    logger,
-		Accounts:  accounts,
-		Rules:     rules,
-		Catalog:   catalog,
-		Activity:  activity,
-		Audit:     audit,
-		Feed:      feed.New(catalog, rules, activity),
-		Quota:     quota,
-		Sealer:    sealer,
-		YouTube:   youtubeClients,
-		DB:        db,
-		Now:       time.Now,
-		Web:       webapp.Handler(),
-		Push:      pusher,
+		Config:   cfg,
+		Logger:   logger,
+		Accounts: accounts,
+		Rules:    rules,
+		Catalog:  catalog,
+		Activity: activity,
+		Audit:    audit,
+		Feed:     feed.New(catalog, rules, activity),
+		Quota:    quota,
+		Sealer:   sealer,
+		YouTube:  youtubeClients,
+		DB:       db,
+		Now:      time.Now,
+		Web:      webapp.Handler(),
+		Push:     pusher,
 	})
 	if err != nil {
 		return err
@@ -275,7 +288,7 @@ func serve(ctx context.Context, cfg *config.Config, db *store.DB, logger *slog.L
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Addr,
-		Handler:           api.Handler(),
+		Handler:           telemetry.HTTPHandler(api.Handler(), "coop.http"),
 		ReadTimeout:       cfg.Server.ReadTimeout,
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		WriteTimeout:      cfg.Server.WriteTimeout,
