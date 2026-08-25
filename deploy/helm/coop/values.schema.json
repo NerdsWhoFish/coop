@@ -61,11 +61,20 @@
         "keySecretKey": { "type": "string", "minLength": 1 }
       }
     },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["otlpEndpoint", "environment"],
+      "properties": {
+        "otlpEndpoint": { "type": "string", "pattern": "^(http://.+)?$" },
+        "environment": { "type": "string", "minLength": 1 }
+      }
+    },
     "resources": { "type": "object" },
     "networkPolicy": { "type": "object" },
     "nodeSelector": { "type": "object" },
     "tolerations": { "type": "array" },
     "affinity": { "type": "object" }
   },
-  "required": ["replicaCount", "image", "config", "updates"]
+  "required": ["replicaCount", "image", "config", "updates", "observability"]
 }

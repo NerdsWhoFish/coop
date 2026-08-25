@@ -65,6 +65,10 @@ apns:
   environment: production
   keySecretKey: apns-key
 
+observability:
+  otlpEndpoint: ""
+  environment: production
+
 # Over-the-air application releases, read from a Fledge server. Coop hosts no
 # packages itself, so this needs no storage.
 updates:

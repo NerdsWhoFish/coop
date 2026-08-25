@@ -57,6 +57,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.config.existingSecret }}
                   key: {{ .Values.config.authEncryptionKeyKey }}
+            {{- if .Values.observability.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.observability.otlpEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: http/protobuf
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ printf "deployment.environment.name=%s" .Values.observability.environment | quote }}
+            {{- end }}
             {{- if .Values.updates.enabled }}
             - name: COOP_UPDATES_ENABLED
               value: "true"
