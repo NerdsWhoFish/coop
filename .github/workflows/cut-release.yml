@@ -208,10 +208,14 @@ jobs:
               > "$verify_dir/entitlements.plist" 2>/dev/null
             security cms -D -i "${payload_apps[0]}/embedded.mobileprovision" \
               > "$verify_dir/profile.plist"
-            test "$(plutil -extract aps-environment raw -o - "$verify_dir/entitlements.plist")" = production
-            test "$(plutil -extract UUID raw -o - "$verify_dir/profile.plist")" = "$profile_uuid"
-            test "$(plutil -extract Entitlements.application-identifier raw -o - "$verify_dir/profile.plist")" = "$DEVELOPMENT_TEAM.$bundle_id"
-            test "$(plutil -extract Entitlements.get-task-allow raw -o - "$verify_dir/profile.plist")" = false
+            test "$(plutil -extract aps-environment raw -o - \
+              "$verify_dir/entitlements.plist")" = production
+            test "$(plutil -extract UUID raw -o - \
+              "$verify_dir/profile.plist")" = "$profile_uuid"
+            test "$(plutil -extract Entitlements.application-identifier raw -o - \
+              "$verify_dir/profile.plist")" = "$DEVELOPMENT_TEAM.$bundle_id"
+            test "$(plutil -extract Entitlements.get-task-allow raw -o - \
+              "$verify_dir/profile.plist")" = false
           done
 
       - uses: actions/upload-artifact@v4
