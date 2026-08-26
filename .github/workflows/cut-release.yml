@@ -123,60 +123,72 @@ jobs:
           xcodegen generate --spec ios/CooperTheCop/project.yml
           xcodegen generate --spec ios/CooperWatch/project.yml
 
-      - name: Write the App Store Connect key
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/keys"
-          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
-          chmod 600 "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+      - name: Persistent Apple signing
+        id: signing
+        uses: TheOutdoorProgrammer/quill/apple-signing@1eb90455ea34ced58e5377dc0058cc6e50e297b0
+        with:
+          p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
+          p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          api-key-id: ${{ secrets.ASC_KEY_ID }}
+          api-private-key: ${{ secrets.ASC_KEY_P8 }}
+          bundle-identifiers: |
+            fish.nerdswhofish.coop.parent
+            fish.nerdswhofish.coop.child
 
       - name: Archive and export both applications
         env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           # Never read the team from the Keychain: the certificate's team is not
           # necessarily the active one, and the mismatch reports as
           # "No Account for Team", which reads as Xcode being signed out.
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILES: ${{ steps.signing.outputs.profiles }}
+          SIGNING_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
         run: |
           set -euo pipefail
-          auth=(
-            -allowProvisioningUpdates
-            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
-            -authenticationKeyID "$ASC_KEY_ID"
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          )
-
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <plist version="1.0"><dict>
-            <key>method</key><string>release-testing</string>
-            <key>teamID</key><string>$DEVELOPMENT_TEAM</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>destination</key><string>export</string>
-          </dict></plist>
-          PLIST
 
           for app in CooperTheCop CooperWatch; do
-            # The authentication flags are needed on the export as well as the
-            # archive. Missing them there fails after a clean archive.
+            case "$app" in
+              CooperTheCop) bundle_id=fish.nerdswhofish.coop.parent ;;
+              CooperWatch) bundle_id=fish.nerdswhofish.coop.child ;;
+            esac
+            profile_name="$(jq -er --arg bundle "$bundle_id" '.[$bundle].name' <<< "$PROFILES")"
+            profile_uuid="$(jq -er --arg bundle "$bundle_id" '.[$bundle].uuid' <<< "$PROFILES")"
+            signing_config="$RUNNER_TEMP/signing-$app.xcconfig"
+            {
+              echo "DEVELOPMENT_TEAM[sdk=iphoneos*] = $DEVELOPMENT_TEAM"
+              echo "CODE_SIGN_STYLE[sdk=iphoneos*] = Manual"
+              echo "CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution"
+              echo "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $profile_name"
+              echo "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*] = --keychain $SIGNING_KEYCHAIN"
+            } > "$signing_config"
+
             xcodebuild archive \
               -project "ios/$app/$app.xcodeproj" \
               -scheme "$app" \
               -destination 'generic/platform=iOS' \
               -archivePath "$RUNNER_TEMP/archives/$app.xcarchive" \
-              -skipPackagePluginValidation -skipMacroValidation \
-              DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-              "${auth[@]}"
+              -xcconfig "$signing_config" \
+              -skipPackagePluginValidation -skipMacroValidation
+
+            cat > "$RUNNER_TEMP/ExportOptions-$app.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0"><dict>
+            <key>method</key><string>release-testing</string>
+            <key>teamID</key><string>$DEVELOPMENT_TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict>
+              <key>$bundle_id</key><string>$profile_name</string>
+            </dict>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
 
             xcodebuild -exportArchive \
               -archivePath "$RUNNER_TEMP/archives/$app.xcarchive" \
-              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-              -exportPath "$RUNNER_TEMP/export/$app" \
-              "${auth[@]}"
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-$app.plist" \
+              -exportPath "$RUNNER_TEMP/export/$app"
 
             # Named exactly, because `fledge upload` opens the path it is given
             # and does not expand a glob, whatever the archive came out called.
@@ -186,6 +198,24 @@ jobs:
               exit 1
             }
             mv "$found" "$RUNNER_TEMP/export/$app.ipa"
+
+            verify_dir="$RUNNER_TEMP/verify/$app"
+            ditto -x -k "$RUNNER_TEMP/export/$app.ipa" "$verify_dir"
+            payload_apps=("$verify_dir"/Payload/*.app)
+            [ "${#payload_apps[@]}" -eq 1 ]
+            codesign --verify --deep --strict "${payload_apps[0]}"
+            codesign -d --entitlements :- "${payload_apps[0]}" \
+              > "$verify_dir/entitlements.plist" 2>/dev/null
+            security cms -D -i "${payload_apps[0]}/embedded.mobileprovision" \
+              > "$verify_dir/profile.plist"
+            test "$(plutil -extract aps-environment raw -o - \
+              "$verify_dir/entitlements.plist")" = production
+            test "$(plutil -extract UUID raw -o - \
+              "$verify_dir/profile.plist")" = "$profile_uuid"
+            test "$(plutil -extract Entitlements.application-identifier raw -o - \
+              "$verify_dir/profile.plist")" = "$DEVELOPMENT_TEAM.$bundle_id"
+            test "$(plutil -extract Entitlements.get-task-allow raw -o - \
+              "$verify_dir/profile.plist")" = false
           done
 
       - uses: actions/upload-artifact@v4

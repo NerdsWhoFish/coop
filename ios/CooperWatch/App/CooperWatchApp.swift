@@ -42,10 +42,14 @@ final class CooperWatchOrientationDelegate: NSObject, UIApplicationDelegate {
       isActive
       ? [.portrait, .landscapeLeft, .landscapeRight]
       : .portrait
+    let requestedOrientations =
+      isActive && ProcessInfo.processInfo.environment["COOP_UI_LANDSCAPE"] == "1"
+      ? UIInterfaceOrientationMask.landscapeLeft
+      : supportedOrientations
 
     for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
       scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-      scene.requestGeometryUpdate(.iOS(interfaceOrientations: supportedOrientations))
+      scene.requestGeometryUpdate(.iOS(interfaceOrientations: requestedOrientations))
     }
   }
 }
