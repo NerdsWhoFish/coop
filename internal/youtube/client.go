@@ -38,6 +38,43 @@ const (
 // ErrNotFound reports that YouTube returned no item for an id.
 var ErrNotFound = errors.New("not found on youtube")
 
+type apiResponseError struct {
+	status  int
+	reason  string
+	message string
+}
+
+func (e *apiResponseError) Retryable() bool {
+	if e.status == http.StatusNotFound {
+		return e.reason == "" && e.message == ""
+	}
+	return e.status == http.StatusRequestTimeout ||
+		e.status == http.StatusTooManyRequests ||
+		e.status >= http.StatusInternalServerError
+}
+
+type transportError struct {
+	cause error
+}
+
+func (e *transportError) Error() string   { return "calling youtube: " + e.cause.Error() }
+func (e *transportError) Retryable() bool { return true }
+
+func (e *apiResponseError) Error() string {
+	if e.message != "" {
+		return fmt.Sprintf("youtube api %d (%s): %s", e.status, e.reason, e.message)
+	}
+	return fmt.Sprintf("youtube api returned %d", e.status)
+}
+
+// IsRetryable reports whether another attempt may succeed without changing
+// the request. Structured 404s are permanent; bare 404s have proven transient
+// at YouTube's edge and are safe to defer and retry.
+func IsRetryable(err error) bool {
+	var retryable interface{ Retryable() bool }
+	return errors.As(err, &retryable) && retryable.Retryable()
+}
+
 // Channel is the channel metadata Coop stores.
 type Channel struct {
 	ID                string
@@ -524,6 +561,9 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 
 	resp, err := c.cfg.HTTP.Do(req)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		cause := err
 		for {
 			urlErr, ok := cause.(*url.Error)
@@ -532,7 +572,7 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 			}
 			cause = urlErr.Err
 		}
-		return nil, fmt.Errorf("calling youtube: %w", cause)
+		return nil, &transportError{cause: cause}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -566,10 +606,7 @@ func apiError(status int, body []byte) error {
 	if reason == "quotaExceeded" || reason == "rateLimitExceeded" {
 		return fmt.Errorf("%w: google reports %s", ErrBudgetExhausted, reason)
 	}
-	if envelope.Error.Message != "" {
-		return fmt.Errorf("youtube api %d (%s): %s", status, reason, envelope.Error.Message)
-	}
-	return fmt.Errorf("youtube api returned %d", status)
+	return &apiResponseError{status: status, reason: reason, message: envelope.Error.Message}
 }
 
 func parseCount(s string) int64 {

@@ -137,6 +137,9 @@ func TestTransportErrorDoesNotExposeAPIKey(t *testing.T) {
 	if strings.Contains(err.Error(), apiKey) {
 		t.Fatalf("transport error exposed API key: %v", err)
 	}
+	if !IsRetryable(err) {
+		t.Fatalf("IsRetryable(%v) = false, want true", err)
+	}
 }
 
 const channelsBody = `{"items":[{
@@ -492,6 +495,34 @@ func TestOtherAPIErrorsSurfaceTheReason(t *testing.T) {
 	}
 	if errors.Is(err, ErrBudgetExhausted) {
 		t.Errorf("error = %v, want it not classified as a budget problem", err)
+	}
+}
+
+func TestAPIErrorRetryability(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		body      string
+		retryable bool
+	}{
+		{name: "bare not found", status: http.StatusNotFound, retryable: true},
+		{
+			name:   "structured not found",
+			status: http.StatusNotFound,
+			body:   `{"error":{"message":"playlist missing","errors":[{"reason":"playlistNotFound"}]}}`,
+		},
+		{name: "request timeout", status: http.StatusRequestTimeout, retryable: true},
+		{name: "too many requests", status: http.StatusTooManyRequests, retryable: true},
+		{name: "internal server error", status: http.StatusInternalServerError, retryable: true},
+		{name: "bad request", status: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsRetryable(apiError(tt.status, []byte(tt.body))); got != tt.retryable {
+				t.Errorf("IsRetryable() = %t, want %t", got, tt.retryable)
+			}
+		})
 	}
 }
 
