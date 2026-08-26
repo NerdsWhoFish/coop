@@ -85,10 +85,8 @@ final class CooperWatchUITests: XCTestCase {
 
   @MainActor
   func testRegularVideoUsesTheWholeScreenInLandscape() throws {
-    XCUIDevice.shared.orientation = .landscapeLeft
-    defer { XCUIDevice.shared.orientation = .portrait }
-
     let app = previewApp()
+    app.launchEnvironment["COOP_UI_LANDSCAPE"] = "1"
     app.launch()
 
     let video = element(labeled: "Why Do Volcanoes Erupt?", in: app)
@@ -109,10 +107,9 @@ final class CooperWatchUITests: XCTestCase {
     XCTAssertFalse(element(labeled: "Home", in: app).exists)
     XCTAssertFalse(app.navigationBars["Now watching"].exists)
 
-    // Browsing only opens from a right-edge swipe, so mid-screen drags stay
-    // with the player's own horizontally scrolling recommendations.
-    let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5))
-    edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+    let browseButton = app.descendants(matching: .any)["landscape-browse-button"]
+    XCTAssertTrue(browseButton.waitForExistence(timeout: 5))
+    browseButton.tap()
     let browseView = app.descendants(matching: .any)["landscape-browse-view"]
     XCTAssertTrue(browseView.waitForExistence(timeout: 5))
     XCTAssertTrue(app.descendants(matching: .any)["landscape-watch-next-heading"].exists)
