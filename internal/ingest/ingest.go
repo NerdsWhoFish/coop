@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,21 @@ import (
 )
 
 const maxChannelsPerRefresh = 500
+
+const (
+	minChannelRetryDelay = 5 * time.Minute
+	maxChannelRetryDelay = time.Hour
+)
+
+type channelRetryKey struct {
+	familyID  uuid.UUID
+	channelID string
+}
+
+type channelRetry struct {
+	failures uint
+	next     time.Time
+}
 
 type familySource interface {
 	FamiliesWithAPIKeys(context.Context) ([]store.Family, error)
@@ -49,6 +65,8 @@ type Service struct {
 	refreshInterval time.Duration
 	logger          *slog.Logger
 	now             func() time.Time
+	retries         map[channelRetryKey]channelRetry
+	retryDelay      func(uint) time.Duration
 }
 
 // New builds an ingest service.
@@ -89,6 +107,10 @@ func New(families familySource, catalog catalog, client ClientForFamily,
 		refreshInterval: refreshInterval,
 		logger:          logger,
 		now:             now,
+		retries:         make(map[channelRetryKey]channelRetry),
+		retryDelay: func(failures uint) time.Duration {
+			return channelRetryDelay(failures, refreshInterval)
+		},
 	}, nil
 }
 
@@ -140,6 +162,10 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 	if err != nil || len(ids) == 0 {
 		return err
 	}
+	ids = s.channelsReadyForRetry(familyID, ids)
+	if len(ids) == 0 {
+		return nil
+	}
 
 	client, err := s.client(ctx, familyID)
 	if err != nil {
@@ -161,6 +187,10 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
+			if youtube.IsRetryable(err) {
+				retryIn := s.deferChannels(familyID, ids[start:end])
+				err = fmt.Errorf("%w; retrying in %s", err, retryIn.Round(time.Second))
+			}
 			errs = append(errs, fmt.Errorf("refreshing channel metadata: %w", err))
 			continue
 		}
@@ -181,9 +211,14 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return ctxErr
 				}
+				if youtube.IsRetryable(err) {
+					retryIn := s.deferChannel(familyID, channel.ID)
+					err = fmt.Errorf("%w; retrying in %s", err, retryIn.Round(time.Second))
+				}
 				errs = append(errs, fmt.Errorf("refreshing channel %s: %w", channel.ID, err))
 				continue
 			}
+			s.clearChannelRetry(familyID, channel.ID)
 			if err := s.catalog.MarkChannelRefreshed(ctx, channel.ID); err != nil {
 				errs = append(errs, fmt.Errorf("marking channel %s refreshed: %w", channel.ID, err))
 			}
@@ -191,6 +226,57 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (s *Service) channelsReadyForRetry(familyID uuid.UUID, ids []string) []string {
+	now := s.now()
+	ready := make([]string, 0, len(ids))
+	for _, channelID := range ids {
+		retry, found := s.retries[channelRetryKey{familyID: familyID, channelID: channelID}]
+		if !found || !now.Before(retry.next) {
+			ready = append(ready, channelID)
+		}
+	}
+	return ready
+}
+
+func (s *Service) deferChannels(familyID uuid.UUID, ids []string) time.Duration {
+	var earliest time.Duration
+	for _, channelID := range ids {
+		delay := s.deferChannel(familyID, channelID)
+		if earliest == 0 || delay < earliest {
+			earliest = delay
+		}
+	}
+	return earliest
+}
+
+func (s *Service) deferChannel(familyID uuid.UUID, channelID string) time.Duration {
+	key := channelRetryKey{familyID: familyID, channelID: channelID}
+	retry := s.retries[key]
+	retry.failures++
+	delay := s.retryDelay(retry.failures)
+	retry.next = s.now().Add(delay)
+	s.retries[key] = retry
+	return delay
+}
+
+func (s *Service) clearChannelRetry(familyID uuid.UUID, channelID string) {
+	delete(s.retries, channelRetryKey{familyID: familyID, channelID: channelID})
+}
+
+func channelRetryDelay(failures uint, refreshInterval time.Duration) time.Duration {
+	ceiling := min(maxChannelRetryDelay, refreshInterval)
+	delay := min(minChannelRetryDelay, ceiling)
+	for attempt := uint(1); attempt < failures && delay < ceiling; attempt++ {
+		delay = min(delay*2, ceiling)
+	}
+
+	spread := delay / 5
+	if spread == 0 {
+		return delay
+	}
+	return delay - spread + time.Duration(rand.Int64N(int64(spread)+1))
 }
 
 func (s *Service) refreshChannel(ctx context.Context, client Client, channelID string) error {

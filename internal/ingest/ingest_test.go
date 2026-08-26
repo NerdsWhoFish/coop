@@ -77,6 +77,11 @@ type fakeClient struct {
 	purposes       []domain.QuotaPurpose
 }
 
+type retryableFailure struct{}
+
+func (retryableFailure) Error() string   { return "temporary failure" }
+func (retryableFailure) Retryable() bool { return true }
+
 func (f *fakeClient) Channels(_ context.Context, ids []string,
 	purpose domain.QuotaPurpose) ([]youtube.Channel, error) {
 	f.channelBatches = append(f.channelBatches, append([]string(nil), ids...))
@@ -205,6 +210,103 @@ func TestRefreshContinuesAfterOneChannelFails(t *testing.T) {
 	}
 	if len(catalog.refreshed) != 1 || catalog.refreshed[0] != second {
 		t.Fatalf("refreshed channels = %v, want only the second channel", catalog.refreshed)
+	}
+}
+
+func TestRefreshBacksOffRetryableChannelFailure(t *testing.T) {
+	familyID := uuid.New()
+	channelID := "UCabcdefghijklmnopqrstuv"
+	now := time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC)
+	families := &fakeFamilies{rows: []store.Family{{ID: familyID}}}
+	catalog := &fakeCatalog{stale: []string{channelID}}
+	client := &fakeClient{
+		channels:     []youtube.Channel{{ID: channelID}},
+		uploads:      map[string][]string{},
+		feeds:        map[string][]youtube.FeedEntry{},
+		uploadErrors: map[string]error{channelID: retryableFailure{}},
+	}
+
+	svc, err := New(families, catalog,
+		func(context.Context, uuid.UUID) (Client, error) { return client, nil },
+		time.Minute, 6*time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.retryDelay = func(uint) time.Duration { return 5 * time.Minute }
+
+	if err := svc.Refresh(context.Background()); err == nil {
+		t.Fatal("first Refresh() error = nil, want the temporary failure")
+	}
+	if len(client.uploadCalls) != 1 {
+		t.Fatalf("upload calls = %v, want one", client.uploadCalls)
+	}
+
+	now = now.Add(4 * time.Minute)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("backed-off Refresh() error = %v", err)
+	}
+	if len(client.uploadCalls) != 1 {
+		t.Fatalf("upload calls during backoff = %v, want no retry", client.uploadCalls)
+	}
+
+	now = now.Add(time.Minute)
+	delete(client.uploadErrors, channelID)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("retry Refresh() error = %v", err)
+	}
+	if len(client.uploadCalls) != 2 {
+		t.Fatalf("upload calls after backoff = %v, want a retry", client.uploadCalls)
+	}
+	if len(catalog.refreshed) != 1 || catalog.refreshed[0] != channelID {
+		t.Fatalf("refreshed channels = %v, want %s", catalog.refreshed, channelID)
+	}
+	if len(svc.retries) != 0 {
+		t.Fatalf("retry state = %v, want it cleared after recovery", svc.retries)
+	}
+}
+
+func TestRefreshDoesNotBackOffPermanentChannelFailure(t *testing.T) {
+	familyID := uuid.New()
+	channelID := "UCabcdefghijklmnopqrstuv"
+	families := &fakeFamilies{rows: []store.Family{{ID: familyID}}}
+	catalog := &fakeCatalog{stale: []string{channelID}}
+	client := &fakeClient{
+		channels:     []youtube.Channel{{ID: channelID}},
+		uploads:      map[string][]string{},
+		feeds:        map[string][]youtube.FeedEntry{},
+		uploadErrors: map[string]error{channelID: errors.New("permanent failure")},
+	}
+	svc := testService(t, families, catalog, client, time.Now())
+
+	for range 2 {
+		if err := svc.Refresh(context.Background()); err == nil {
+			t.Fatal("Refresh() error = nil, want the permanent failure")
+		}
+	}
+	if len(client.uploadCalls) != 2 {
+		t.Fatalf("upload calls = %v, want permanent failures retried on schedule", client.uploadCalls)
+	}
+}
+
+func TestChannelRetryDelayBacksOffWithinBounds(t *testing.T) {
+	tests := []struct {
+		failures uint
+		minimum  time.Duration
+		maximum  time.Duration
+	}{
+		{failures: 1, minimum: 4 * time.Minute, maximum: 5 * time.Minute},
+		{failures: 2, minimum: 8 * time.Minute, maximum: 10 * time.Minute},
+		{failures: 5, minimum: 48 * time.Minute, maximum: time.Hour},
+		{failures: 20, minimum: 48 * time.Minute, maximum: time.Hour},
+	}
+
+	for _, tt := range tests {
+		got := channelRetryDelay(tt.failures, 6*time.Hour)
+		if got < tt.minimum || got > tt.maximum {
+			t.Errorf("channelRetryDelay(%d) = %s, want %s through %s",
+				tt.failures, got, tt.minimum, tt.maximum)
+		}
 	}
 }
 
