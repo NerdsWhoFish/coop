@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - mini-2
+    - release
+    - coop

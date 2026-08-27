@@ -1,8 +1,7 @@
 name: Cut release
 
-# The only way to cut a release. Three jobs because GitHub's macOS runners have
-# no Docker: iOS archives on macOS, the image builds on Linux, and the tag is
-# cut last so a signing failure never burns a version number.
+# The only way to cut a release. iOS archives on macOS, the image builds on
+# Linux, and the tag is cut last so a signing failure never burns a version.
 
 on:
   workflow_dispatch:
@@ -93,7 +92,7 @@ jobs:
     needs: prepare
     # Xcode 26 is this image's default, which the iOS 26 deployment target
     # needs. Selecting an Xcode path by version breaks when the image moves.
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, mini-2, release, coop]
     permissions:
       contents: read
     steps:
@@ -115,7 +114,16 @@ jobs:
           done
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        env:
+          XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+            -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Generate the projects
         run: |
