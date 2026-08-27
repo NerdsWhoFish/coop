@@ -133,7 +133,7 @@ jobs:
 
       - name: Persistent Apple signing
         id: signing
-        uses: TheOutdoorProgrammer/quill/apple-signing@1eb90455ea34ced58e5377dc0058cc6e50e297b0
+        uses: TheOutdoorProgrammer/quill/apple-signing@3157e0821deb8d7667b0242d185ceadc5e480939
         with:
           p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
@@ -152,8 +152,11 @@ jobs:
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           PROFILES: ${{ steps.signing.outputs.profiles }}
           SIGNING_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          SIGNING_KEYCHAIN_PASSWORD: ${{ steps.signing.outputs.keychain-password }}
         run: |
           set -euo pipefail
+          security unlock-keychain -p "$SIGNING_KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN"
+          security default-keychain -d user -s "$SIGNING_KEYCHAIN"
 
           for app in CooperTheCop CooperWatch; do
             case "$app" in
@@ -168,7 +171,6 @@ jobs:
               echo "CODE_SIGN_STYLE[sdk=iphoneos*] = Manual"
               echo "CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution"
               echo "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $profile_name"
-              echo "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*] = --keychain $SIGNING_KEYCHAIN"
             } > "$signing_config"
 
             xcodebuild archive \
