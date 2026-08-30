@@ -57,6 +57,32 @@ final class CooperWatchUITests: XCTestCase {
   }
 
   @MainActor
+  func testParentBlockInterruptsRegularPlaybackWithClearMessage() throws {
+    let app = previewApp()
+    app.launchEnvironment["COOP_UI_PARENT_BLOCKED"] = "1"
+    app.launch()
+
+    let video = element(labeled: "Why Do Volcanoes Erupt?", in: app)
+    XCTAssertTrue(video.waitForExistence(timeout: 5))
+    video.tap()
+
+    XCTAssertTrue(app.staticTexts["Your parents blocked this video"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Choose another video to keep watching."].exists)
+    XCTAssertTrue(app.buttons["Watch something else"].isHittable)
+  }
+
+  @MainActor
+  func testParentBlockInterruptsShortPlaybackWithClearMessage() throws {
+    let app = previewApp(tab: "shorts")
+    app.launchEnvironment["COOP_UI_PARENT_BLOCKED"] = "1"
+    app.launch()
+
+    XCTAssertTrue(app.staticTexts["Your parents blocked this video"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Choose another video to keep watching."].exists)
+    XCTAssertTrue(app.buttons["Watch something else"].isHittable)
+  }
+
+  @MainActor
   func testShortsShowThumbnailLoadingPlaceholders() throws {
     let app = previewApp(tab: "shorts")
     app.launchEnvironment["COOP_UI_PLAYER_LOADING"] = "1"

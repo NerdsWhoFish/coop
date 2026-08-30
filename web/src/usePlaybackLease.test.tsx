@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { usePlaybackLease } from './usePlaybackLease'
+import { parentBlockedPlaybackMessage, usePlaybackLease } from './usePlaybackLease'
 
 const mocks = vi.hoisted(() => ({
   playback: vi.fn(),
@@ -48,7 +48,7 @@ describe('browser playback lease', () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
 
-    expect(blocked).toHaveBeenCalledOnce()
+    expect(blocked).toHaveBeenCalledWith(parentBlockedPlaybackMessage)
     expect(mocks.playback).toHaveBeenCalledWith('video-2', 'stopped')
   })
 })

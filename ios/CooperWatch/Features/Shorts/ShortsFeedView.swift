@@ -17,6 +17,7 @@ struct ShortsFeedView: View {
   @State private var nextOffset = 0
   @State private var isLoading = false
   @State private var loadError: CoopConnectionProblem?
+  @State private var parentBlockedPlayback = false
 
   private let pageSize = 8
 
@@ -42,6 +43,7 @@ struct ShortsFeedView: View {
     .task { await loadNextPage() }
     .onAppear { model.playbackDidStart() }
     .onDisappear { model.playbackDidStop() }
+    .parentBlockedPlaybackAlert(isPresented: $parentBlockedPlayback)
   }
 
   private var feed: some View {
@@ -118,6 +120,7 @@ struct ShortsFeedView: View {
 
   private func removeBlocked(_ item: ShortOccurrence) {
     guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+    parentBlockedPlayback = true
     let replacement = items.indices.contains(index + 1) ? items[index + 1].id : items.first?.id
     items.remove(at: index)
     currentID = replacement == item.id ? items.first?.id : replacement

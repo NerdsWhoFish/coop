@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/store"
@@ -45,6 +47,10 @@ func (s *Server) handlePlaybackLease(w http.ResponseWriter, r *http.Request, c a
 
 	if _, err := s.deps.Feed.Watchable(r.Context(), c.FamilyID, c.ID, body.VideoID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			trace.SpanFromContext(r.Context()).AddEvent(
+				"coop.playback.interrupted",
+				trace.WithAttributes(attribute.String("coop.playback.state", body.State)),
+			)
 			if stopErr := s.deps.Activity.StopPlayback(r.Context(), c.DeviceID, body.VideoID); stopErr != nil {
 				return stopErr
 			}

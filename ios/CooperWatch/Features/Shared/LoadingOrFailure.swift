@@ -59,6 +59,17 @@ struct LoadingOrFailure: View {
 }
 
 extension View {
+  func parentBlockedPlaybackAlert(
+    isPresented: Binding<Bool>,
+    onDismiss: @escaping () -> Void = {}
+  ) -> some View {
+    alert("Your parents blocked this video", isPresented: isPresented) {
+      Button("Watch something else", role: .cancel, action: onDismiss)
+    } message: {
+      Text("Choose another video to keep watching.")
+    }
+  }
+
   /// Reloads a failed screen once the network is back, so the tunnel dropping
   /// costs a child a moment rather than the video they picked.
   func reloadOnReconnect(
