@@ -31,6 +31,7 @@ final class ChildAppModel {
   var channelSearchRequest: ChannelSearchRequest?
   private(set) var isPreviewMode = false
   private(set) var showsPlayerLoadingPreview = false
+  private(set) var blocksPlaybackInPreview = false
 
   private var api: CoopAPI?
   private let defaults = UserDefaults.standard
@@ -51,6 +52,8 @@ final class ChildAppModel {
         isPreviewMode = true
         showsPlayerLoadingPreview =
           ProcessInfo.processInfo.environment["COOP_UI_PLAYER_LOADING"] == "1"
+        blocksPlaybackInPreview =
+          ProcessInfo.processInfo.environment["COOP_UI_PARENT_BLOCKED"] == "1"
         serverAddress = "https://coop.example"
         profile = Components.Schemas.ChildProfile(
           id: "preview-child",
@@ -221,8 +224,7 @@ final class ChildAppModel {
         )
       }
       if isPreviewMode,
-        let discovery = Self.previewDiscoveries.first(where: { $0.video.channelId == id })
-      {
+        let discovery = Self.previewDiscoveries.first(where: { $0.video.channelId == id }) {
         return Components.Schemas.ChannelPage(
           channel: Components.Schemas.Channel(
             id: id,
@@ -239,8 +241,7 @@ final class ChildAppModel {
   }
 
   func search(query: String, channelID: String? = nil) async throws
-    -> Components.Schemas.SearchResults?
-  {
+    -> Components.Schemas.SearchResults? {
     #if DEBUG
       if isPreviewMode {
         let videos = (Self.previewVideos + Self.previewShorts).filter { video in
@@ -269,8 +270,7 @@ final class ChildAppModel {
   func video(id: String) async throws -> Components.Schemas.WatchPage? {
     #if DEBUG
       if isPreviewMode,
-        let video = (Self.previewVideos + Self.previewShorts).first(where: { $0.id == id })
-      {
+        let video = (Self.previewVideos + Self.previewShorts).first(where: { $0.id == id }) {
         return Components.Schemas.WatchPage(
           video: video,
           embedUrl: "https://www.youtube-nocookie.com/embed/\(video.id)",
@@ -304,8 +304,7 @@ final class ChildAppModel {
   }
 
   func shorts(session: String, offset: Int, limit: Int = 8) async throws
-    -> [Components.Schemas.Video]
-  {
+    -> [Components.Schemas.Video] {
     #if DEBUG
       if isPreviewMode {
         return (0..<limit).map { Self.previewShorts[(offset + $0) % Self.previewShorts.count] }
@@ -338,7 +337,10 @@ final class ChildAppModel {
 
   func updatePlayback(videoID: String, state: PlaybackLeaseState) async -> Bool {
     #if DEBUG
-      if isPreviewMode { return true }
+      if isPreviewMode {
+        if case .stopped = state { return true }
+        return !blocksPlaybackInPreview
+      }
     #endif
     guard let api else { return true }
     do {
@@ -496,7 +498,7 @@ final class ChildAppModel {
       Components.Schemas.Channel(
         id: "animals", title: "Brave Wilderness", subscriberCount: 21_500_000),
       Components.Schemas.Channel(
-        id: "build", title: "Art for Kids Hub", subscriberCount: 9_300_000),
+        id: "build", title: "Art for Kids Hub", subscriberCount: 9_300_000)
     ]
 
     private static let previewVideos = [
@@ -526,7 +528,7 @@ final class ChildAppModel {
         durationSeconds: 665,
         publishedAt: Date(timeIntervalSinceNow: -86_400 * 20),
         isShort: false
-      ),
+      )
     ]
 
     private static let previewDiscoveries = [
@@ -557,7 +559,7 @@ final class ChildAppModel {
         ),
         reason: "Because you finished Why Do Volcanoes Erupt?",
         pendingRequest: true
-      ),
+      )
     ]
 
     private static let previewShorts = [
@@ -584,7 +586,7 @@ final class ChildAppModel {
         title: "The easiest trick for drawing dragon wings",
         durationSeconds: 37,
         isShort: true
-      ),
+      )
     ]
   #endif
 }

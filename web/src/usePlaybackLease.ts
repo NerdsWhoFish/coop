@@ -4,9 +4,11 @@ import { api } from './api'
 type PlaybackLeaseOptions = {
   videoId: string
   active: boolean
-  onBlocked: () => void
+  onBlocked: (message: string) => void
   onError: (message: string) => void
 }
+
+export const parentBlockedPlaybackMessage = 'Your parents blocked this video. Watch something else.'
 
 export function usePlaybackLease({ videoId, active, onBlocked, onError }: PlaybackLeaseOptions) {
   const blocked = useEffectEvent(onBlocked)
@@ -35,7 +37,7 @@ export function usePlaybackLease({ videoId, active, onBlocked, onError }: Playba
 
     const block = () => {
       stop()
-      blocked()
+      blocked(parentBlockedPlaybackMessage)
     }
 
     const start = async () => {

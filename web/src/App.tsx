@@ -298,7 +298,10 @@ function WatchPageContent({ id, setError }: { id: string; setError: (s: string) 
   const navigate = useNavigate()
   const pendingVideo = (location.state as { video?: Video } | null)?.video
   const [page, setPage] = useState<WatchData | null>(null), [related, setRelated] = useState<Video[]>([]), [discoveries, setDiscoveries] = useState<Discovery[]>([]), [subscribed, setSubscribed] = useState(false)
-  const blocked = useCallback(() => navigate('/', { replace: true }), [navigate])
+  const blocked = useCallback((notice: string) => {
+    setError(notice)
+    navigate('/', { replace: true })
+  }, [navigate, setError])
   usePlaybackLease({ videoId: id, active: page !== null, onBlocked: blocked, onError: setError })
   const load = useCallback(async () => {
     try {
@@ -366,11 +369,14 @@ function ShortsPage({ setError }: { setError: (s: string) => void }) {
       return loadMore()
     })
   }, [loadMore])
-  function blocked(index: number) { setVideos(current => current.filter((_, candidate) => candidate !== index)) }
-  return <div className="shorts-wrap"><div className="shorts-feed">{videos.map((video, index) => <Short key={`${session}-${video.id}-${index}`} video={video} setError={setError} onActive={() => { if (index >= videos.length - 3) void loadMore() }} onBlocked={() => blocked(index)} />)}{loading && videos.length > 0 && <div className="shorts-loading"><LoaderCircle className="spin" /> Mixing more Shorts…</div>}{!loading && videos.length === 0 && <EmptyState icon={<Sparkles />} title="No Shorts yet" text="Approved Shorts will appear here after your channels update." />}</div></div>
+  function blocked(index: number, notice: string) {
+    setError(notice)
+    setVideos(current => current.filter((_, candidate) => candidate !== index))
+  }
+  return <div className="shorts-wrap"><div className="shorts-feed">{videos.map((video, index) => <Short key={`${session}-${video.id}-${index}`} video={video} setError={setError} onActive={() => { if (index >= videos.length - 3) void loadMore() }} onBlocked={notice => blocked(index, notice)} />)}{loading && videos.length > 0 && <div className="shorts-loading"><LoaderCircle className="spin" /> Mixing more Shorts…</div>}{!loading && videos.length === 0 && <EmptyState icon={<Sparkles />} title="No Shorts yet" text="Approved Shorts will appear here after your channels update." />}</div></div>
 }
 
-function Short({ video, setError, onActive, onBlocked }: { video: Video; setError: (s: string) => void; onActive: () => void; onBlocked: () => void }) {
+function Short({ video, setError, onActive, onBlocked }: { video: Video; setError: (s: string) => void; onActive: () => void; onBlocked: (notice: string) => void }) {
   const root = useRef<HTMLElement>(null), [active, setActive] = useState(false)
   const becameActive = useEffectEvent(onActive)
   const [page, setPage] = useState<WatchData | null>(null), [reaction, setReaction] = useState<'like' | 'dislike' | undefined>()

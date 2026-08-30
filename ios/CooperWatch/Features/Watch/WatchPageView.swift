@@ -16,6 +16,7 @@ struct WatchPageView: View {
   @State private var playerSession = YouTubeEmbeddedPlayerSession()
   @State private var reaction: ChildReaction?
   @State private var startedAt: Date?
+  @State private var parentBlockedPlayback = false
   @State private var landscapeBrowsing = false
   @State private var channelSubscribed = false
   @State private var subscriptionIsWorking = false
@@ -56,6 +57,7 @@ struct WatchPageView: View {
     }
     .task { await load() }
     .task(id: playbackTaskID) { await maintainPlaybackLease() }
+    .parentBlockedPlaybackAlert(isPresented: $parentBlockedPlayback) { dismiss() }
     .onAppear {
       syncPlaybackVisibility()
       model.playbackDidStart()
@@ -121,55 +123,8 @@ struct WatchPageView: View {
     ScrollView {
       if let page {
         VStack(alignment: .leading, spacing: 14) {
-          HStack {
-            Button {
-              dismiss()
-            } label: {
-              Label("Back", systemImage: "chevron.left")
-            }
-            .buttonStyle(.bordered)
-
-            Spacer()
-
-            Button {
-              withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1)) {
-                landscapeBrowsing = false
-              }
-            } label: {
-              Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
-            }
-            .buttonStyle(.borderedProminent)
-          }
-
-          HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 12) {
-              player(for: page)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(.rect(cornerRadius: 14))
-              Text(page.video.title).font(.headline).lineLimit(2)
-              channelLink(for: page)
-              reactionControls(for: page)
-            }
-            .frame(width: proxy.size.width * 0.56)
-
-            VStack(alignment: .leading, spacing: 12) {
-              Text("Watch next")
-                .font(.title3.bold())
-                .accessibilityIdentifier("landscape-watch-next-heading")
-              VideoGrid(
-                videos: watchNext,
-                model: model,
-                accessibilityPrefix: "landscape-watch-next",
-                style: .list
-              )
-              DiscoveryShelf(
-                title: "Explore next",
-                discoveries: model.discoverNext(excluding: page.video.id),
-                model: model
-              )
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-          }
+          landscapeBrowseToolbar
+          landscapeBrowseColumns(page: page, width: proxy.size.width)
         }
         .padding(18)
         .padding(.bottom, 60)
@@ -178,6 +133,63 @@ struct WatchPageView: View {
       }
     }
     .accessibilityIdentifier("landscape-browse-view")
+  }
+
+  private var landscapeBrowseToolbar: some View {
+    HStack {
+      Button {
+        dismiss()
+      } label: {
+        Label("Back", systemImage: "chevron.left")
+      }
+      .buttonStyle(.bordered)
+
+      Spacer()
+
+      Button {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1)) {
+          landscapeBrowsing = false
+        }
+      } label: {
+        Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+      }
+      .buttonStyle(.borderedProminent)
+    }
+  }
+
+  private func landscapeBrowseColumns(
+    page: Components.Schemas.WatchPage,
+    width: CGFloat
+  ) -> some View {
+    HStack(alignment: .top, spacing: 18) {
+      VStack(alignment: .leading, spacing: 12) {
+        player(for: page)
+          .aspectRatio(16 / 9, contentMode: .fit)
+          .clipShape(.rect(cornerRadius: 14))
+        Text(page.video.title).font(.headline).lineLimit(2)
+        channelLink(for: page)
+        reactionControls(for: page)
+      }
+      .frame(width: width * 0.56)
+
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Watch next")
+          .font(.title3.bold())
+          .accessibilityIdentifier("landscape-watch-next-heading")
+        VideoGrid(
+          videos: watchNext,
+          model: model,
+          accessibilityPrefix: "landscape-watch-next",
+          style: .list
+        )
+        DiscoveryShelf(
+          title: "Explore next",
+          discoveries: model.discoverNext(excluding: page.video.id),
+          model: model
+        )
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
   }
 
   private var portraitContent: some View {
@@ -401,16 +413,14 @@ struct WatchPageView: View {
   private func maintainPlaybackLease() async {
     guard page != nil, isPlaybackActive else { return }
     guard await model.updatePlayback(videoID: videoID, state: .started) else {
-      dismiss()
+      await interruptBlockedPlayback()
       return
     }
     do {
       while !Task.isCancelled {
         try await Task.sleep(for: .seconds(15))
         guard await model.updatePlayback(videoID: videoID, state: .heartbeat) else {
-          playerSession.stop()
-          await model.loadLibrary()
-          dismiss()
+          await interruptBlockedPlayback()
           return
         }
       }
@@ -419,6 +429,13 @@ struct WatchPageView: View {
     } catch {
       return
     }
+  }
+
+  private func interruptBlockedPlayback() async {
+    playerSession.stop()
+    recordWatch()
+    parentBlockedPlayback = true
+    await model.loadLibrary()
   }
 
   private var isPlaybackActive: Bool {
