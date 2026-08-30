@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"slices"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/nerdswhofish/coop/internal/auth"
 )
 
@@ -64,7 +67,25 @@ func (s *Server) handleChildChannelWeights(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		return err
 	}
+	writeChannelWeights(w, s, weights)
+	return nil
+}
 
+func (s *Server) handleFamilyChannelWeights(w http.ResponseWriter, r *http.Request,
+	p auth.Parent) error {
+
+	if err := p.RequireAdmin(); err != nil {
+		return err
+	}
+	weights, err := s.deps.Feed.FamilyChannelWeights(r.Context(), p.FamilyID)
+	if err != nil {
+		return err
+	}
+	writeChannelWeights(w, s, weights)
+	return nil
+}
+
+func writeChannelWeights(w http.ResponseWriter, s *Server, weights map[string]int) {
 	out := make([]channelWeightDTO, 0, len(weights))
 	for channelID, weight := range weights {
 		out = append(out, channelWeightDTO{ChannelID: channelID, Weight: weight})
@@ -73,7 +94,6 @@ func (s *Server) handleChildChannelWeights(w http.ResponseWriter, r *http.Reques
 		return cmp.Compare(a.ChannelID, b.ChannelID)
 	})
 	writeJSON(w, s.deps.Logger, http.StatusOK, out)
-	return nil
 }
 
 func (s *Server) handleSetChildChannelWeight(w http.ResponseWriter, r *http.Request,
@@ -100,6 +120,37 @@ func (s *Server) handleSetChildChannelWeight(w http.ResponseWriter, r *http.Requ
 	); err != nil {
 		return err
 	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) handleSetFamilyChannelWeight(w http.ResponseWriter, r *http.Request,
+	p auth.Parent) error {
+
+	if err := p.RequireAdmin(); err != nil {
+		return err
+	}
+	var body struct {
+		Weight *int `json:"weight"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	if body.Weight == nil {
+		return badRequest("weight is required")
+	}
+	if *body.Weight < -2 || *body.Weight > 2 {
+		return badRequest("weight must be between -2 and 2")
+	}
+	if err := s.deps.Feed.SetFamilyChannelWeight(
+		r.Context(), p.FamilyID, r.PathValue("channelId"), *body.Weight, p.ID,
+	); err != nil {
+		return err
+	}
+	trace.SpanFromContext(r.Context()).AddEvent(
+		"coop.recommendation.household_weight.changed",
+		trace.WithAttributes(attribute.Int("coop.recommendation.weight", *body.Weight)),
+	)
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }

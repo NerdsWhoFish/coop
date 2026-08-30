@@ -56,8 +56,7 @@ public actor CoopAPI {
   }
 
   public func logIn(email: String, password: String) async throws
-    -> Components.Schemas.AuthChallenge
-  {
+    -> Components.Schemas.AuthChallenge {
     let credentials = Operations.LogInParent.Input.Body.JsonPayload(
       email: email,
       password: password
@@ -74,8 +73,7 @@ public actor CoopAPI {
   }
 
   public func acceptInvitation(code: String, password: String) async throws
-    -> Components.Schemas.AuthChallenge
-  {
+    -> Components.Schemas.AuthChallenge {
     let payload = Operations.AcceptParentInvitation.Input.Body.JsonPayload(
       code: code,
       password: password
@@ -92,8 +90,7 @@ public actor CoopAPI {
   }
 
   public func verifyTOTP(challenge: String, code: String) async throws
-    -> Components.Schemas.Session
-  {
+    -> Components.Schemas.Session {
     let payload = Operations.VerifyParentTOTP.Input.Body.JsonPayload(
       challenge: challenge,
       code: code
@@ -271,8 +268,7 @@ public actor CoopAPI {
   }
 
   public func updateChildDevice(id: String, allowSelfUnpair: Bool) async throws
-    -> Components.Schemas.Device
-  {
+    -> Components.Schemas.Device {
     let path = Operations.UpdateChildDevice.Input.Path(deviceId: id)
     let body = Operations.UpdateChildDevice.Input.Body.json(
       .init(allowSelfUnpair: allowSelfUnpair)
@@ -288,8 +284,8 @@ public actor CoopAPI {
     return try response.body.json
   }
 
-  public func childAllowlist(childID: String) async throws -> [Components.Schemas.EffectiveChannel]
-  {
+  public func childAllowlist(childID: String) async throws
+    -> [Components.Schemas.EffectiveChannel] {
     let path = Operations.GetChildAllowlist.Input.Path(childId: childID)
     let output = try await client.getChildAllowlist(path: path)
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
@@ -309,17 +305,21 @@ public actor CoopAPI {
   }
 
   public func childChannelWeights(childID: String) async throws
-    -> [Components.Schemas.ChannelWeight]
-  {
+    -> [Components.Schemas.ChannelWeight] {
     let path = Operations.GetChildChannelWeights.Input.Path(childId: childID)
     let output = try await client.getChildChannelWeights(path: path)
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
     return try response.body.json
   }
 
+  public func familyChannelWeights() async throws -> [Components.Schemas.ChannelWeight] {
+    let output = try await client.getFamilyChannelWeights()
+    guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
+    return try response.body.json
+  }
+
   public func activePlayback(cursor: String? = nil) async throws
-    -> Components.Schemas.PlaybackPage
-  {
+    -> Components.Schemas.PlaybackPage {
     let query = Operations.ListActivePlayback.Input.Query(cursor: cursor)
     let output = try await client.listActivePlayback(query: query)
     guard case .ok(let response) = output else { throw CoopAPIError.unexpectedResponse }
@@ -348,8 +348,7 @@ public actor CoopAPI {
   }
 
   public func setChildChannelWeight(_ weight: Int, channelID: String, childID: String)
-    async throws
-  {
+    async throws {
     let path = Operations.SetChildChannelWeight.Input.Path(
       childId: childID,
       channelId: channelID
@@ -357,6 +356,14 @@ public actor CoopAPI {
     let payload = Operations.SetChildChannelWeight.Input.Body.JsonPayload(weight: weight)
     guard
       case .noContent = try await client.setChildChannelWeight(path: path, body: .json(payload))
+    else { throw CoopAPIError.unexpectedResponse }
+  }
+
+  public func setFamilyChannelWeight(_ weight: Int, channelID: String) async throws {
+    let path = Operations.SetFamilyChannelWeight.Input.Path(channelId: channelID)
+    let payload = Operations.SetFamilyChannelWeight.Input.Body.JsonPayload(weight: weight)
+    guard
+      case .noContent = try await client.setFamilyChannelWeight(path: path, body: .json(payload))
     else { throw CoopAPIError.unexpectedResponse }
   }
 
@@ -436,8 +443,7 @@ public actor CoopAPI {
   }
 
   public func setChannelBlocked(_ blocked: Bool, channelID: String, reason: String? = nil)
-    async throws
-  {
+    async throws {
     if blocked {
       let payload = Operations.BlockChannel.Input.Body.JsonPayload(
         channelId: channelID, reason: reason)
@@ -602,8 +608,7 @@ public actor CoopAPI {
   }
 
   public func searchForChild(query: String, channelID: String? = nil) async throws
-    -> Components.Schemas.SearchResults
-  {
+    -> Components.Schemas.SearchResults {
     let query = Operations.SearchForChild.Input.Query(q: query, channelId: channelID)
     let output = try await client.searchForChild(query: query)
     switch output {

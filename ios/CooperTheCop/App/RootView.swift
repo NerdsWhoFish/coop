@@ -14,6 +14,10 @@ struct RootView: View {
         NavigationStack {
           RecommendationTuningView(child: AppModel.recommendationPreviewChild, model: model)
         }
+      } else if AppModel.showsFamilyRecommendationPreview {
+        NavigationStack {
+          FamilyRecommendationTuningView(model: model)
+        }
       } else if AppModel.showsChildSettingsPreview {
         NavigationStack {
           ChildSettingsView(child: AppModel.recommendationPreviewChild, model: model)

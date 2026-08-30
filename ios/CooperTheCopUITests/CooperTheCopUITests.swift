@@ -68,6 +68,38 @@ final class CooperTheCopUITests: XCTestCase {
   }
 
   @MainActor
+  func testHouseholdMixerTunesEveryChildTogether() throws {
+    let app = XCUIApplication()
+    app.launchEnvironment["COOP_UI_SCREEN"] = "family-recommendations"
+    app.launch()
+
+    XCTAssertTrue(app.staticTexts["Shape every child’s feed"].waitForExistence(timeout: 5))
+    let explanation = "These defaults apply to every child, including new profiles. "
+      + "Changing a channel here replaces individual adjustments for that channel."
+    let explanationText = app.staticTexts.matching(
+      NSPredicate(format: "label == %@", explanation)
+    ).firstMatch
+    XCTAssertTrue(explanationText.exists)
+
+    let showMore = app.buttons["Show more from Draw Every Day"]
+    for _ in 0..<4 where !showMore.isHittable {
+      app.swipeUp()
+    }
+    XCTAssertTrue(showMore.isHittable)
+    let preference = app.staticTexts["channel-preference-drawing"]
+    XCTAssertEqual(preference.label, "BALANCED")
+    showMore.tap()
+    let changed = NSPredicate(format: "label == %@", "MORE")
+    expectation(for: changed, evaluatedWith: preference)
+    waitForExpectations(timeout: 5)
+
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Household recommendation mixer"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor
   func testChildSettingsExposeOptInChannelDiscovery() throws {
     let app = XCUIApplication()
     app.launchEnvironment["COOP_UI_SCREEN"] = "child-settings"

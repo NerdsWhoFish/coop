@@ -123,6 +123,8 @@ func (s *Server) routes() {
 	parent("DELETE /api/v1/parent/family", s.handleDeleteFamily)
 	parent("PUT /api/v1/parent/family/api-key", s.handleSetAPIKey)
 	parent("GET /api/v1/parent/family/quota", s.handleQuota)
+	parent("GET /api/v1/parent/family/channel-weights", s.handleFamilyChannelWeights)
+	parent("PUT /api/v1/parent/family/channel-weights/{channelId}", s.handleSetFamilyChannelWeight)
 
 	parent("GET /api/v1/parent/parents", s.handleListParents)
 	parent("POST /api/v1/parent/parents/invite", s.handleInviteParent)

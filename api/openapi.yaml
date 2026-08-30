@@ -284,6 +284,43 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/QuotaStatus" }
 
+  /parent/family/channel-weights:
+    get:
+      operationId: getFamilyChannelWeights
+      tags: [family]
+      summary: Read household channel preferences inherited by every child. Admin only
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelWeight" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parent/family/channel-weights/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    put:
+      operationId: setFamilyChannelWeight
+      tags: [family]
+      summary: Set one channel preference for every child. Admin only
+      description: |
+        Replaces child-specific preferences for this channel so every child is synchronized.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [weight]
+              properties:
+                weight: { type: integer, minimum: -2, maximum: 2 }
+      responses:
+        "204": { description: Updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   # Parents ------------------------------------------------------------------
 
   /parent/parents:

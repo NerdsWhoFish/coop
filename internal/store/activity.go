@@ -208,14 +208,38 @@ func (a *Activity) Reactions(ctx context.Context, childID uuid.UUID) ([]Reaction
 	return rows, wrap(err, "listing reactions")
 }
 
-// ChannelWeights returns non-neutral parent preferences keyed by channel.
+// ChannelWeights resolves household defaults with child overrides.
 func (a *Activity) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[string]int, error) {
-	var rows []ChannelWeight
-	err := a.db.WithContext(ctx).Where("child_id = ?", childID).Find(&rows).Error
+	db := a.db.WithContext(ctx)
+	familyID, err := familyIDForChild(db, childID)
 	if err != nil {
-		return nil, fmt.Errorf("listing channel weights: %w", err)
+		return nil, err
 	}
 
+	weights, err := familyChannelWeights(db, familyID)
+	if err != nil {
+		return nil, err
+	}
+	var overrides []ChannelWeight
+	if err := db.Where("child_id = ?", childID).Find(&overrides).Error; err != nil {
+		return nil, fmt.Errorf("listing child channel weights: %w", err)
+	}
+	for _, row := range overrides {
+		weights[row.ChannelID] = row.Weight
+	}
+	return weights, nil
+}
+
+// FamilyChannelWeights returns non-neutral household defaults keyed by channel.
+func (a *Activity) FamilyChannelWeights(ctx context.Context, familyID uuid.UUID) (map[string]int, error) {
+	return familyChannelWeights(a.db.WithContext(ctx), familyID)
+}
+
+func familyChannelWeights(db *gorm.DB, familyID uuid.UUID) (map[string]int, error) {
+	var rows []FamilyChannelWeight
+	if err := db.Where("family_id = ?", familyID).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("listing family channel weights: %w", err)
+	}
 	weights := make(map[string]int, len(rows))
 	for _, row := range rows {
 		weights[row.ChannelID] = row.Weight
@@ -223,7 +247,7 @@ func (a *Activity) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[s
 	return weights, nil
 }
 
-// SetChannelWeight stores a soft parent preference. Neutral removes the row.
+// SetChannelWeight stores one child's override of the household default.
 func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
 	channelID string, weight int, actorID uuid.UUID) error {
 
@@ -235,9 +259,18 @@ func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
 		if err != nil {
 			return err
 		}
-		before := 0
+		familyWeight := 0
+		var inherited FamilyChannelWeight
+		result := tx.First(&inherited, "family_id = ? AND channel_id = ?", familyID, channelID)
+		if result.Error == nil {
+			familyWeight = inherited.Weight
+		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("reading family channel weight: %w", result.Error)
+		}
+
+		before := familyWeight
 		var existing ChannelWeight
-		result := tx.First(&existing, "child_id = ? AND channel_id = ?", childID, channelID)
+		result = tx.First(&existing, "child_id = ? AND channel_id = ?", childID, channelID)
 		if result.Error == nil {
 			before = existing.Weight
 		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -247,7 +280,7 @@ func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
 			return nil
 		}
 
-		if weight == 0 {
+		if weight == familyWeight {
 			if err := tx.Delete(&ChannelWeight{},
 				"child_id = ? AND channel_id = ?", childID, channelID).Error; err != nil {
 				return fmt.Errorf("clearing channel weight: %w", err)
@@ -265,6 +298,58 @@ func (a *Activity) SetChannelWeight(ctx context.Context, childID uuid.UUID,
 			FamilyID: familyID, ActorParentID: &actorID, ChildID: &childID,
 			Action: "recommendation.channel_weight", TargetType: "channel", TargetID: channelID,
 			Before: map[string]any{"weight": before}, After: map[string]any{"weight": weight},
+			CreatedAt: a.now(),
+		})
+	})
+}
+
+// SetFamilyChannelWeight synchronizes every child to one household value.
+func (a *Activity) SetFamilyChannelWeight(ctx context.Context, familyID uuid.UUID,
+	channelID string, weight int, actorID uuid.UUID) error {
+
+	if weight < -2 || weight > 2 {
+		return fmt.Errorf("setting family channel weight: weight must be between -2 and 2")
+	}
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		before := 0
+		var existing FamilyChannelWeight
+		result := tx.First(&existing, "family_id = ? AND channel_id = ?", familyID, channelID)
+		if result.Error == nil {
+			before = existing.Weight
+		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("reading family channel weight: %w", result.Error)
+		}
+		if before != weight && weight == 0 {
+			if err := tx.Delete(&FamilyChannelWeight{},
+				"family_id = ? AND channel_id = ?", familyID, channelID).Error; err != nil {
+				return fmt.Errorf("clearing family channel weight: %w", err)
+			}
+		} else if before != weight {
+			row := FamilyChannelWeight{
+				FamilyID: familyID, ChannelID: channelID, Weight: weight, UpdatedAt: a.now(),
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "family_id"}, {Name: "channel_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"weight", "updated_at"}),
+			}).Create(&row).Error; err != nil {
+				return fmt.Errorf("setting family channel weight: %w", err)
+			}
+		}
+
+		children := tx.Model(&Child{}).Select("id").Where("family_id = ?", familyID)
+		cleared := tx.Where("channel_id = ? AND child_id IN (?)", channelID, children).
+			Delete(&ChannelWeight{})
+		if cleared.Error != nil {
+			return fmt.Errorf("clearing child channel weight overrides: %w", cleared.Error)
+		}
+		if before == weight && cleared.RowsAffected == 0 {
+			return nil
+		}
+		return appendAudit(tx, auditChange{
+			FamilyID: familyID, ActorParentID: &actorID,
+			Action: "recommendation.family_channel_weight", TargetType: "channel", TargetID: channelID,
+			Before:    map[string]any{"weight": before, "childOverrides": cleared.RowsAffected},
+			After:     map[string]any{"weight": weight, "childOverrides": 0},
 			CreatedAt: a.now(),
 		})
 	})
