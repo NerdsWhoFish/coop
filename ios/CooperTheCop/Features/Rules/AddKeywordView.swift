@@ -57,14 +57,14 @@ struct AddKeywordView: View {
     isSaving = true
     Task {
       do {
-        try await model.createKeyword(
+        try await model.createKeyword(.init(
           term: term.trimmingCharacters(in: .whitespacesAndNewlines),
           childID: childID,
           matchTitle: matchTitle,
           matchTags: matchTags,
           matchDescription: matchDescription,
           wholeWord: wholeWord
-        )
+        ))
         await didSave()
         dismiss()
       } catch {

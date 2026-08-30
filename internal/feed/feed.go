@@ -229,9 +229,14 @@ func (s *Service) recommendations(ctx context.Context, familyID, childID uuid.UU
 	return page, nil
 }
 
-// ChannelWeights returns the parent's non-neutral feed preferences.
+// ChannelWeights returns effective non-neutral preferences for one child.
 func (s *Service) ChannelWeights(ctx context.Context, childID uuid.UUID) (map[string]int, error) {
 	return s.activity.ChannelWeights(ctx, childID)
+}
+
+// FamilyChannelWeights returns household recommendation defaults.
+func (s *Service) FamilyChannelWeights(ctx context.Context, familyID uuid.UUID) (map[string]int, error) {
+	return s.activity.FamilyChannelWeights(ctx, familyID)
 }
 
 // SetChannelWeight changes a soft preference only for an approved channel.
@@ -246,6 +251,22 @@ func (s *Service) SetChannelWeight(ctx context.Context, familyID, childID uuid.U
 		return store.ErrNotFound
 	}
 	return s.activity.SetChannelWeight(ctx, childID, channelID, weight, actorID)
+}
+
+// SetFamilyChannelWeight changes the default for a globally approved channel.
+func (s *Service) SetFamilyChannelWeight(ctx context.Context, familyID uuid.UUID,
+	channelID string, weight int, actorID uuid.UUID) error {
+
+	channels, err := s.rules.GlobalAllowlist(ctx, familyID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(channels, func(channel store.AllowGlobal) bool {
+		return channel.ChannelID == channelID
+	}) {
+		return store.ErrNotFound
+	}
+	return s.activity.SetFamilyChannelWeight(ctx, familyID, channelID, weight, actorID)
 }
 
 func rankCandidates(videos []store.Video) []rank.Candidate {

@@ -77,70 +77,7 @@ struct RecommendationTuningView: View {
   }
 
   private var mixStrip: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Group {
-        if dynamicTypeSize.isAccessibilitySize {
-          VStack(alignment: .leading, spacing: 8) {
-            mixTitle
-            channelCount
-          }
-        } else {
-          HStack {
-            mixTitle
-            Spacer()
-            channelCount
-          }
-        }
-      }
-
-      if channels.isEmpty {
-        Capsule().fill(CoopTheme.surface).frame(height: 14)
-      } else {
-        HStack(spacing: 4) {
-          ForEach(channels) { channel in
-            Capsule()
-              .fill(preferenceColor(weights[channel.id] ?? 0))
-              .frame(height: 14)
-              .accessibilityHidden(true)
-          }
-        }
-        .animation(reduceMotion ? nil : .snappy, value: weights)
-      }
-
-      Group {
-        if dynamicTypeSize.isAccessibilitySize {
-          VStack(alignment: .leading) {
-            Label("Less", systemImage: "minus")
-            Label("Balanced", systemImage: "equal")
-            Label("More", systemImage: "plus")
-          }
-        } else {
-          HStack {
-            Label("Less", systemImage: "minus")
-            Spacer()
-            Label("Balanced", systemImage: "equal")
-            Spacer()
-            Label("More", systemImage: "plus")
-          }
-        }
-      }
-      .font(.caption.weight(.semibold))
-      .foregroundStyle(CoopTheme.foreground.opacity(0.62))
-    }
-    .padding(18)
-    .background(CoopTheme.surface.opacity(0.72), in: .rect(cornerRadius: 22))
-  }
-
-  private var mixTitle: some View {
-    Label("Live feed mix", systemImage: "waveform.path.ecg")
-      .font(.headline)
-  }
-
-  private var channelCount: some View {
-    Text("\(channels.count) CHANNELS")
-      .font(.caption2.weight(.black))
-      .tracking(1.1)
-      .foregroundStyle(CoopTheme.muted)
+    PreferenceMixStrip(channels: channels, weights: weights)
   }
 
   @ViewBuilder
@@ -169,8 +106,7 @@ struct RecommendationTuningView: View {
       } else {
         ScrollView(.horizontal) {
           LazyHStack(alignment: .top, spacing: 14) {
-            ForEach(Array(recommendations.prefix(8).enumerated()), id: \.element.id) {
-              index, item in
+            ForEach(Array(recommendations.prefix(8).enumerated()), id: \.element.id) { index, item in
               RecommendationCard(position: index + 1, recommendation: item)
                 .containerRelativeFrame(.horizontal) { length, _ in min(length * 0.86, 360) }
             }
@@ -219,14 +155,6 @@ struct RecommendationTuningView: View {
           }
         }
       }
-    }
-  }
-
-  private func preferenceColor(_ weight: Int) -> Color {
-    switch weight {
-    case ..<0: CoopTheme.orange
-    case 1...: CoopTheme.green
-    default: CoopTheme.muted
     }
   }
 
@@ -339,7 +267,89 @@ private struct RecommendationCard: View {
   }
 }
 
-private struct ChannelMixerRow: View {
+struct PreferenceMixStrip: View {
+  let channels: [TunableChannel]
+  let weights: [String: Int]
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Group {
+        if dynamicTypeSize.isAccessibilitySize {
+          VStack(alignment: .leading, spacing: 8) {
+            title
+            channelCount
+          }
+        } else {
+          HStack {
+            title
+            Spacer()
+            channelCount
+          }
+        }
+      }
+
+      if channels.isEmpty {
+        Capsule().fill(CoopTheme.surface).frame(height: 14)
+      } else {
+        HStack(spacing: 4) {
+          ForEach(channels) { channel in
+            Capsule()
+              .fill(preferenceColor(weights[channel.id] ?? 0))
+              .frame(height: 14)
+              .accessibilityHidden(true)
+          }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: weights)
+      }
+
+      Group {
+        if dynamicTypeSize.isAccessibilitySize {
+          VStack(alignment: .leading) {
+            Label("Less", systemImage: "minus")
+            Label("Balanced", systemImage: "equal")
+            Label("More", systemImage: "plus")
+          }
+        } else {
+          HStack {
+            Label("Less", systemImage: "minus")
+            Spacer()
+            Label("Balanced", systemImage: "equal")
+            Spacer()
+            Label("More", systemImage: "plus")
+          }
+        }
+      }
+      .font(.caption.weight(.semibold))
+      .foregroundStyle(CoopTheme.foreground.opacity(0.62))
+    }
+    .padding(18)
+    .background(CoopTheme.surface.opacity(0.72), in: .rect(cornerRadius: 22))
+  }
+
+  private var title: some View {
+    Label("Live feed mix", systemImage: "waveform.path.ecg")
+      .font(.headline)
+  }
+
+  private var channelCount: some View {
+    Text("\(channels.count) CHANNELS")
+      .font(.caption2.weight(.black))
+      .tracking(1.1)
+      .foregroundStyle(CoopTheme.muted)
+  }
+
+  private func preferenceColor(_ weight: Int) -> Color {
+    switch weight {
+    case ..<0: CoopTheme.orange
+    case 1...: CoopTheme.green
+    default: CoopTheme.muted
+    }
+  }
+}
+
+struct ChannelMixerRow: View {
   let channel: TunableChannel
   let preference: ChannelPreference
   let isSaving: Bool
@@ -387,6 +397,7 @@ private struct ChannelMixerRow: View {
           .tracking(1.1)
           .foregroundStyle(preferenceColor)
           .contentTransition(.numericText())
+          .accessibilityIdentifier("channel-preference-\(channel.id)")
       }
     }
   }

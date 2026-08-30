@@ -72,6 +72,12 @@ struct FamilyView: View {
         }
 
         if model.parent?.role == .admin {
+          Section("Recommendations") {
+            NavigationLink("Recommendation mix for all children") {
+              FamilyRecommendationTuningView(model: model)
+            }
+          }
+
           Section("Devices") {
             NavigationLink("App versions", destination: AppVersionsView(model: model))
           }
@@ -120,7 +126,8 @@ struct FamilyView: View {
         Button("Cancel", role: .cancel) {}
       } message: {
         Text(
-          "This permanently deletes every parent account, child profile, rule, activity record, and audit event. This cannot be undone."
+          "This permanently deletes every parent account, child profile, rule, activity record, "
+            + "and audit event. This cannot be undone."
         )
       }
       .coopBackground()

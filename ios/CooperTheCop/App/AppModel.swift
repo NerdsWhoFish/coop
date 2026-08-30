@@ -11,6 +11,15 @@ final class AppModel {
     let provisioningURL: String?
   }
 
+  struct KeywordConfiguration {
+    let term: String
+    let childID: String?
+    let matchTitle: Bool
+    let matchTags: Bool
+    let matchDescription: Bool
+    let wholeWord: Bool
+  }
+
   enum Destination {
     case connecting
     case authentication(needsSetup: Bool)
@@ -39,7 +48,7 @@ final class AppModel {
   private var previewChannelWeights = [
     "science": 1,
     "drawing": 0,
-    "outdoors": -1,
+    "outdoors": -1
   ]
 
   static var uiPreviewScreen: String? {
@@ -52,6 +61,9 @@ final class AppModel {
 
   static var isUIPreview: Bool { uiPreviewScreen != nil }
   static var showsRecommendationPreview: Bool { uiPreviewScreen == "recommendations" }
+  static var showsFamilyRecommendationPreview: Bool {
+    uiPreviewScreen == "family-recommendations"
+  }
   static var showsFamilyPreview: Bool { uiPreviewScreen == "family" }
   static var showsRequestsPreview: Bool { uiPreviewScreen == "requests" }
   static var showsChildSettingsPreview: Bool { uiPreviewScreen == "child-settings" }
@@ -79,7 +91,7 @@ final class AppModel {
   static let familyPreviewQuota = [
     Components.Schemas.QuotaStatus(purpose: .feed, used: 11, budget: 8_000),
     Components.Schemas.QuotaStatus(purpose: .search, used: 2, budget: 90),
-    Components.Schemas.QuotaStatus(purpose: .backfill, used: 0, budget: 500),
+    Components.Schemas.QuotaStatus(purpose: .backfill, used: 0, budget: 500)
   ]
 
   static let familyPreviewParent = Components.Schemas.Parent(
@@ -100,7 +112,7 @@ final class AppModel {
         buildId: "570fdeca6768",
         installPageUrl: "https://fledge.example/a/fish.nerdswhofish.coop.parent"
       )
-    } else if Self.showsFamilyPreview {
+    } else if Self.showsFamilyPreview || Self.showsFamilyRecommendationPreview {
       parent = Self.familyPreviewParent
     } else if Self.showsRequestsPreview {
       let channel = Components.Schemas.Channel(
@@ -386,8 +398,7 @@ final class AppModel {
   }
 
   func updateChildDevice(id: String, allowSelfUnpair: Bool) async throws
-    -> Components.Schemas.Device
-  {
+    -> Components.Schemas.Device {
     guard let api else { throw CoopAPIError.invalidSession }
     return try await api.updateChildDevice(id: id, allowSelfUnpair: allowSelfUnpair)
   }
@@ -446,15 +457,44 @@ final class AppModel {
     )
   }
 
+  func familyTunableChannels() async throws -> [TunableChannel] {
+    if Self.showsFamilyRecommendationPreview { return Self.previewChannels }
+    return try await globalAllowlist().map { entry in
+      let channel = entry.value1
+      return TunableChannel(
+        id: channel.id,
+        title: channel.title,
+        thumbnailURL: channel.thumbnailUrl.flatMap(URL.init(string:))
+      )
+    }
+  }
+
+  func familyRecommendationChannelWeights() async throws -> [String: Int] {
+    if Self.showsFamilyRecommendationPreview { return previewChannelWeights }
+    guard let api else { return [:] }
+    return Dictionary(
+      uniqueKeysWithValues: try await api.familyChannelWeights()
+        .map { ($0.channelId, $0.weight) }
+    )
+  }
+
   func setRecommendationChannelWeight(_ weight: Int, channelID: String, childID: String)
-    async throws
-  {
+    async throws {
     if Self.showsRecommendationPreview {
       previewChannelWeights[channelID] = weight
       return
     }
     guard let api else { return }
     try await api.setChildChannelWeight(weight, channelID: channelID, childID: childID)
+  }
+
+  func setFamilyRecommendationChannelWeight(_ weight: Int, channelID: String) async throws {
+    if Self.showsFamilyRecommendationPreview {
+      previewChannelWeights[channelID] = weight
+      return
+    }
+    guard let api else { return }
+    try await api.setFamilyChannelWeight(weight, channelID: channelID)
   }
 
   func blocklist() async throws -> [Components.Schemas.BlockedChannel] {
@@ -492,22 +532,15 @@ final class AppModel {
     try await api.setChannelBlocked(blocked, channelID: channelID, reason: reason)
   }
 
-  func createKeyword(
-    term: String,
-    childID: String?,
-    matchTitle: Bool,
-    matchTags: Bool,
-    matchDescription: Bool,
-    wholeWord: Bool
-  ) async throws {
+  func createKeyword(_ configuration: KeywordConfiguration) async throws {
     guard let api else { return }
     _ = try await api.createKeyword(
-      term: term,
-      childID: childID,
-      matchTitle: matchTitle,
-      matchTags: matchTags,
-      matchDescription: matchDescription,
-      wholeWord: wholeWord
+      term: configuration.term,
+      childID: configuration.childID,
+      matchTitle: configuration.matchTitle,
+      matchTags: configuration.matchTags,
+      matchDescription: configuration.matchDescription,
+      wholeWord: configuration.wholeWord
     )
   }
 
@@ -561,8 +594,7 @@ final class AppModel {
   }
 
   func inviteParent(email: String, admin: Bool, childIDs: [String]) async throws
-    -> Components.Schemas.Invitation?
-  {
+    -> Components.Schemas.Invitation? {
     guard let api else { return nil }
     return try await api.inviteParent(email: email, admin: admin, childIDs: childIDs)
   }
@@ -639,7 +671,7 @@ final class AppModel {
     TunableChannel(id: "science", title: "Deep Sea Lab", thumbnailURL: nil),
     TunableChannel(id: "drawing", title: "Draw Every Day", thumbnailURL: nil),
     TunableChannel(id: "outdoors", title: "Trail Kids", thumbnailURL: nil),
-    TunableChannel(id: "music", title: "Tiny Orchestra", thumbnailURL: nil),
+    TunableChannel(id: "music", title: "Tiny Orchestra", thumbnailURL: nil)
   ]
 
   private static let previewRecommendations = [
@@ -678,6 +710,6 @@ final class AppModel {
       thumbnailURL: nil,
       reason: "Something new from an approved channel.",
       signal: .unwatched
-    ),
+    )
   ]
 }

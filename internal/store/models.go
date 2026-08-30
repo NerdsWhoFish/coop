@@ -333,10 +333,17 @@ type PlaybackSession struct {
 	Active    bool      `gorm:"not null;default:true;index"`
 }
 
-// ChannelWeight is a parent's soft preference for one child's feed.
-// Zero is omitted from storage because it is the default.
+// ChannelWeight overrides the family's soft preference for one child's feed.
 type ChannelWeight struct {
 	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ChannelID string    `gorm:"primaryKey"`
+	Weight    int       `gorm:"not null"`
+	UpdatedAt time.Time
+}
+
+// FamilyChannelWeight is inherited unless a child has an explicit override.
+type FamilyChannelWeight struct {
+	FamilyID  uuid.UUID `gorm:"type:uuid;primaryKey"`
 	ChannelID string    `gorm:"primaryKey"`
 	Weight    int       `gorm:"not null"`
 	UpdatedAt time.Time
@@ -431,7 +438,8 @@ func AllModels() []any {
 		&Channel{}, &Video{},
 		&AllowGlobal{}, &AllowChild{}, &DenyChild{}, &BlockChannel{},
 		&Keyword{}, &VideoOverride{}, &VideoBlock{},
-		&Subscription{}, &Reaction{}, &WatchEvent{}, &PlaybackSession{}, &ChannelWeight{},
+		&Subscription{}, &Reaction{}, &WatchEvent{}, &PlaybackSession{},
+		&ChannelWeight{}, &FamilyChannelWeight{},
 		&Request{}, &Suppression{},
 		&APICache{}, &QuotaSpend{}, &ChildSearch{}, &PushToken{},
 	}

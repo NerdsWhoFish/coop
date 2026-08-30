@@ -921,3 +921,92 @@ func TestVideoBlockOutranksApprovalAndPlaybackLeaseExpires(t *testing.T) {
 		t.Fatalf("stopped playbacks = (%+v, %v), want none", rows, err)
 	}
 }
+
+func TestFamilyChannelWeightResynchronizesChildOverrides(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
+	accounts := NewAccounts(db, fixedClock(now))
+	family, parent, err := accounts.CreateFamily(
+		ctx, "Recommendation Test", "UTC", uuid.NewString()+"@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Family{}, "id = ?", family.ID) })
+
+	first, err := accounts.CreateChild(ctx, family.ID, "River", "", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := accounts.CreateChild(ctx, family.ID, "Rowan", "", parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	channelID := "UC" + uuid.NewString()
+	if err := NewCatalog(db, fixedClock(now)).UpsertChannels(
+		ctx, []youtube.Channel{{ID: channelID, Title: "Shared channel"}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Delete(&Channel{}, "id = ?", channelID) })
+
+	activity := NewActivity(db, fixedClock(now))
+	if err := activity.SetChannelWeight(ctx, first.ID, channelID, 1, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := activity.SetChannelWeight(ctx, second.ID, channelID, -1, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := activity.SetFamilyChannelWeight(ctx, family.ID, channelID, 2, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, child := range []Child{first, second} {
+		weights, err := activity.ChannelWeights(ctx, child.ID)
+		if err != nil || weights[channelID] != 2 {
+			t.Fatalf("family weight for %s = (%v, %v), want 2", child.Name, weights, err)
+		}
+	}
+	var overrides int64
+	if err := db.Model(&ChannelWeight{}).Where("channel_id = ?", channelID).
+		Count(&overrides).Error; err != nil {
+		t.Fatal(err)
+	}
+	if overrides != 0 {
+		t.Fatalf("child overrides after family update = %d, want 0", overrides)
+	}
+
+	if err := activity.SetChannelWeight(ctx, first.ID, channelID, 0, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	firstWeights, err := activity.ChannelWeights(ctx, first.ID)
+	if err != nil || firstWeights[channelID] != 0 {
+		t.Fatalf("child neutral override = (%v, %v), want 0", firstWeights, err)
+	}
+	secondWeights, err := activity.ChannelWeights(ctx, second.ID)
+	if err != nil || secondWeights[channelID] != 2 {
+		t.Fatalf("sibling inherited weight = (%v, %v), want 2", secondWeights, err)
+	}
+	if err := activity.SetFamilyChannelWeight(ctx, family.ID, channelID, 2, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	firstWeights, err = activity.ChannelWeights(ctx, first.ID)
+	if err != nil || firstWeights[channelID] != 2 {
+		t.Fatalf("same family weight resync = (%v, %v), want 2", firstWeights, err)
+	}
+
+	if err := activity.SetChannelWeight(ctx, first.ID, channelID, 0, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := activity.SetChannelWeight(ctx, first.ID, channelID, 2, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&ChannelWeight{}).Where(
+		"child_id = ? AND channel_id = ?", first.ID, channelID,
+	).Count(&overrides).Error; err != nil {
+		t.Fatal(err)
+	}
+	if overrides != 0 {
+		t.Fatalf("redundant child override count = %d, want 0", overrides)
+	}
+}

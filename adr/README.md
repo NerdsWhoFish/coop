@@ -31,3 +31,4 @@ Records are numbered sequentially and are never rewritten: a decision that gets 
 | [0019](0019-seeded-exploration-jitter-over-deterministic-ranking.md) | Vary child feeds with seeded exploration jitter over the deterministic ranking | accepted | 2026-08-18 |
 | [0020](0020-per-family-apns-push-with-graceful-degradation.md) | Deliver request notifications through per-family APNs keys, degrading gracefully | accepted | 2026-08-18 |
 | [0021](0021-delegate-package-hosting-to-fledge.md) | Delegate package hosting to Fledge | accepted | 2026-08-18 |
+| [0022](0022-use-household-recommendation-defaults-with-child-overrides.md) | Use household recommendation defaults with child overrides | accepted | 2026-08-30 |
