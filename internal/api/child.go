@@ -1,10 +1,14 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"math/rand/v2"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/domain"
@@ -432,7 +436,15 @@ func (s *Server) handleChildSearch(w http.ResponseWriter, r *http.Request, c aut
 }
 
 func (s *Server) handleWatch(w http.ResponseWriter, r *http.Request, c auth.Child) error {
-	video, err := s.deps.Feed.Watchable(r.Context(), c.FamilyID, c.ID, r.PathValue("videoId"))
+	videoID := r.PathValue("videoId")
+	if !youtube.ValidVideoID(videoID) {
+		return notFound()
+	}
+	if _, err := s.ensureVideo(r.Context(), c.FamilyID, videoID); err != nil {
+		return err
+	}
+
+	video, err := s.deps.Feed.Watchable(r.Context(), c.FamilyID, c.ID, videoID)
 	if err != nil {
 		return err
 	}
@@ -611,46 +623,52 @@ func (s *Server) handleLocateVideoChannel(w http.ResponseWriter, r *http.Request
 		return badRequest("malformed video id")
 	}
 
-	channelID := ""
-	video, err := s.deps.Catalog.Video(r.Context(), videoID)
-	switch {
-	case err == nil:
-		channelID = video.ChannelID
-	case !errors.Is(err, store.ErrNotFound):
+	video, err := s.ensureVideo(r.Context(), c.FamilyID, videoID)
+	if err != nil {
 		return err
-	default:
-		client, err := s.youtubeFor(r.Context(), c.FamilyID)
-		if err != nil {
-			return err
-		}
-		fetched, err := client.Videos(r.Context(), []string{videoID}, domain.PurposeFeed)
-		if err != nil {
-			return err
-		}
-		if len(fetched) == 0 {
-			return notFound()
-		}
-		channelID = fetched[0].ChannelID
-		// Catalog the branding the channel page needs, then the video so a
-		// raised request can carry it as context for the reviewing parent.
-		if err := s.ensureChannel(r.Context(), c.FamilyID, channelID); err != nil {
-			return err
-		}
-		if err := s.deps.Catalog.UpsertVideos(r.Context(), fetched); err != nil {
-			return err
-		}
 	}
 
 	evaluator, err := s.deps.Rules.Evaluator(r.Context(), c.FamilyID, c.ID)
 	if err != nil {
 		return err
 	}
-	if evaluator.Channel(channelID) == domain.StateBlocked {
+	if evaluator.Channel(video.ChannelID) == domain.StateBlocked {
 		return notFound()
 	}
 
-	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]string{"channelId": channelID})
+	writeJSON(w, s.deps.Logger, http.StatusOK, map[string]string{"channelId": video.ChannelID})
 	return nil
+}
+
+func (s *Server) ensureVideo(ctx context.Context, familyID uuid.UUID, videoID string) (store.Video, error) {
+	video, err := s.deps.Catalog.Video(ctx, videoID)
+	if err == nil {
+		return video, nil
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		return store.Video{}, err
+	}
+	trace.SpanFromContext(ctx).AddEvent("coop.video.catalog.read_through")
+
+	client, err := s.youtubeFor(ctx, familyID)
+	if err != nil {
+		return store.Video{}, err
+	}
+	fetched, err := client.Videos(ctx, []string{videoID}, domain.PurposeFeed)
+	if err != nil {
+		return store.Video{}, err
+	}
+	if len(fetched) == 0 {
+		return store.Video{}, notFound()
+	}
+	if err := s.ensureChannel(ctx, familyID, fetched[0].ChannelID); err != nil {
+		return store.Video{}, err
+	}
+	if err := s.deps.Catalog.UpsertVideos(ctx, fetched); err != nil {
+		return store.Video{}, err
+	}
+	trace.SpanFromContext(ctx).AddEvent("coop.video.catalog.filled")
+	return s.deps.Catalog.Video(ctx, videoID)
 }
 
 // videoDTOs decorates videos with their channel titles in one lookup, rather
