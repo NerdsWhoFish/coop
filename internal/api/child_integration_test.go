@@ -234,6 +234,40 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 		got.Reason != "Because you liked Birds" || got.PendingRequest {
 		t.Errorf("discovery = %+v, want a locked, explainable requestable-good", got)
 	}
+
+	t.Run("watch reads through an uncatalogued video", func(t *testing.T) {
+		const freshVideoID = "fresh-video"
+		videoParams := url.Values{
+			"part":       {"snippet,contentDetails,status,liveStreamingDetails"},
+			"id":         {freshVideoID},
+			"maxResults": {"50"},
+		}
+		videoBody := fmt.Sprintf(`{"items":[{"id":%q,"snippet":{"channelId":%q,"channelTitle":"Allowed","title":"Fresh video","publishedAt":"2026-08-15T12:00:00Z","liveBroadcastContent":"none","thumbnails":{}},"contentDetails":{"duration":"PT5M"},"status":{"embeddable":true}}]}`,
+			freshVideoID, allowedChannel)
+		if err := cache.Put(ctx, youtube.CacheKey("videos.list", videoParams), "videos.list", []byte(videoBody), time.Hour); err != nil {
+			t.Fatal(err)
+		}
+
+		req = httptest.NewRequest("GET", "/api/v1/child/videos/"+freshVideoID, nil)
+		req.SetPathValue("videoId", freshVideoID)
+		recorder = httptest.NewRecorder()
+		if err := server.handleWatch(recorder, req, auth.Child{ID: child.ID, FamilyID: family.ID}); err != nil {
+			t.Fatalf("watching an uncatalogued video: %v", err)
+		}
+		if recorder.Code != 200 {
+			t.Fatalf("watch status = %d, want 200", recorder.Code)
+		}
+		var watch watchPageDTO
+		if err := json.NewDecoder(recorder.Body).Decode(&watch); err != nil {
+			t.Fatal(err)
+		}
+		if watch.Video.ID != freshVideoID {
+			t.Errorf("watch video = %q, want %q", watch.Video.ID, freshVideoID)
+		}
+		if _, err := catalog.Video(ctx, freshVideoID); err != nil {
+			t.Errorf("cataloged video lookup: %v", err)
+		}
+	})
 }
 
 func putSearchCache(t *testing.T, cache *store.APICacheStore, channelIDs, videoIDs []string,
