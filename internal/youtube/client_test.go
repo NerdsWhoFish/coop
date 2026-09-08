@@ -3,15 +3,20 @@ package youtube
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/nerdswhofish/coop/internal/domain"
 )
@@ -539,8 +544,180 @@ func TestFailedCallsAreNotCached(t *testing.T) {
 	if h.cache.puts != 0 {
 		t.Errorf("cache puts = %d, want a failed call left uncached", h.cache.puts)
 	}
-	if h.ledger.records != 0 {
-		t.Errorf("ledger records = %d, want no spend recorded for a failed call", h.ledger.records)
+	if h.ledger.records != 3 {
+		t.Errorf("ledger records = %d, want every failed attempt counted", h.ledger.records)
+	}
+}
+
+func TestRequestsRecoverFromTransientResponses(t *testing.T) {
+	for _, feed := range []bool{false, true} {
+		t.Run(fmt.Sprint("feed=", feed), func(t *testing.T) {
+			attempts := 0
+			h := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				if attempts == 1 {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				if attempts == 2 {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				body := channelsBody
+				if feed {
+					body = sampleFeed
+					if !strings.Contains(r.Header.Get("Accept"), "application/atom+xml") {
+						t.Error("feed request must accept Atom")
+					}
+				}
+				_, _ = w.Write([]byte(body))
+			})
+			var err error
+			if feed {
+				_, err = h.client.ChannelFeed(context.Background(), "UCabcdefghijklmnopqrstuv")
+			} else {
+				_, err = h.client.Channels(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, domain.PurposeFeed)
+			}
+			if err != nil || attempts != 3 || h.cache.puts != 1 {
+				t.Fatalf("error=%v attempts=%d cache writes=%d", err, attempts, h.cache.puts)
+			}
+			wantSpend := 3
+			if feed {
+				wantSpend = 0
+			}
+			if h.ledger.records != wantSpend {
+				t.Fatalf("spend=%d want %d", h.ledger.records, wantSpend)
+			}
+		})
+	}
+}
+
+func TestRetriesRespectBudget(t *testing.T) {
+	h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) })
+	h.client.cfg.Budget.Units = 1
+	_, err := h.client.Channels(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, domain.PurposeFeed)
+	if !errors.Is(err, ErrBudgetExhausted) || *h.calls != 1 || h.ledger.records != 1 {
+		t.Fatalf("error=%v calls=%d spend=%d", err, *h.calls, h.ledger.records)
+	}
+}
+
+func TestRetryAfterAndPermanentErrorsStopImmediateRetries(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusBadRequest, http.StatusNotFound} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Retry-After", "120")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"error":{"message":"unavailable","errors":[{"reason":"playlistNotFound"}]}}`))
+			})
+			_, err := h.client.Channels(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, domain.PurposeFeed)
+			if err == nil || *h.calls != 1 {
+				t.Fatalf("error=%v calls=%d", err, *h.calls)
+			}
+			if RetryAfter(err) != 2*time.Minute {
+				t.Fatalf("upstream retry delay=%s", RetryAfter(err))
+			}
+		})
+	}
+}
+
+func TestRetryCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		cancel()
+	})
+	_, err := h.client.ChannelFeed(ctx, "UCabcdefghijklmnopqrstuv")
+	if !errors.Is(err, context.Canceled) || *h.calls != 1 || h.cache.puts != 0 {
+		t.Fatalf("error=%v calls=%d cache writes=%d", err, *h.calls, h.cache.puts)
+	}
+}
+
+func TestMalformedFeedDoesNotPoisonCache(t *testing.T) {
+	attempts := 0
+	h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts <= 3 {
+			_, _ = w.Write([]byte("<html>not a feed</html>"))
+			return
+		}
+		_, _ = w.Write([]byte(sampleFeed))
+	})
+	_, err := h.client.ChannelFeed(context.Background(), "UCabcdefghijklmnopqrstuv")
+	if err == nil || h.cache.puts != 0 {
+		t.Fatalf("error=%v cache writes=%d", err, h.cache.puts)
+	}
+	entries, err := h.client.ChannelFeed(context.Background(), "UCabcdefghijklmnopqrstuv")
+	if err != nil || len(entries) != 3 || attempts != 4 {
+		t.Fatalf("error=%v entries=%d attempts=%d", err, len(entries), attempts)
+	}
+}
+
+func TestRequestDeadlineRemainsRetryableForScheduledRefresh(t *testing.T) {
+	h := newHarness(t, jsonHandler(channelsBody))
+	_, err := h.client.request(context.Background(), endpointFeed, func(context.Context) ([]byte, error) {
+		return nil, context.DeadlineExceeded
+	})
+	if !errors.Is(err, context.DeadlineExceeded) || !IsRetryable(err) {
+		t.Fatalf("error=%v retryable=%v", err, IsRetryable(err))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = h.client.request(ctx, endpointFeed, func(context.Context) ([]byte, error) {
+		t.Fatal("canceled request executed")
+		return nil, nil
+	})
+	if !errors.Is(err, context.Canceled) || IsRetryable(err) {
+		t.Fatalf("error=%v retryable=%v", err, IsRetryable(err))
+	}
+}
+
+func TestMalformedCachedFeedIsReplaced(t *testing.T) {
+	h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(sampleFeed)) })
+	key := CacheKey(endpointFeed, url.Values{"channel_id": {"UCabcdefghijklmnopqrstuv"}})
+	h.cache.entries[key] = []byte("<html>not a feed</html>")
+	entries, err := h.client.ChannelFeed(context.Background(), "UCabcdefghijklmnopqrstuv")
+	if err != nil || len(entries) != 3 || *h.calls != 1 || h.cache.puts != 1 {
+		t.Fatalf("error=%v entries=%d requests=%d cache writes=%d", err, len(entries), *h.calls, h.cache.puts)
+	}
+}
+
+func TestYouTubeTraceRecordsAttemptsWithoutRequestData(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		_ = provider.Shutdown(context.Background())
+	})
+	calls := 0
+	h := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(channelsBody))
+	})
+	h.client.cfg.APIKey = "private-test-key"
+	_, err := h.client.Channels(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, domain.PurposeFeed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spans := exporter.GetSpans()
+	if len(spans) != 1 || spans[0].Name != "youtube.channels.list" {
+		t.Fatalf("spans=%+v", spans)
+	}
+	attributes := map[string]string{}
+	for _, attr := range spans[0].Attributes {
+		attributes[string(attr.Key)] = attr.Value.String()
+	}
+	if attributes["upstream.attempts"] != "2" || attributes["http.response.status_code"] != "200" {
+		t.Fatalf("attributes=%v", attributes)
+	}
+	if len(attributes) != 2 || len(spans[0].Events) != 0 {
+		t.Fatalf("unexpected request data in trace: %+v", spans[0])
 	}
 }
 

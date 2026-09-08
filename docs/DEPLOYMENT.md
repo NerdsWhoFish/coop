@@ -94,6 +94,18 @@ A home-only DNS policy does nothing on cellular or another Wi-Fi network, so use
 
 Use `/livez` for process liveness and `/readyz` for traffic readiness.
 Readiness includes PostgreSQL and should be the load balancer or orchestrator health check.
+The check retries brief database connection failures within a two-second deadline; configure the probe timeout above that deadline.
+Persistent failures return HTTP 503 and log the cause with the request's trace ID.
+
+YouTube requests retry transient transport errors, bare 404s, HTTP 408/429, and server errors at most three times within twenty seconds.
+Every Data API attempt counts against the family's quota, including failed requests; public Atom feeds remain free.
+Exhausted retries retain the per-channel scheduled backoff, and logs identify the failing endpoint.
+Catalog refresh spans correlate with upstream spans without recording API keys or request URLs.
+Malformed feeds are never cached.
+
+The thumbnail proxy retries transient upstream failures and falls back to smaller YouTube-provided image sizes when a resolution is missing.
+It validates the complete image before returning HTTP 200, limits each request to ten seconds, and checks redirect destinations against the image host allowlist.
+Persistent upstream failures remain HTTP 502.
 
 The server runs migrations before accepting traffic.
 Read release notes before rolling back across a schema change.

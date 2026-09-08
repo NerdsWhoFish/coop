@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/google/uuid"
 
 	"github.com/nerdswhofish/coop/internal/config"
@@ -226,12 +227,25 @@ func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.DB.SQL().PingContext(r.Context()); err != nil {
+	if err := databaseReady(r.Context(), s.deps.DB.SQL().PingContext); err != nil {
+		s.deps.Logger.ErrorContext(r.Context(), "database readiness failed", "error", err)
 		http.Error(w, "database unreachable", http.StatusServiceUnavailable)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok\n"))
+}
+
+func databaseReady(ctx context.Context, ping func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, err := backoff.Retry(ctx, func() (struct{}, error) {
+		if err := ctx.Err(); err != nil {
+			return struct{}{}, backoff.Permanent(err)
+		}
+		return struct{}{}, ping(ctx)
+	}, backoff.WithBackOff(backoff.NewConstantBackOff(100*time.Millisecond)), backoff.WithMaxTries(3))
+	return err
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
