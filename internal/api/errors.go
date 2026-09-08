@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -128,12 +129,12 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	apiErr := toAPIError(err)
 
 	if apiErr.status >= http.StatusInternalServerError {
-		logger.Error("request failed",
-			"method", r.Method, "path", r.URL.Path,
-			"status", apiErr.status, "error", apiErr.Error())
+		logger.ErrorContext(r.Context(), "request failed",
+			"method", r.Method, "route", r.Pattern,
+			"status", apiErr.status, "code", apiErr.code, "error_type", fmt.Sprintf("%T", apiErr.cause))
 	} else {
-		logger.Debug("request rejected",
-			"method", r.Method, "path", r.URL.Path,
+		logger.DebugContext(r.Context(), "request rejected",
+			"method", r.Method, "route", r.Pattern,
 			"status", apiErr.status, "code", apiErr.code)
 	}
 
