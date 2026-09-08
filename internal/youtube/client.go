@@ -13,7 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/nerdswhofish/coop/internal/domain"
 )
@@ -39,9 +45,10 @@ const (
 var ErrNotFound = errors.New("not found on youtube")
 
 type apiResponseError struct {
-	status  int
-	reason  string
-	message string
+	status     int
+	reason     string
+	message    string
+	retryAfter time.Duration
 }
 
 func (e *apiResponseError) Retryable() bool {
@@ -53,12 +60,13 @@ func (e *apiResponseError) Retryable() bool {
 		e.status >= http.StatusInternalServerError
 }
 
-type transportError struct {
+type retryableError struct {
 	cause error
 }
 
-func (e *transportError) Error() string   { return "calling youtube: " + e.cause.Error() }
-func (e *transportError) Retryable() bool { return true }
+func (e *retryableError) Error() string   { return "youtube request: " + e.cause.Error() }
+func (e *retryableError) Unwrap() error   { return e.cause }
+func (e *retryableError) Retryable() bool { return true }
 
 func (e *apiResponseError) Error() string {
 	if e.message != "" {
@@ -73,6 +81,14 @@ func (e *apiResponseError) Error() string {
 func IsRetryable(err error) bool {
 	var retryable interface{ Retryable() bool }
 	return errors.As(err, &retryable) && retryable.Retryable()
+}
+
+func RetryAfter(err error) time.Duration {
+	var responseErr *apiResponseError
+	if errors.As(err, &responseErr) {
+		return max(0, responseErr.retryAfter)
+	}
+	return 0
 }
 
 // Channel is the channel metadata Coop stores.
@@ -493,10 +509,21 @@ func (c *Client) ChannelFeed(ctx context.Context, channelID string) ([]FeedEntry
 	key := CacheKey(endpointFeed, params)
 
 	if body, ok, err := c.cfg.Cache.Get(ctx, key); err == nil && ok {
-		return ParseFeed(strings.NewReader(string(body)))
+		if entries, err := ParseFeed(strings.NewReader(string(body))); err == nil {
+			return entries, nil
+		}
 	}
 
-	body, err := c.get(ctx, c.cfg.FeedBaseURL+"?"+params.Encode())
+	body, err := c.request(ctx, endpointFeed, func(ctx context.Context) ([]byte, error) {
+		body, err := c.get(ctx, c.cfg.FeedBaseURL+"?"+params.Encode(), "application/atom+xml, application/xml")
+		if err == nil {
+			_, err = ParseFeed(strings.NewReader(string(body)))
+			if err != nil {
+				err = &retryableError{cause: err}
+			}
+		}
+		return body, err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -518,46 +545,82 @@ func (c *Client) fetch(ctx context.Context, endpoint string, params url.Values,
 		return body, nil
 	}
 
-	now := c.cfg.Now()
-	day := QuotaDay(now)
-
-	usage, err := c.cfg.Ledger.Usage(ctx, c.cfg.FamilyID, day)
-	if err != nil {
-		return nil, fmt.Errorf("reading quota usage: %w", err)
-	}
-	if err := check(usage, c.cfg.Budget, purpose, cost, now); err != nil {
-		return nil, err
-	}
-
 	withKey := make(url.Values, len(params)+1)
 	maps.Copy(withKey, params)
 	withKey.Set("key", c.cfg.APIKey)
 
 	path, _ := strings.CutSuffix(endpoint, ".list")
-	body, err := c.get(ctx, c.cfg.APIBaseURL+"/"+path+"?"+withKey.Encode())
+	body, err := c.request(ctx, endpoint, func(ctx context.Context) ([]byte, error) {
+		now := c.cfg.Now()
+		day := QuotaDay(now)
+		usage, err := c.cfg.Ledger.Usage(ctx, c.cfg.FamilyID, day)
+		if err != nil {
+			return nil, fmt.Errorf("reading quota usage: %w", err)
+		}
+		if err := check(usage, c.cfg.Budget, purpose, cost, now); err != nil {
+			return nil, err
+		}
+		units := cost
+		if purpose == domain.PurposeSearch {
+			units = 0
+		}
+		// Failed requests also consume quota. Reserve each attempt before sending it.
+		if err := c.cfg.Ledger.Record(ctx, c.cfg.FamilyID, day, purpose, units, 1); err != nil {
+			return nil, fmt.Errorf("recording quota spend: %w", err)
+		}
+		return c.get(ctx, c.cfg.APIBaseURL+"/"+path+"?"+withKey.Encode(), "application/json")
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	// Search is metered by call in its own bucket; everything else in units.
-	units, calls := cost, 1
-	if purpose == domain.PurposeSearch {
-		units = 0
-	}
-	if err := c.cfg.Ledger.Record(ctx, c.cfg.FamilyID, day, purpose, units, calls); err != nil {
-		return nil, fmt.Errorf("recording quota spend: %w", err)
 	}
 
 	_ = c.cfg.Cache.Put(ctx, key, endpoint, body, c.cfg.TTLs.For(endpoint))
 	return body, nil
 }
 
-func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
+func (c *Client) request(ctx context.Context, endpoint string, operation func(context.Context) ([]byte, error)) ([]byte, error) {
+	callerCtx := ctx
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	ctx, span := otel.Tracer("coop/youtube").Start(ctx, "youtube."+endpoint, trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+	delay := backoff.NewExponentialBackOff()
+	delay.InitialInterval = 200 * time.Millisecond
+	delay.MaxInterval = time.Second
+	attempts := 0
+	body, err := backoff.Retry(ctx, func() ([]byte, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, backoff.Permanent(err)
+		}
+		attempts++
+		body, err := operation(ctx)
+		if err != nil && !IsRetryable(err) {
+			return nil, backoff.Permanent(err)
+		}
+		var responseErr *apiResponseError
+		if errors.As(err, &responseErr) && responseErr.retryAfter > 0 {
+			return nil, errors.Join(err, &backoff.RetryAfterError{Duration: responseErr.retryAfter})
+		}
+		return body, err
+	}, backoff.WithBackOff(delay), backoff.WithMaxTries(3), backoff.WithMaxElapsedTime(20*time.Second))
+	span.SetAttributes(attribute.Int("upstream.attempts", attempts))
+	if err != nil {
+		span.SetStatus(codes.Error, "YouTube request failed")
+		if errors.Is(err, context.DeadlineExceeded) && callerCtx.Err() == nil {
+			err = &retryableError{cause: err}
+		}
+		return nil, fmt.Errorf("%s: %w", endpoint, err)
+	}
+	return body, nil
+}
+
+func (c *Client) get(ctx context.Context, rawURL, accept string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("building request: %w", err)
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	resp, err := c.cfg.HTTP.Do(req)
 	if err != nil {
@@ -572,16 +635,32 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 			}
 			cause = urlErr.Err
 		}
-		return nil, &transportError{cause: cause}
+		return nil, &retryableError{cause: cause}
 	}
 	defer func() { _ = resp.Body.Close() }()
+	trace.SpanFromContext(ctx).SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (8<<20)+1))
 	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, &retryableError{cause: err}
+	}
+	if len(body) > 8<<20 {
+		return nil, errors.New("youtube response exceeds size limit")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, apiError(resp.StatusCode, body)
+		err := apiError(resp.StatusCode, body)
+		var responseErr *apiResponseError
+		if errors.As(err, &responseErr) {
+			if seconds, parseErr := strconv.Atoi(resp.Header.Get("Retry-After")); parseErr == nil && seconds > 0 {
+				responseErr.retryAfter = time.Duration(min(seconds, 86400)) * time.Second
+			} else if until, parseErr := http.ParseTime(resp.Header.Get("Retry-After")); parseErr == nil {
+				responseErr.retryAfter = until.Sub(c.cfg.Now())
+			}
+		}
+		return nil, err
 	}
 	return body, nil
 }

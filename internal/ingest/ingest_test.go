@@ -310,6 +310,21 @@ func TestChannelRetryDelayBacksOffWithinBounds(t *testing.T) {
 	}
 }
 
+func TestScheduledRetryPreservesUpstreamMinimum(t *testing.T) {
+	now := time.Now()
+	familyID := uuid.New()
+	channelID := "UCabcdefghijklmnopqrstuv"
+	svc := testService(t, &fakeFamilies{}, &fakeCatalog{}, &fakeClient{}, now)
+	delay := svc.deferChannels(familyID, []string{channelID}, 2*time.Hour)
+	if delay != 2*time.Hour || len(svc.channelsReadyForRetry(familyID, []string{channelID})) != 0 {
+		t.Fatalf("delay=%s retries=%v", delay, svc.retries)
+	}
+	svc.now = func() time.Time { return now.Add(2 * time.Hour) }
+	if len(svc.channelsReadyForRetry(familyID, []string{channelID})) != 1 {
+		t.Fatal("channel did not become eligible after Retry-After")
+	}
+}
+
 func TestRefreshStopsAtBudgetExhaustion(t *testing.T) {
 	familyID := uuid.New()
 	first := "UCabcdefghijklmnopqrstuv"

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/store"
@@ -132,8 +134,13 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 func (s *Service) refreshAndLog(ctx context.Context) {
+	ctx, span := otel.Tracer("coop/ingest").Start(ctx, "coop.catalog.refresh")
+	defer span.End()
 	if err := s.Refresh(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		s.logger.Error("catalog refresh failed", "error", err)
+		span.SetStatus(codes.Error, "catalog refresh failed")
+		s.logger.ErrorContext(ctx, "catalog refresh failed", "error", err)
+	} else if err == nil {
+		s.logger.InfoContext(ctx, "catalog refresh completed")
 	}
 }
 
@@ -150,7 +157,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 			return err
 		}
 		if err := s.refreshFamily(ctx, family.ID); err != nil {
-			errs = append(errs, fmt.Errorf("refreshing family %s: %w", family.ID, err))
+			errs = append(errs, fmt.Errorf("refreshing family: %w", err))
 		}
 	}
 	return errors.Join(errs...)
@@ -180,7 +187,7 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 		end := min(start+youtube.MaxIDsPerCall, len(ids))
 		channels, err := client.Channels(ctx, ids[start:end], domain.PurposeFeed)
 		if errors.Is(err, youtube.ErrBudgetExhausted) {
-			s.logger.Info("catalog refresh paused at quota limit", "family_id", familyID)
+			s.logger.InfoContext(ctx, "catalog refresh paused at quota limit")
 			return errors.Join(errs...)
 		}
 		if err != nil {
@@ -188,7 +195,7 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 				return ctxErr
 			}
 			if youtube.IsRetryable(err) {
-				retryIn := s.deferChannels(familyID, ids[start:end])
+				retryIn := s.deferChannels(familyID, ids[start:end], youtube.RetryAfter(err))
 				err = fmt.Errorf("%w; retrying in %s", err, retryIn.Round(time.Second))
 			}
 			errs = append(errs, fmt.Errorf("refreshing channel metadata: %w", err))
@@ -204,7 +211,7 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 			}
 			err := s.refreshChannel(ctx, client, channel.ID)
 			if errors.Is(err, youtube.ErrBudgetExhausted) {
-				s.logger.Info("catalog refresh paused at quota limit", "family_id", familyID)
+				s.logger.InfoContext(ctx, "catalog refresh paused at quota limit")
 				return errors.Join(errs...)
 			}
 			if err != nil {
@@ -212,15 +219,15 @@ func (s *Service) refreshFamily(ctx context.Context, familyID uuid.UUID) error {
 					return ctxErr
 				}
 				if youtube.IsRetryable(err) {
-					retryIn := s.deferChannel(familyID, channel.ID)
+					retryIn := s.deferChannel(familyID, channel.ID, youtube.RetryAfter(err))
 					err = fmt.Errorf("%w; retrying in %s", err, retryIn.Round(time.Second))
 				}
-				errs = append(errs, fmt.Errorf("refreshing channel %s: %w", channel.ID, err))
+				errs = append(errs, fmt.Errorf("refreshing channel: %w", err))
 				continue
 			}
 			s.clearChannelRetry(familyID, channel.ID)
 			if err := s.catalog.MarkChannelRefreshed(ctx, channel.ID); err != nil {
-				errs = append(errs, fmt.Errorf("marking channel %s refreshed: %w", channel.ID, err))
+				errs = append(errs, fmt.Errorf("marking channel refreshed: %w", err))
 			}
 		}
 	}
@@ -240,10 +247,10 @@ func (s *Service) channelsReadyForRetry(familyID uuid.UUID, ids []string) []stri
 	return ready
 }
 
-func (s *Service) deferChannels(familyID uuid.UUID, ids []string) time.Duration {
+func (s *Service) deferChannels(familyID uuid.UUID, ids []string, minimum time.Duration) time.Duration {
 	var earliest time.Duration
 	for _, channelID := range ids {
-		delay := s.deferChannel(familyID, channelID)
+		delay := s.deferChannel(familyID, channelID, minimum)
 		if earliest == 0 || delay < earliest {
 			earliest = delay
 		}
@@ -251,11 +258,11 @@ func (s *Service) deferChannels(familyID uuid.UUID, ids []string) time.Duration 
 	return earliest
 }
 
-func (s *Service) deferChannel(familyID uuid.UUID, channelID string) time.Duration {
+func (s *Service) deferChannel(familyID uuid.UUID, channelID string, minimum time.Duration) time.Duration {
 	key := channelRetryKey{familyID: familyID, channelID: channelID}
 	retry := s.retries[key]
 	retry.failures++
-	delay := s.retryDelay(retry.failures)
+	delay := max(s.retryDelay(retry.failures), minimum)
 	retry.next = s.now().Add(delay)
 	s.retries[key] = retry
 	return delay
