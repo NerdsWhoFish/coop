@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -219,7 +220,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 
 		s.deps.Logger.Log(r.Context(), level, "request",
 			"method", r.Method,
-			"path", r.URL.Path,
+			"route", r.Pattern,
 			"status", status,
 			"bytes", recorder.bytes,
 			"duration", time.Since(start).String(),
@@ -236,10 +237,10 @@ func (s *Server) recoverPanics(next http.Handler) http.Handler {
 			if recovered == nil {
 				return
 			}
-			s.deps.Logger.Error("panic serving request",
+			s.deps.Logger.ErrorContext(r.Context(), "panic serving request",
 				"method", r.Method,
-				"path", r.URL.Path,
-				"panic", recovered,
+				"route", r.Pattern,
+				"panic_type", fmt.Sprintf("%T", recovered),
 				"stack", string(debug.Stack()),
 			)
 			writeError(w, r, s.deps.Logger, internal(nil))
