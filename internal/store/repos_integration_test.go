@@ -40,6 +40,51 @@ func fixedClock(t time.Time) func() time.Time {
 	return func() time.Time { return t }
 }
 
+func TestCatalogRefreshPreservesClassificationAndAdvancesClock(t *testing.T) {
+	db := migratedDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 15, 2, 0, 0, 0, time.UTC)
+	catalog := NewCatalog(db, fixedClock(now))
+	channelID := uuid.NewString()
+	videoID := uuid.NewString()
+	t.Cleanup(func() {
+		db.Delete(&Video{}, "channel_id = ?", channelID)
+		db.Delete(&Channel{}, "id = ?", channelID)
+	})
+	if err := catalog.UpsertChannels(ctx, []youtube.Channel{{ID: channelID, Title: "Channel"}}); err != nil {
+		t.Fatal(err)
+	}
+	video := youtube.Video{ID: videoID, ChannelID: channelID, Title: "Video",
+		IsShort: true, ShortSource: domain.ShortSourceDuration, Embeddable: true}
+	if err := catalog.UpsertVideos(ctx, []youtube.Video{video}); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.ApplyFeedClassification(ctx, []youtube.FeedEntry{{VideoID: videoID, IsShort: false}}); err != nil {
+		t.Fatal(err)
+	}
+	video.Title = "Updated metadata"
+	if err := catalog.UpsertVideos(ctx, []youtube.Video{video}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := catalog.VideosByID(ctx, []string{videoID})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("VideosByID() = %v, %v", rows, err)
+	}
+	if rows[0].IsShort || rows[0].ShortSource != domain.ShortSourceRSS || rows[0].Title != video.Title {
+		t.Fatalf("metadata refresh replaced RSS classification: %+v", rows[0])
+	}
+	if err := catalog.MarkChannelRefreshed(ctx, channelID); err != nil {
+		t.Fatal(err)
+	}
+	var channel Channel
+	if err := db.First(&channel, "id = ?", channelID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if channel.UploadsFetchedAt == nil || !channel.UploadsFetchedAt.Equal(now) {
+		t.Fatalf("uploads refresh clock = %v, want %v", channel.UploadsFetchedAt, now)
+	}
+}
+
 func TestAPICacheRoundTrip(t *testing.T) {
 	db := migratedDB(t)
 	ctx := context.Background()
