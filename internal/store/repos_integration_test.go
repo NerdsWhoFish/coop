@@ -671,7 +671,7 @@ func TestFamiliesWithAPIKeysExcludesUnconfiguredFamilies(t *testing.T) {
 	db := migratedDB(t)
 	ctx := context.Background()
 	configured := newFamily(t, db)
-	_ = newFamily(t, db)
+	unconfigured := newFamily(t, db)
 
 	if err := db.Model(&Family{}).Where("id = ?", configured).
 		Update("encrypted_api_key", []byte("sealed")).Error; err != nil {
@@ -682,10 +682,15 @@ func TestFamiliesWithAPIKeysExcludesUnconfiguredFamilies(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	found := false
 	for _, family := range families {
-		if family.ID != configured {
+		if family.ID == unconfigured || len(family.EncryptedAPIKey) == 0 {
 			t.Fatalf("FamiliesWithAPIKeys() included unconfigured family %s", family.ID)
 		}
+		found = found || family.ID == configured
+	}
+	if !found {
+		t.Fatalf("FamiliesWithAPIKeys() omitted configured family %s", configured)
 	}
 }
 
