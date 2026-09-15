@@ -302,6 +302,16 @@ func (s *Service) refreshChannel(ctx context.Context, client Client, channelID s
 
 	entries, err := client.ChannelFeed(ctx, channelID)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if youtube.IsRetryable(err) {
+			// Uploads are stored with a duration fallback, and existing RSS
+			// classifications survive metadata updates. Retry enrichment on
+			// the next refresh without repeating successful API work.
+			s.logger.WarnContext(ctx, "catalog classification deferred", "error", err)
+			return nil
+		}
 		return err
 	}
 	return s.catalog.ApplyFeedClassification(ctx, entries)

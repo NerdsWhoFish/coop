@@ -151,6 +151,13 @@ Point `updates.base_url` at that server and Coop reports the published build to 
 The release workflow uses Quill's optional Apple signing action with the persistent Distribution identity in `APPSTORE_CERTIFICATES_FILE_BASE64` and `APPSTORE_CERTIFICATES_PASSWORD` rather than asking Xcode to create a certificate on each runner.
 The parent and child applications receive separate certificate-, device-, and capability-bound Ad Hoc profiles through the existing `ASC_ISSUER_ID`, `ASC_KEY_ID`, and `ASC_KEY_P8` credentials.
 
+## Catalog refresh
+
+Catalog refresh saves uploads independently of the channel RSS classification signal.
+If RSS remains temporarily unavailable after bounded retries, the refresh completes with a `catalog classification deferred` warning and retries RSS at the next configured channel refresh interval.
+Existing RSS classifications remain intact; new videos retain the explicit duration-based fallback described in [ADR 0002](adr/0002-shorts-classification-via-channel-rss.md), which can misclassify short regular videos until RSS recovers.
+Upstream failures remain visible in traces, while permanent feed errors and database write failures still fail the refresh.
+
 ## Contributing
 
 Decisions with real trade-offs get an ADR in [adr/](adr/) before the code lands.

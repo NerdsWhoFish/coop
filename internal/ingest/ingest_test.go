@@ -1,7 +1,9 @@
 package ingest
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -37,6 +39,7 @@ type fakeCatalog struct {
 	channels    []youtube.Channel
 	videos      []youtube.Video
 	feedEntries []youtube.FeedEntry
+	feedErr     error
 	refreshed   []string
 }
 
@@ -58,7 +61,7 @@ func (f *fakeCatalog) UpsertVideos(_ context.Context, videos []youtube.Video) er
 
 func (f *fakeCatalog) ApplyFeedClassification(_ context.Context, entries []youtube.FeedEntry) error {
 	f.feedEntries = append(f.feedEntries, entries...)
-	return nil
+	return f.feedErr
 }
 
 func (f *fakeCatalog) MarkChannelRefreshed(_ context.Context, channelID string) error {
@@ -72,6 +75,7 @@ type fakeClient struct {
 	videos         []youtube.Video
 	feeds          map[string][]youtube.FeedEntry
 	uploadErrors   map[string]error
+	feedErrors     map[string]error
 	channelBatches [][]string
 	uploadCalls    []string
 	purposes       []domain.QuotaPurpose
@@ -103,7 +107,7 @@ func (f *fakeClient) Videos(_ context.Context, _ []string,
 }
 
 func (f *fakeClient) ChannelFeed(_ context.Context, channelID string) ([]youtube.FeedEntry, error) {
-	return f.feeds[channelID], nil
+	return f.feeds[channelID], f.feedErrors[channelID]
 }
 
 func testService(t *testing.T, families *fakeFamilies, catalog *fakeCatalog,
@@ -157,6 +161,94 @@ func TestRefreshIngestsApprovedChannels(t *testing.T) {
 		if purpose != domain.PurposeFeed {
 			t.Errorf("purpose = %q, want feed", purpose)
 		}
+	}
+}
+
+func TestRefreshDefersTransientFeedClassification(t *testing.T) {
+	familyID := uuid.New()
+	channelID := "UCabcdefghijklmnopqrstuv"
+	video := youtube.Video{ID: "video-1", ChannelID: channelID,
+		IsShort: true, ShortSource: domain.ShortSourceDuration}
+	entry := youtube.FeedEntry{VideoID: video.ID, IsShort: false}
+	families := &fakeFamilies{rows: []store.Family{{ID: familyID}}}
+	catalog := &fakeCatalog{stale: []string{channelID}}
+	client := &fakeClient{
+		channels:   []youtube.Channel{{ID: channelID}},
+		uploads:    map[string][]string{channelID: {video.ID}},
+		videos:     []youtube.Video{video},
+		feedErrors: map[string]error{channelID: retryableFailure{}},
+	}
+	svc := testService(t, families, catalog, client, time.Now())
+	var logs bytes.Buffer
+	svc.logger = slog.New(slog.NewJSONHandler(&logs, nil))
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v, want successful uploads with deferred classification", err)
+	}
+	if len(catalog.videos) != 1 || catalog.videos[0].ShortSource != domain.ShortSourceDuration {
+		t.Fatalf("videos = %+v, want the explicit duration fallback", catalog.videos)
+	}
+	if len(catalog.feedEntries) != 0 || len(catalog.refreshed) != 1 || catalog.refreshed[0] != channelID {
+		t.Fatalf("feed entries = %v, refreshed = %v", catalog.feedEntries, catalog.refreshed)
+	}
+	var log map[string]any
+	if err := json.Unmarshal(logs.Bytes(), &log); err != nil {
+		t.Fatal(err)
+	}
+	if log["level"] != "WARN" || log["msg"] != "catalog classification deferred" || log["error"] != "temporary failure" {
+		t.Fatalf("degradation log = %v", log)
+	}
+
+	// The persisted refresh clock makes the channel ineligible until its
+	// normal refresh interval, even though classification was unavailable.
+	catalog.stale = nil
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.uploadCalls) != 1 {
+		t.Fatalf("upload calls = %v, want no repeat while fresh", client.uploadCalls)
+	}
+	catalog.stale = []string{channelID}
+	delete(client.feedErrors, channelID)
+	client.feeds = map[string][]youtube.FeedEntry{channelID: {entry}}
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("next scheduled Refresh() error = %v", err)
+	}
+	if len(catalog.feedEntries) != 1 || catalog.feedEntries[0] != entry || len(catalog.refreshed) != 2 {
+		t.Fatalf("recovered feed entries = %v, refreshed = %v", catalog.feedEntries, catalog.refreshed)
+	}
+}
+
+func TestRefreshDoesNotHideClassificationFailures(t *testing.T) {
+	permanent := errors.New("permanent feed failure")
+	database := errors.New("classification write failed")
+	for _, tt := range []struct {
+		name     string
+		feedErr  error
+		storeErr error
+	}{
+		{name: "permanent upstream", feedErr: permanent},
+		{name: "canceled", feedErr: context.Canceled},
+		{name: "deadline", feedErr: context.DeadlineExceeded},
+		{name: "database", storeErr: database},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			channelID := "UCabcdefghijklmnopqrstuv"
+			families := &fakeFamilies{rows: []store.Family{{ID: uuid.New()}}}
+			catalog := &fakeCatalog{stale: []string{channelID}, feedErr: tt.storeErr}
+			client := &fakeClient{
+				channels:   []youtube.Channel{{ID: channelID}},
+				uploads:    map[string][]string{channelID: {"video-1"}},
+				feedErrors: map[string]error{channelID: tt.feedErr},
+			}
+			err := testService(t, families, catalog, client, time.Now()).Refresh(context.Background())
+			want := tt.feedErr
+			if want == nil {
+				want = tt.storeErr
+			}
+			if !errors.Is(err, want) || len(catalog.refreshed) != 0 {
+				t.Fatalf("Refresh() error = %v, refreshed = %v, want %v without advancing the clock", err, catalog.refreshed, want)
+			}
+		})
 	}
 }
 
