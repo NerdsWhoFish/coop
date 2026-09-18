@@ -158,6 +158,14 @@ If RSS remains temporarily unavailable after bounded retries, the refresh comple
 Existing RSS classifications remain intact; new videos retain the explicit duration-based fallback described in [ADR 0002](adr/0002-shorts-classification-via-channel-rss.md), which can misclassify short regular videos until RSS recovers.
 Upstream failures remain visible in traces, while permanent feed errors and database write failures still fail the refresh.
 
+## Removing a parent
+
+An administrator can remove a parent account while another administrator remains.
+Removal revokes the account's sessions, authentication challenges, invitations, push registrations, and child scopes.
+Channel approvals, video blocks, video overrides, request decisions, and audit history remain in place; their references to the removed parent become empty.
+Children keep the same effective viewing policy.
+See [ADR 0023](adr/0023-preserve-policy-and-history-when-deleting-a-parent.md) for the attribution and rollback trade-offs.
+
 ## Contributing
 
 Decisions with real trade-offs get an ADR in [adr/](adr/) before the code lands.

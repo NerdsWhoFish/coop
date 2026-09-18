@@ -225,17 +225,17 @@ type Video struct {
 
 // AllowGlobal approves a channel for every child in a family.
 type AllowGlobal struct {
-	FamilyID   uuid.UUID `gorm:"type:uuid;primaryKey"`
-	ChannelID  string    `gorm:"primaryKey"`
-	ApprovedBy uuid.UUID `gorm:"type:uuid;not null"`
+	FamilyID   uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	ChannelID  string     `gorm:"primaryKey"`
+	ApprovedBy *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt  time.Time
 }
 
 // AllowChild approves a channel for one child.
 type AllowChild struct {
-	ChildID    uuid.UUID `gorm:"type:uuid;primaryKey"`
-	ChannelID  string    `gorm:"primaryKey"`
-	ApprovedBy uuid.UUID `gorm:"type:uuid;not null"`
+	ChildID    uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	ChannelID  string     `gorm:"primaryKey"`
+	ApprovedBy *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt  time.Time
 }
 
@@ -282,15 +282,15 @@ type VideoOverride struct {
 	FamilyID  uuid.UUID  `gorm:"type:uuid;not null;index"`
 	ChildID   *uuid.UUID `gorm:"type:uuid;index"`
 	VideoID   string     `gorm:"not null;index"`
-	CreatedBy uuid.UUID  `gorm:"type:uuid;not null"`
+	CreatedBy *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt time.Time
 }
 
 // VideoBlock hides one video from one child even when its channel is allowed.
 type VideoBlock struct {
-	ChildID   uuid.UUID `gorm:"type:uuid;primaryKey"`
-	VideoID   string    `gorm:"primaryKey"`
-	CreatedBy uuid.UUID `gorm:"type:uuid;not null"`
+	ChildID   uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	VideoID   string     `gorm:"primaryKey"`
+	CreatedBy *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt time.Time
 }
 
