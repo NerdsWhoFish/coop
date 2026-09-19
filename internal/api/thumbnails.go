@@ -56,6 +56,10 @@ type thumbnailImage struct {
 func (s *Server) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoId")
 	video, err := s.deps.Catalog.Video(r.Context(), videoID)
+	if requestCanceled(r.Context(), err) {
+		writeRequestCanceled(w, r)
+		return
+	}
 	if err != nil || !isYouTubeImageURL(video.ThumbnailURL) {
 		http.NotFound(w, r)
 		return
@@ -63,6 +67,10 @@ func (s *Server) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	thumbnail, err := fetchThumbnail(r.Context(), thumbnailClient(nil), video.ThumbnailURL, videoID)
 	if err != nil {
+		if requestCanceled(r.Context(), err) {
+			writeRequestCanceled(w, r)
+			return
+		}
 		s.deps.Logger.WarnContext(r.Context(), "thumbnail unavailable", "error", err)
 		http.Error(w, "thumbnail unavailable", http.StatusBadGateway)
 		return
@@ -98,8 +106,7 @@ func fetchThumbnail(ctx context.Context, client *http.Client, rawURL, videoID st
 	case thumbnailSlots <- struct{}{}:
 		defer func() { <-thumbnailSlots }()
 	case <-ctx.Done():
-		span.RecordError(ctx.Err())
-		span.SetStatus(codes.Error, "thumbnail queue timeout")
+		recordThumbnailFailure(ctx, span, ctx.Err(), "thumbnail queue timeout")
 		return thumbnailImage{}, ctx.Err()
 	}
 
@@ -116,9 +123,17 @@ func fetchThumbnail(ctx context.Context, client *http.Client, rawURL, videoID st
 			break
 		}
 	}
-	span.RecordError(lastErr)
-	span.SetStatus(codes.Error, "thumbnail unavailable")
+	recordThumbnailFailure(ctx, span, lastErr, "thumbnail unavailable")
 	return thumbnailImage{}, lastErr
+}
+
+func recordThumbnailFailure(ctx context.Context, span trace.Span, err error, message string) {
+	if requestCanceled(ctx, err) {
+		span.SetAttributes(attribute.Bool("coop.request.canceled", true))
+		return
+	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, message)
 }
 
 func fetchThumbnailCandidate(ctx context.Context, client *http.Client, rawURL string) (thumbnailImage, error) {
@@ -150,19 +165,18 @@ func requestThumbnail(ctx context.Context, client *http.Client, rawURL string) (
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 	resp, err := client.Do(req)
 	if err != nil {
-		if ctx.Err() != nil {
-			return thumbnailImage{}, false, ctx.Err()
-		}
 		if errors.Is(err, errThumbnailRedirect) {
 			return thumbnailImage{}, false, &thumbnailError{reason: "redirect_rejected"}
 		}
-		// net/http errors contain the URL, which can identify a child's video.
-		return thumbnailImage{}, true, &thumbnailError{reason: "transport"}
+		return thumbnailIOFailure(ctx, err, "transport")
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		retry := resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
 		failure := &thumbnailError{reason: "upstream_status", status: resp.StatusCode}
+		if ctx.Err() != nil {
+			return thumbnailImage{}, false, failure
+		}
 		if retry {
 			if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds >= 0 {
 				delay := time.Duration(min(seconds, int(thumbnailTimeout.Seconds()))) * time.Second
@@ -179,22 +193,31 @@ func requestThumbnail(ctx context.Context, client *http.Client, rawURL string) (
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxThumbnailBytes+1))
 	if err != nil {
-		return thumbnailImage{}, true, &thumbnailError{reason: "body_read"}
+		return thumbnailIOFailure(ctx, err, "body_read")
 	}
 	if len(body) > maxThumbnailBytes {
 		return thumbnailImage{}, false, &thumbnailError{reason: "too_large"}
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(body))
 	if err != nil {
-		return thumbnailImage{}, !errors.Is(err, image.ErrFormat), &thumbnailError{reason: "invalid_image"}
+		return thumbnailImage{}, ctx.Err() == nil && !errors.Is(err, image.ErrFormat), &thumbnailError{reason: "invalid_image"}
 	}
 	if config.Width <= 0 || config.Height <= 0 || config.Width > maxThumbnailPixels/config.Height {
 		return thumbnailImage{}, false, &thumbnailError{reason: "invalid_image"}
 	}
 	if _, _, err := image.Decode(bytes.NewReader(body)); err != nil {
-		return thumbnailImage{}, true, &thumbnailError{reason: "invalid_image"}
+		return thumbnailImage{}, ctx.Err() == nil, &thumbnailError{reason: "invalid_image"}
 	}
 	return thumbnailImage{body: body, contentType: "image/" + format}, false, nil
+}
+
+func thumbnailIOFailure(ctx context.Context, err error, reason string) (thumbnailImage, bool, error) {
+	if requestCanceled(ctx, err) || (ctx.Err() == context.DeadlineExceeded && errors.Is(err, context.DeadlineExceeded)) {
+		return thumbnailImage{}, false, ctx.Err()
+	}
+	// Transport errors can contain private URLs. Stop retrying independent
+	// failures after cancellation so backoff cannot replace them with ctx.Err().
+	return thumbnailImage{}, ctx.Err() == nil, &thumbnailError{reason: reason}
 }
 
 func thumbnailCandidates(rawURL, videoID string) []string {

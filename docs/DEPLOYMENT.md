@@ -107,6 +107,10 @@ The thumbnail proxy retries transient upstream failures and falls back to smalle
 It validates the complete image before returning HTTP 200, limits each request to ten seconds, and checks redirect destinations against the image host allowlist.
 Persistent upstream failures remain HTTP 502.
 
+When a client cancels a request and its work returns a cancellation error, the server records HTTP 499 at info level with trace correlation.
+The request and thumbnail spans carry `coop.request.canceled=true` without marking the cancellation as a server failure.
+Deadlines and unrelated errors still produce failure telemetry, even if the client disconnects at the same time.
+
 The server runs migrations before accepting traffic.
 Read release notes before rolling back across a schema change.
 

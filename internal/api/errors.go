@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,10 +10,35 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
+
+const statusClientClosedRequest = 499
+
+func requestCanceled(ctx context.Context, err error) bool {
+	if ctx.Err() != context.Canceled {
+		return false
+	}
+	// Only a single cancellation cause is safe to downgrade. Joined failures
+	// may include an independent error that still needs attention.
+	for err != nil {
+		if err == context.Canceled {
+			return true
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
+}
+
+func writeRequestCanceled(w http.ResponseWriter, r *http.Request) {
+	trace.SpanFromContext(r.Context()).SetAttributes(attribute.Bool("coop.request.canceled", true))
+	w.WriteHeader(statusClientClosedRequest)
+}
 
 // errorBody is the shape every failure takes, matching api/openapi.yaml.
 type errorBody struct {
@@ -126,6 +152,10 @@ func writeJSON(w http.ResponseWriter, logger *slog.Logger, status int, body any)
 
 // writeError renders a failure, logging the cause without leaking it.
 func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
+	if requestCanceled(r.Context(), err) {
+		writeRequestCanceled(w, r)
+		return
+	}
 	apiErr := toAPIError(err)
 
 	if apiErr.status >= http.StatusInternalServerError {
