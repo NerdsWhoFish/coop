@@ -97,6 +97,10 @@ Readiness includes PostgreSQL and should be the load balancer or orchestrator he
 The check retries brief database connection failures within a two-second deadline; configure the probe timeout above that deadline.
 Persistent failures return HTTP 503 and log the cause with the request's trace ID.
 
+Database operations canceled by their caller emit an info-level `database query canceled` log with trace correlation, without SQL or connection details.
+Deadlines and independent database failures retain their existing failure logs, even if the caller cancels at the same time.
+Joined connection errors count as cancellation only when every cause is cancellation.
+
 YouTube requests retry transient transport errors, bare 404s, HTTP 408/429, and server errors at most three times within twenty seconds.
 Every Data API attempt counts against the family's quota, including failed requests; public Atom feeds remain free.
 Exhausted retries retain the per-channel scheduled backoff, and logs identify the failing endpoint.

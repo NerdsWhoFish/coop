@@ -29,6 +29,8 @@ func TestRequestCancellationPreservesRealFailures(t *testing.T) {
 	}{
 		{"client_canceled", true, fmt.Errorf("reading video: %w", context.Canceled), 499},
 		{"wrapped_api_cancellation", true, internal(context.Canceled), 499},
+		{"joined_cancellation", true, errors.Join(context.Canceled), 499},
+		{"nested_cancellation", true, internal(errors.Join(context.Canceled, fmt.Errorf("lookup: %w", context.Canceled))), 499},
 		{"independent_failure", true, errors.New("private-value"), 500},
 		{"joined_failure", true, errors.Join(context.Canceled, errors.New("private-value")), 500},
 		{"deadline", true, context.DeadlineExceeded, 500},
