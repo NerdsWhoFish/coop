@@ -200,7 +200,7 @@ func TestThumbnailCancellationStopsWork(t *testing.T) {
 	client := thumbnailClient(thumbnailTransport(func(r *http.Request) (*http.Response, error) {
 		calls++
 		cancel()
-		return thumbnailResponse(503, nil), nil
+		return nil, r.Context().Err()
 	}))
 	_, err := fetchThumbnail(ctx, client, testThumbnailURL, "abcdefghijk")
 	if !errors.Is(err, context.Canceled) || calls != 1 {
