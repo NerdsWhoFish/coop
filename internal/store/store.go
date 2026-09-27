@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -37,7 +38,7 @@ type DB struct {
 
 // Open connects to Postgres and configures the pool. It does not migrate.
 func Open(ctx context.Context, cfg config.Database, quiet bool) (*DB, error) {
-	gormLog := logger.Default.LogMode(logger.Warn)
+	gormLog := newDatabaseLogger(slog.Default())
 	if quiet {
 		gormLog = logger.Discard
 	}

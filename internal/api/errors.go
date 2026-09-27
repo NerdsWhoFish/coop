@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/nerdswhofish/coop/internal/auth"
+	"github.com/nerdswhofish/coop/internal/cancellation"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
@@ -21,18 +22,7 @@ import (
 const statusClientClosedRequest = 499
 
 func requestCanceled(ctx context.Context, err error) bool {
-	if ctx.Err() != context.Canceled {
-		return false
-	}
-	// Only a single cancellation cause is safe to downgrade. Joined failures
-	// may include an independent error that still needs attention.
-	for err != nil {
-		if err == context.Canceled {
-			return true
-		}
-		err = errors.Unwrap(err)
-	}
-	return false
+	return cancellation.Is(ctx, err)
 }
 
 func writeRequestCanceled(w http.ResponseWriter, r *http.Request) {
