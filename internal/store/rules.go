@@ -68,7 +68,7 @@ func (r *Rules) BlockVideoForChild(ctx context.Context, childID uuid.UUID, video
 	return r.childPolicyMutation(ctx, childID, actorID, "video.block_child",
 		"video", videoID, map[string]any{}, map[string]any{"blocked": true},
 		func(tx *gorm.DB) (bool, error) {
-			row := VideoBlock{ChildID: childID, VideoID: videoID, CreatedBy: actorID}
+			row := VideoBlock{ChildID: childID, VideoID: videoID, CreatedBy: &actorID}
 			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
 			return result.RowsAffected > 0, wrap(result.Error, "blocking video for child")
 		})
@@ -169,7 +169,7 @@ func (r *Rules) AllowGlobally(ctx context.Context, familyID uuid.UUID, channelID
 	return r.policyMutation(ctx, familyID, nil, approvedBy, "channel.allow_global",
 		"channel", channelID, map[string]any{}, map[string]any{"allowed": true},
 		func(tx *gorm.DB) (bool, error) {
-			row := AllowGlobal{FamilyID: familyID, ChannelID: channelID, ApprovedBy: approvedBy}
+			row := AllowGlobal{FamilyID: familyID, ChannelID: channelID, ApprovedBy: &approvedBy}
 			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
 			return result.RowsAffected > 0, wrap(result.Error, "approving channel globally")
 		})
@@ -193,7 +193,7 @@ func (r *Rules) AllowForChild(ctx context.Context, childID uuid.UUID, channelID 
 	return r.childPolicyMutation(ctx, childID, approvedBy, "channel.allow_child",
 		"channel", channelID, map[string]any{}, map[string]any{"allowed": true},
 		func(tx *gorm.DB) (bool, error) {
-			row := AllowChild{ChildID: childID, ChannelID: channelID, ApprovedBy: approvedBy}
+			row := AllowChild{ChildID: childID, ChannelID: channelID, ApprovedBy: &approvedBy}
 			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
 			return result.RowsAffected > 0, wrap(result.Error, "approving channel for child")
 		})
@@ -403,8 +403,9 @@ func (r *Rules) ListKeywords(ctx context.Context, familyID uuid.UUID, childID *u
 }
 
 // CreateOverride re-allows a video a keyword suppressed.
-func (r *Rules) CreateOverride(ctx context.Context, row VideoOverride) error {
-	return r.policyMutation(ctx, row.FamilyID, row.ChildID, row.CreatedBy,
+func (r *Rules) CreateOverride(ctx context.Context, row VideoOverride, actorID uuid.UUID) error {
+	row.CreatedBy = &actorID
+	return r.policyMutation(ctx, row.FamilyID, row.ChildID, actorID,
 		"video.override", "video", row.VideoID, map[string]any{}, map[string]any{"allowed": true},
 		func(tx *gorm.DB) (bool, error) {
 			result := tx.Create(&row)

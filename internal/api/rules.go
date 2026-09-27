@@ -632,16 +632,15 @@ func (s *Server) handleOverrideSuppression(w http.ResponseWriter, r *http.Reques
 	}
 
 	override := store.VideoOverride{
-		FamilyID:  p.FamilyID,
-		VideoID:   suppression.VideoID,
-		CreatedBy: p.ID,
+		FamilyID: p.FamilyID,
+		VideoID:  suppression.VideoID,
 	}
 	if body.Scope != "family" {
 		childID := suppression.ChildID
 		override.ChildID = &childID
 	}
 
-	if err := s.deps.Rules.CreateOverride(r.Context(), override); err != nil {
+	if err := s.deps.Rules.CreateOverride(r.Context(), override, p.ID); err != nil {
 		return err
 	}
 
