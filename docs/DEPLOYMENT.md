@@ -114,6 +114,8 @@ Persistent upstream failures remain HTTP 502.
 When a client cancels a request and its work returns a cancellation error, the server records HTTP 499 at info level with trace correlation.
 The request and thumbnail spans carry `coop.request.canceled=true` without marking the cancellation as a server failure.
 Deadlines and unrelated errors still produce failure telemetry, even if the client disconnects at the same time.
+Canceled writes retain their cancellation cause if PostgreSQL transaction cleanup reports that the transaction or connection has already closed.
+This does not suppress commit failures or independent rollback failures.
 
 The server runs migrations before accepting traffic.
 Read release notes before rolling back across a schema change.

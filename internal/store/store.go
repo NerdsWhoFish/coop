@@ -59,6 +59,10 @@ func Open(ctx context.Context, cfg config.Database, quiet bool) (*DB, error) {
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	if err := installTransactionCallbacks(gdb); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("pinging postgres: %w", err)
