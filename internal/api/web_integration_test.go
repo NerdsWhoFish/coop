@@ -18,13 +18,11 @@ import (
 	"github.com/nerdswhofish/coop/internal/auth"
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/store"
+	"github.com/nerdswhofish/coop/internal/testdb"
 )
 
 func TestDisabledWebLinkingRejectsChildApproval(t *testing.T) {
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
 
 	ctx := context.Background()
 	now := time.Date(2026, 8, 17, 20, 0, 0, 0, time.UTC)
@@ -92,10 +90,7 @@ func TestDisabledWebLinkingRejectsChildApproval(t *testing.T) {
 }
 
 func TestWebLogoutRequiresSelfUnpairPermission(t *testing.T) {
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
 
 	ctx := context.Background()
 	now := time.Date(2026, 8, 17, 20, 0, 0, 0, time.UTC)
