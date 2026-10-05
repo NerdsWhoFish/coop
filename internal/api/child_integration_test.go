@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
@@ -22,6 +22,7 @@ import (
 	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/feed"
 	"github.com/nerdswhofish/coop/internal/store"
+	"github.com/nerdswhofish/coop/internal/testdb"
 	"github.com/nerdswhofish/coop/internal/youtube"
 	"github.com/nerdswhofish/coop/internal/youtubeclient"
 )
@@ -33,10 +34,12 @@ func TestChildSearchReturnsPolicyFilteredVideos(t *testing.T) {
 		blockedChannel     = "UCcccccccccccccccccccccc"
 	)
 
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
+	previousTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = previousTransport })
+	http.DefaultTransport = thumbnailTransport(func(r *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected network request in cached search test: %s", r.URL.Path)
+	})
 
 	ctx := context.Background()
 	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)

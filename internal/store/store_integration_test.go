@@ -4,7 +4,6 @@ package store
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"gorm.io/gorm/schema"
 
 	"github.com/nerdswhofish/coop/internal/config"
+	"github.com/nerdswhofish/coop/internal/testdb"
 )
 
 // parseModel resolves a model's table and column names exactly as GORM will at
@@ -29,10 +29,7 @@ func parseModel(t *testing.T, model any) *schema.Schema {
 func testDB(t *testing.T) *DB {
 	t.Helper()
 
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -48,6 +45,29 @@ func testDB(t *testing.T) *DB {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
+}
+
+func TestIntegrationDatabasesIsolateMigrationsAndCachePurge(t *testing.T) {
+	first, second := migratedDB(t), migratedDB(t)
+	ctx := t.Context()
+	now := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	cache := NewAPICacheStore(second, fixedClock(now))
+	if err := cache.Put(ctx, "fixture", "search.list", []byte(`{"items":[]}`), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	purger := NewAPICacheStore(first, fixedClock(now.Add(2*time.Hour)))
+	if _, err := purger.PurgeExpired(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := cache.Get(ctx, "fixture"); err != nil || !found {
+		t.Fatalf("cache fixture after another database's purge: found=%v, err=%v", found, err)
+	}
+	if err := first.MigrateDown(); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := cache.Get(ctx, "fixture"); err != nil || !found {
+		t.Fatalf("cache fixture after another database's rollback: found=%v, err=%v", found, err)
+	}
 }
 
 // A migration that cannot roll back is a migration that cannot be recovered

@@ -130,6 +130,12 @@ make test          # run tests
 make lint          # vet and staticcheck
 ```
 
+`make test-integration` runs the PostgreSQL integration tests against the dev server.
+Each test creates and drops its own database so migration rollbacks and cache purges cannot affect other tests.
+For another local test server, set `COOP_TEST_DATABASE_DSN` and run `go test -race -tags=integration ./...`.
+The connection role needs `CREATEDB`; the dev and CI PostgreSQL roles already have it.
+Tests do not modify the database named in the DSN, which is used only to create the temporary databases.
+
 The shared Swift package and native apps can be checked independently:
 
 ```sh

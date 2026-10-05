@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -17,14 +16,12 @@ import (
 	"github.com/nerdswhofish/coop/internal/config"
 	"github.com/nerdswhofish/coop/internal/domain"
 	"github.com/nerdswhofish/coop/internal/store"
+	"github.com/nerdswhofish/coop/internal/testdb"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
 
 func TestDeleteParentWithApprovals(t *testing.T) {
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
 	ctx := context.Background()
 	db, err := store.Open(ctx, config.Database{DSN: dsn}, true)
 	if err != nil {

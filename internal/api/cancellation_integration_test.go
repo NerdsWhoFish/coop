@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -24,15 +23,13 @@ import (
 	"github.com/nerdswhofish/coop/internal/feed"
 	"github.com/nerdswhofish/coop/internal/store"
 	"github.com/nerdswhofish/coop/internal/telemetry"
+	"github.com/nerdswhofish/coop/internal/testdb"
 	"github.com/nerdswhofish/coop/internal/youtube"
 )
 
 func cancellationServer(t *testing.T) (*Server, *bytes.Buffer, string) {
 	t.Helper()
-	dsn := os.Getenv("COOP_TEST_DATABASE_DSN")
-	if dsn == "" {
-		t.Skip("COOP_TEST_DATABASE_DSN not set")
-	}
+	dsn := testdb.New(t)
 	db, err := store.Open(t.Context(), config.Database{
 		DSN: dsn, MaxOpenConns: 5, MaxIdleConns: 2, ConnMaxLifetime: time.Minute,
 	}, true)
