@@ -102,6 +102,8 @@ Playback uses YouTube's official embedded player, so creators receive real views
 The parent app (`Cooper The Cop`) includes setup, policy administration, retained audit history, account deletion, and the recommendation mixer.
 The native and browser Cooper Watch clients include pairing, feeds, subscriptions, search, approvals, playback, reactions, sharing, and Shorts.
 
+In the native app, locking the screen or switching apps suspends regular-video playback in place so returning keeps the current position. Leaving the watch page or a parent blocking the video still clears the player.
+
 Coop is ready for daily family use through its self-hosted deployment and registered-device release tooling.
 App Store publication still depends on the legal, content-rights, signing, account, metadata, and human approval gates listed in [ios/AppStore/README.md](ios/AppStore/README.md).
 
