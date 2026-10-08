@@ -450,11 +450,11 @@ struct WatchPageView: View {
 
   private func syncPlaybackVisibility() {
     CooperWatchOrientationDelegate.setRegularVideoPlaybackActive(isPlaybackActive)
+    playerSession.setPlaybackActive(isPlaybackActive)
     if isPlaybackActive {
       if page != nil, startedAt == nil { startedAt = .now }
       return
     }
-    playerSession.stop()
     Task { _ = await model.updatePlayback(videoID: videoID, state: .stopped) }
     recordWatch()
   }

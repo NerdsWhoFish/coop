@@ -273,6 +273,12 @@ final class YouTubeEmbeddedPlayerSession {
     linkRouter = PlayerLinkRouter.install(on: webView)
   }
 
+  func setPlaybackActive(_ isActive: Bool) {
+    // Backgrounding must pause the existing media, not replace the document:
+    // replacing it discards YouTube's playback position and user pause state.
+    webView.setAllMediaPlaybackSuspended(!isActive, completionHandler: nil)
+  }
+
   func stop() {
     webView.stopLoading()
     webView.loadHTMLString("", baseURL: nil)

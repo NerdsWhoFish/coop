@@ -21,6 +21,7 @@
 		5B396E626218992A88D44212 /* ShortsFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC30EB2C441F8287349E4A3 /* ShortsFeedView.swift */; };
 		63B08D2E7E98D520AA5270D7 /* CooperWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E86E9A4AC4B3415C166CFC /* CooperWatchApp.swift */; };
 		64CE30B0C813335D92031068 /* ChildSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78177997C79BC196C892669F /* ChildSearchView.swift */; };
+		799DE5A599429841AD7C1E54 /* PlaybackSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811000358B9DC72D504EA220 /* PlaybackSessionTests.swift */; };
 		7B77FF825FA0E449D84BC319 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E0EE7B3EA6E78F00C8FD8A /* PairingView.swift */; };
 		7D3DDF61CC36DA08E6A0E5A7 /* DiscoveryShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FDBE0A55E3B1CA9948DBB3 /* DiscoveryShelf.swift */; };
 		93DE8EC80DEE9A0918641A26 /* CooperWatchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E673C35DD68853F479EA11 /* CooperWatchUITests.swift */; };
@@ -66,6 +67,7 @@
 		55E4B135EDDA821C30106CEA /* VideoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCard.swift; sourceTree = "<group>"; };
 		55FDBE0A55E3B1CA9948DBB3 /* DiscoveryShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryShelf.swift; sourceTree = "<group>"; };
 		78177997C79BC196C892669F /* ChildSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChildSearchView.swift; sourceTree = "<group>"; };
+		811000358B9DC72D504EA220 /* PlaybackSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSessionTests.swift; sourceTree = "<group>"; };
 		92892C912773F57371E07472 /* CoopKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CoopKit; path = ../CoopKit; sourceTree = SOURCE_ROOT; };
 		9654E746A4F5B63910469124 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		99162D89BC9EDD3B8AA62CA6 /* CooperWatch.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CooperWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -267,6 +269,7 @@
 			isa = PBXGroup;
 			children = (
 				B8574B65886590196410E6CB /* CooperWatchTests.swift */,
+				811000358B9DC72D504EA220 /* PlaybackSessionTests.swift */,
 			);
 			name = CooperWatchTests;
 			path = ../CooperWatchTests;
@@ -416,6 +419,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				51546BFAB8F53D96769CB029 /* CooperWatchTests.swift in Sources */,
+				799DE5A599429841AD7C1E54 /* PlaybackSessionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
